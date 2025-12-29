@@ -510,6 +510,10 @@ tensorguard/
 │   ├── integrations/         # [NEW] Fleet Adapters (Open-RMF, VDA5050)
 │   ├── moai/                 # [NEW] FHE Inference Core (CKKS, ModelPack)
 │   ├── observability/        # [NEW] Prometheus/OTel Metrics
+│   ├── platform/             # [NEW] Management Platform (FastAPI + SQLModel)
+│   │   ├── api/              # REST Endpoints
+│   │   ├── models/           # DB Schemas (Tenant, Fleet, Job)
+│   │   └── services/         # Dispatch Logic
 │   ├── server/               # Training Aggregation Server
 │   ├── serving/              # [NEW] Inference Gateway (FastAPI)
 │   └── utils/                # Config & Logging
@@ -554,7 +558,38 @@ make bench
 
 ---
 
-## 📚 13. References (APA Style)
+## 🏢 13. Management Platform (New in v2.1)
+
+TensorGuard now ships with a self-hostable **Management Platform** for enterprise fleet orchestration.
+
+### Features
+- **Multi-Tenancy**: Support for multiple organizations (Tenants) with isolated data.
+- **Role-Based Access Control (RBAC)**: Fine-grained permissions (Owner, Admin, Operator).
+- **Fleet Orchestration**: Manage fleets, generate API keys, and dispatch Federated Learning jobs.
+- **Visual Dashboard**: Real-time telemetry, privacy budget monitoring, and audit logs.
+
+![Platform Dashboard UI](docs/images/dashboard_preview.png)
+
+### Quick Start (Local)
+```bash
+# Start the Backend & UI
+python -m uvicorn tensorguard.platform.main:app --reload
+
+# Login Creds (generated on first run):
+# Email: admin@tensorguard.ai
+# Pass:  secret
+```
+
+### Deployment
+A Dockerfile is provided for production deployment:
+```bash
+docker build -t tensorguard-platform -f docker/platform/Dockerfile .
+docker run -p 8000:8000 tensorguard-platform
+```
+
+---
+
+## 📚 14. References (APA Style)
 
 ### Core Technologies
 
@@ -586,7 +621,7 @@ Physical Intelligence. (2024). π₀: A vision-language-action model for general
 
 ---
 
-## 📜 14. License & Attribution
+## 📜 15. License & Attribution
 
 TensorGuard is developed in partnership with:
 - **DTC @ NTU** (Digital Trust Centre, Nanyang Technological University)
@@ -601,7 +636,7 @@ Licensed under **Apache 2.0**. See `LICENSE` for full terms.
 
 ---
 
-## 📚 15. Engineering Deep-Dive & FAQ
+## 📚 16. Engineering Deep-Dive & FAQ
 
 For a complete technical breakdown of all subsystems, see **[docs/ENGINEERING_DEEP_DIVE.md](docs/ENGINEERING_DEEP_DIVE.md)**.
 

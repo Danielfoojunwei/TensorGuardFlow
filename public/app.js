@@ -1,161 +1,177 @@
-const api = {
-    start: () => fetch('/api/start').then(r => r.ok),
-    stop: () => fetch('/api/stop').then(r => r.ok),
-    status: () => fetch('/api/status').then(r => r.json()),
-    genKey: () => fetch('/api/generate_key').then(r => r.json())
-};
+// TensorGuard Platform Client
 
-const dom = {
-    btnStart: document.getElementById('btn-start'),
-    btnStop: document.getElementById('btn-stop'),
-    connection: document.getElementById('connection-status'),
-    connText: document.getElementById('conn-text'),
-    submissionCount: document.getElementById('submission-count'),
-    budgetVal: document.getElementById('budget-val'),
-    budgetFill: document.getElementById('budget-fill'),
-    savedMb: document.getElementById('saved-mb'),
-    latTrain: document.getElementById('lat-train'),
-    latCompress: document.getElementById('lat-compress'),
-    latEncrypt: document.getElementById('lat-encrypt'),
-    compRatio: document.getElementById('comp-ratio'),
-    mseVal: document.getElementById('mse-val'),
-    auditLog: document.getElementById('audit-log'),
-    keyPath: document.getElementById('key-path'),
-    keyBadge: document.getElementById('key-badge'),
-    btnGenKey: document.getElementById('btn-gen-key'),
-    genStatus: document.getElementById('gen-status'),
-    pipeline: document.querySelector('.pipeline'),
-    simdBadge: document.getElementById('simd-badge'),
-    weights: {
-        visual: document.getElementById('weight-visual'),
-        language: document.getElementById('weight-language'),
-        auxiliary: document.getElementById('weight-aux')
-    },
-    experts: {
-        visual: document.getElementById('expert-visual'),
-        language: document.getElementById('expert-language'),
-        auxiliary: document.getElementById('expert-aux')
-    }
-};
+const API_BASE = '/api/v1';
+let token = localStorage.getItem('tg_token');
 
-let isRunning = false;
+// --- Auth ---
 
-// Poll Status
-async function updateStatus() {
+async function login(username, password) {
     try {
-        const data = await api.status();
-
-        // Connection
-        dom.connection.className = `status-badge ${data.connection === 'connected' ? 'connected' : 'disconnected'}`;
-        dom.connText.innerText = data.connection === 'connected' ? 'Secure Link' : 'Offline';
-
-        // Stats
-        dom.submissionCount.innerText = data.submissions;
-        dom.budgetVal.innerText = data.privacy_budget;
-        dom.budgetFill.style.width = `${data.budget_percent}%`;
-
-        // Key Info
-        dom.keyPath.innerText = data.key_path;
-        if (data.key_exists) {
-            dom.keyBadge.innerText = "LOCKED (READY)";
-            dom.keyBadge.className = "badge locked";
-        } else {
-            dom.keyBadge.innerText = "MISSING";
-            dom.keyBadge.className = "badge missing";
-        }
-
-        // Telemetry
-        if (data.telemetry) {
-            dom.savedMb.innerText = `${data.telemetry.bandwidth_saved_mb.toFixed(1)} MB`;
-            dom.latTrain.innerText = `${data.telemetry.latency_train.toFixed(1)}ms`;
-            dom.latCompress.innerText = `${data.telemetry.latency_compress.toFixed(1)}ms`;
-            dom.latEncrypt.innerText = `${data.telemetry.latency_encrypt.toFixed(1)}ms`;
-            dom.compRatio.innerText = `${data.telemetry.compression_ratio.toFixed(0)}:1`;
-            dom.mseVal.innerText = data.telemetry.quality_mse.toFixed(6);
-        }
-
-        // Audit Log
-        if (data.audit && data.audit.length > 0) {
-            dom.auditLog.innerHTML = data.audit.reverse().map(entry => `
-                <div class="audit-entry">
-                    <span class="time">${entry.timestamp.split('T')[1].split('.')[0]}</span>
-                    <span class="event">${entry.event}</span>
-                    <span class="key">${entry.key_id}</span>
-                </div>
-            `).join('');
-        }
-
-        // SIMD
-        if (data.simd) dom.simdBadge.classList.remove('hidden');
-        else dom.simdBadge.classList.add('hidden');
-
-        // Experts
-        if (data.experts) {
-            for (const [key, weight] of Object.entries(data.experts)) {
-                if (dom.weights[key]) dom.weights[key].innerText = `${weight}x`;
-                if (dom.experts[key]) {
-                    if (isRunning) dom.experts[key].classList.add('active');
-                    else dom.experts[key].classList.remove('active');
-                }
-            }
-        }
-
-        // State Sync
-        if (data.running !== isRunning) {
-            isRunning = data.running;
-            updateControls();
-        }
-
+        const res = await fetch(`${API_BASE}/auth/token`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        if (!res.ok) throw new Error("Login failed");
+        const data = await res.json();
+        token = data.access_token;
+        localStorage.setItem('tg_token', token);
+        showMain();
+        loadFleets();
     } catch (e) {
-        console.error("Status fetch failed", e);
-        dom.connection.className = 'status-badge disconnected';
-        dom.connText.innerText = 'Server Error';
+        alert(e.message);
     }
 }
 
-function updateControls() {
-    dom.btnStart.disabled = isRunning;
-    dom.btnStop.disabled = !isRunning;
-
-    if (isRunning) {
-        dom.pipeline.classList.add('active');
-    } else {
-        dom.pipeline.classList.remove('active');
+async function initTenant(name, email, password) {
+    try {
+        const res = await fetch(`${API_BASE}/onboarding/init?name=${name}&admin_email=${email}&admin_pass=${password}`, {
+            method: 'POST'
+        });
+        if (!res.ok) throw new Error("Init failed: " + await res.text());
+        alert("Tenant created! Please login.");
+        toggleInitView();
+    } catch (e) {
+        alert(e.message);
     }
 }
 
-// Listeners
-dom.btnStart.onclick = async () => {
-    await api.start();
-    updateStatus();
-};
+function logout() {
+    token = null;
+    localStorage.removeItem('tg_token');
+    location.reload();
+}
 
-dom.btnStop.onclick = async () => {
-    await api.stop();
-    updateStatus();
-};
+// --- Data Fetching ---
 
-dom.btnGenKey.onclick = async () => {
-    dom.btnGenKey.disabled = true;
-    dom.genStatus.innerText = "Generating 128-bit N2HE key...";
-    try {
-        const res = await api.genKey();
-        if (res.status === 'success') {
-            dom.genStatus.innerText = `Success: ${res.path}`;
-            dom.genStatus.className = "status-msg success";
-        } else {
-            throw new Error(res.message || "Key generation failed");
+async function api(path, method = 'GET', body = null) {
+    const opts = {
+        method,
+        headers: {
+            'Authorization': `Bearer ${token}`
         }
-    } catch (e) {
-        dom.genStatus.innerText = `Error: ${e.message}`;
-        dom.genStatus.className = "status-msg error";
-    } finally {
-        dom.btnGenKey.disabled = false;
-        setTimeout(() => { dom.genStatus.innerText = ""; }, 5000);
-        updateStatus();
+    };
+    if (body) {
+        opts.headers['Content-Type'] = 'application/json';
+        opts.body = JSON.stringify(body);
+    }
+    const res = await fetch(`${API_BASE}${path}`, opts);
+    if (res.status === 401) { logout(); return; }
+    return res.json();
+}
+
+async function loadFleets() {
+    const fleets = await api('/fleets');
+    const container = document.getElementById('fleet-list');
+    container.innerHTML = '';
+
+    if (fleets.length === 0) {
+        container.innerHTML = '<div class="list-item">No fleets found. Create one.</div>';
+        return;
+    }
+
+    fleets.forEach(f => {
+        const div = document.createElement('div');
+        div.className = 'list-item';
+        div.innerHTML = `<strong>${f.name}</strong> <span class="badge ${f.is_active ? 'success' : 'warn'}">${f.is_active ? 'Active' : 'Offline'}</span>`;
+        container.appendChild(div);
+    });
+}
+
+async function createJob() {
+    // Mock Job Creation
+    const fleets = await api('/fleets');
+    if (!fleets.length) return alert("Create a fleet first!");
+
+    const job = await api('/jobs', 'POST', {
+        fleet_id: fleets[0].id,
+        type: 'FED_PEFT_ROUND',
+        config: JSON.stringify({ rounds: 10, epsilon: 1.0 })
+    });
+
+    alert(`Job ${job.id} started!`);
+    loadJobs();
+}
+
+async function loadJobs() {
+    const jobs = await api('/jobs');
+    const container = document.getElementById('job-list');
+    container.innerHTML = '';
+
+    jobs.forEach(j => {
+        const div = document.createElement('div');
+        div.className = 'list-item';
+        div.innerHTML = `
+            <div class="flex-col">
+                <span><strong>${j.type}</strong> (${j.status})</span>
+                <small>${new Date(j.created_at).toLocaleString()}</small>
+            </div>
+        `;
+        container.appendChild(div);
+    });
+}
+
+// --- UI Logic ---
+
+function showMain() {
+    document.getElementById('auth-overlay').classList.add('hidden');
+    document.getElementById('main-content').classList.remove('hidden');
+}
+
+function toggleInitView() {
+    document.getElementById('auth-overlay').querySelector('.auth-card:not(.hidden)').classList.add('hidden');
+    const target = document.getElementById('init-card').classList.contains('hidden') ? 'init-card' : null;
+    if (target) document.getElementById(target).classList.remove('hidden');
+    else document.querySelector('.auth-card').classList.remove('hidden');
+}
+
+// Navigation
+document.querySelectorAll('.nav-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        // Toggle active
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        e.target.classList.add('active');
+
+        // Switch View
+        const view = e.target.dataset.view;
+        document.querySelectorAll('.view-section').forEach(v => v.classList.add('hidden'));
+        document.getElementById(`view-${view}`).classList.remove('hidden');
+
+        if (view === 'fleets') {
+            loadFleets();
+            loadJobs();
+        }
+    });
+});
+
+// Forms
+document.getElementById('login-form').addEventListener('submit', e => {
+    e.preventDefault();
+    login(document.getElementById('email').value, document.getElementById('password').value);
+});
+
+document.getElementById('init-form').addEventListener('submit', e => {
+    e.preventDefault();
+    initTenant(
+        document.getElementById('init-org').value,
+        document.getElementById('init-email').value,
+        document.getElementById('init-pass').value
+    );
+});
+
+document.getElementById('link-init').onclick = toggleInitView;
+document.getElementById('link-login').onclick = toggleInitView;
+document.getElementById('btn-logout').onclick = logout;
+document.getElementById('btn-add-fleet').onclick = async () => {
+    const name = prompt("Fleet Name:");
+    if (name) {
+        await api('/fleets?name=' + name, 'POST');
+        loadFleets();
     }
 };
+document.getElementById('btn-new-job').onclick = createJob;
 
-// Start Polling
-setInterval(updateStatus, 1000);
-updateStatus();
+// Init
+if (token) {
+    showMain();
+}
