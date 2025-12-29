@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+artifacts/
+tests/keys_tmp/
+keys/moai/
+*.egg-info/
+dist/
+build/

@@ -126,4 +126,37 @@ class MoEAdapter(VLAAdapter):
                     if param in raw_grads:
                         expert_grads[expert][param] = raw_grads[param] * weight
         
-        return expert_grads, gate_weights
+class FHEExportAdapter(VLAAdapter):
+    """
+    Adapter for exporting specific submodules (e.g., Policy Head) for FHE inference.
+    Strictly forbids exporting the entire model to prevent IP leakage.
+    """
+    def __init__(self, model_path: str, target_modules: List[str] = None):
+        # In a real implementation, this would load the model structure
+        # Here we mock the loading for the purpose of the export logic
+        self.model = {"type": "pi0-export-target", "weights": {}}
+        self.target_modules = target_modules or ["policy_head", "visual_router"]
+        self.max_params = 1_000_000  # Strict limit for FHE feasibility
+
+    def extract_submodules(self, state_dict: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
+        """
+        Extract only the allowed submodules from a full model state dict.
+        """
+        exported_weights = {}
+        total_params = 0
+        
+        for k, v in state_dict.items():
+            # Check if this parameter belongs to a target module
+            if any(mod in k for mod in self.target_modules):
+                exported_weights[k] = v
+                total_params += v.size
+        
+        # Validation
+        if total_params == 0:
+            logger.warning(f"No parameters found for targets: {self.target_modules}")
+        
+        if total_params > self.max_params:
+            raise ValidationError(f"Export exceeds FHE capacity: {total_params} > {self.max_params}")
+            
+        return exported_weights
+
