@@ -26,10 +26,9 @@ class MoaiBackend(abc.ABC):
         """Run FHE inference."""
         pass
 
-class MockBackend(MoaiBackend):
+class TenSEALBackend(MoaiBackend):
     """
-    Simulation backend that performs "encrypted" inference using
-    plain numpy operations on picked data.
+    Real FHE backend using TenSEAL (CKKS).
     """
     
     def __init__(self):
@@ -38,55 +37,64 @@ class MockBackend(MoaiBackend):
         
     def load_model(self, model_pack: ModelPack):
         self.active_model = model_pack
-        # Unpack mock weights
+        # Unpack weights (these are plaintext weights for hybrid homomorphic inference)
+        # In this scheme: Encrypted Input x Plaintext Weights = Encrypted Output
         self.unpacked_weights = {}
         for k, v in model_pack.weights.items():
             self.unpacked_weights[k] = pickle.loads(v)
             
-        logger.info(f"MockBackend loaded model {model_pack.meta.model_id}")
+        logger.info(f"TenSEALBackend loaded model {model_pack.meta.model_id}")
 
     def infer(self, ciphertext: bytes, eval_keys: bytes) -> bytes:
+        import tenseal as ts
+        
         if not self.active_model:
             raise RuntimeError("No model loaded")
             
-        # Simulate Processing Delay (FHE is slow)
-        time.sleep(0.05) 
-        
-        # 1. "Decrypt" input (deserialize)
         try:
-            input_payload = pickle.loads(ciphertext)
-            input_vec = np.array(input_payload["data"])
-        except Exception:
-            raise ValueError("Invalid mock ciphertext")
+            # 1. Load Context (Server Side - Public Context Only)
+            ctx = ts.context_from(eval_keys)
             
-        # 2. Run Inference (Mock Linear Layer: x @ W + b)
-        # We just grab the first weight/bias we find for demo
-        # In reality this would route through the expert graph
-        weights = list(self.unpacked_weights.values())
-        if len(weights) >= 2:
-            W = weights[0] # Weight
-            b = weights[1] # Bias
+            # 2. Deserialize Encrypted Input
+            enc_vec = ts.ckks_vector_from(ctx, ciphertext)
             
-            # Simple dimensionality fix if shapes mismatch for demo
-            if input_vec.shape[-1] != W.shape[0]:
-                 # Projection to match dimensions for mock
-                 W = np.random.randn(input_vec.shape[-1], 10)
-                 b = np.random.randn(10)
+            # 3. Homomorphic Linear Layer: x @ W + b
+            weights = list(self.unpacked_weights.values())
+            if len(weights) >= 2:
+                W = weights[0] # Expecting (Out, In) from PyTorch state_dict convention
+                b = weights[1] # Expecting (Out,)
+                
+                # Input vector shape matches In features?
+                # TenSEAL CKKS vector is essentially 1D.
+                # If we do x @ W.T (standard Linear), we need W.T to be (In, Out)
+                
+                # Convert to numpy if not already
+                if not isinstance(W, np.ndarray): W = np.array(W)
+                if not isinstance(b, np.ndarray): b = np.array(b)
+                
+                # Transpose for x @ W_transposed
+                W_t = W.T
+                
+                # TenSEAL expects pure Python lists for plain tensors
+                W_list = W_t.tolist()
+                b_list = b.tolist()
+                
+                # Perform MatMul: (1, In) @ (In, Out) -> (1, Out)
+                res = enc_vec.matmul(W_list)
+                res.add(b_list)
+                
+            else:
+                res = enc_vec
+                
+            # 4. Return Encrypted Result
+            return res.serialize()
+                
+            # 4. Return Encrypted Result
+            return res.serialize()
             
-            result = input_vec @ W + b
-        else:
-            # Fallback
-            result = input_vec 
-            
-        # 3. "Encrypt" output
-        output_payload = {
-            "data": result.tolist(),
-            "is_encrypted": True,
-            "provenance": "MockBackend"
-        }
-        
-        return pickle.dumps(output_payload)
-
+        except Exception as e:
+            logger.error(f"FHE Inference Failed: {e}")
+            raise ValueError(f"FHE Error: {e}")
 class NativeBackend(MoaiBackend):
     """Placeholder for C++ MOAI runtime."""
     def load_model(self, model_pack: ModelPack):

@@ -75,13 +75,27 @@ async def init_tenant(name: str, admin_email: str, admin_pass: str, session: Ses
 async def get_fleets(session: Session = Depends(get_session), current_user: User = Depends(get_current_user)):
     return session.exec(select(Fleet).where(Fleet.tenant_id == current_user.tenant_id)).all()
 
-@router.post("/fleets", response_model=Fleet)
+@router.post("/fleets", response_model=Dict[str, Any])
 async def create_fleet(name: str, session: Session = Depends(get_session), current_user: User = Depends(get_current_user)):
-    fleet = Fleet(name=name, tenant_id=current_user.tenant_id, api_key_hash="mock_hash")
+    import secrets
+    import hashlib
+    
+    # Generate a real secure API key
+    raw_key = f"tg_{secrets.token_hex(16)}"
+    key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+    
+    fleet = Fleet(name=name, tenant_id=current_user.tenant_id, api_key_hash=key_hash)
     session.add(fleet)
     session.commit()
     session.refresh(fleet)
-    return fleet
+    
+    # Return the raw key ONLY once
+    return {
+        "id": fleet.id,
+        "name": fleet.name,
+        "api_key": raw_key,
+        "instruction": "Save this key! It will not be shown again."
+    }
 
 # --- Jobs ---
 @router.get("/jobs", response_model=List[Job])

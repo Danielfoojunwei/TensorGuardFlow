@@ -35,13 +35,13 @@ class MicroBenchmark:
         self.results.append(entry)
         print(f"[{test_name}] {json.dumps(metrics, indent=2)}")
 
-    def run_crypto_bench(self, tensor_size_mb: int = 1):
+    def run_crypto_bench(self, tensor_size_mb: float = 0.1):
         """Benchmark N2HE encryption."""
         print(f"Running Crypto Bench (Tensor Size: {tensor_size_mb}MB)...")
         
         # Setup
         # Create a dummy tensor of approx requested size (float32 = 4 bytes)
-        num_elements = (tensor_size_mb * 1024 * 1024) // 4
+        num_elements = int((tensor_size_mb * 1024 * 1024) // 4)
         data = np.random.randn(num_elements).astype(np.float32)
         
         # Initialize Encryptor

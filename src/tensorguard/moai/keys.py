@@ -36,17 +36,38 @@ class MoaiKeyManager:
         self.key_store_path = Path(key_store_path)
         self.key_store_path.mkdir(parents=True, exist_ok=True)
         
-    def generate_keypair_stub(self, tenant_id: str, config: MoaiConfig) -> Tuple[str, bytes, bytes, bytes]:
+    def generate_keypair(self, tenant_id: str, config: MoaiConfig) -> Tuple[str, bytes, bytes, bytes]:
         """
-        Generate a mock keypair for testing/development.
-        Returns: (key_id, public_key, secret_key, eval_keys)
+        Generate a REAL TenSEAL CKKS context and keys.
+        Returns: (key_id, public_context_bytes, secret_context_bytes, eval_keys_dummy)
+        
+        Note: TenSEAL bundles keys into the 'context' object.
+        - secret_context_bytes: Contains SK (Client only)
+        - public_context_bytes: Contains PK + Relin + Galois (Server)
         """
+        import tenseal as ts
         key_id = f"moai_{secrets.token_hex(8)}"
         
-        # Mock key material (in production, these would be binary blobs from SEAL)
-        pk = b"mock_public_key_" + secrets.token_bytes(32)
-        sk = b"mock_secret_key_" + secrets.token_bytes(32)
-        eval_k = b"mock_eval_keys_" + secrets.token_bytes(128)
+        # 1. Create TenSEAL Context
+        ctx = ts.context(
+            ts.SCHEME_TYPE.CKKS,
+            poly_modulus_degree=config.poly_modulus_degree,
+            coeff_mod_bit_sizes=config.coeff_modulus_bit_sizes
+        )
+        ctx.global_scale = config.scale
+        ctx.generate_galois_keys()
+        ctx.generate_relin_keys()
+        
+        # 2. Serialize
+        # Client Secret (Keep this safe!)
+        secret_ctx = ctx.serialize(save_public_key=True, save_secret_key=True, save_galois_keys=True, save_relin_keys=True)
+        
+        # Server Public (No SK)
+        public_ctx = ctx.serialize(save_public_key=True, save_secret_key=False, save_galois_keys=True, save_relin_keys=True)
+        
+        # In TenSEAL, eval keys are part of the context, so we return empty bytes for explicit eval_k arg
+        # to match signature, but the public_ctx acts as the eval_keys carrier.
+        eval_k = b"" 
         
         # Save metadata
         meta = CkksKeyMetadata(
@@ -59,7 +80,7 @@ class MoaiKeyManager:
         )
         
         self._save_metadata(key_id, meta)
-        return key_id, pk, sk, eval_k
+        return key_id, public_ctx, secret_ctx, eval_k
 
     def _save_metadata(self, key_id: str, meta: CkksKeyMetadata):
         """Save key metadata to disk."""

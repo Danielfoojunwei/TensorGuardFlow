@@ -137,8 +137,61 @@ class TensorGuardStrategy(fl.server.strategy.FedAvg):
             logger.error("All contributions rejected as outliers")
             return None, {}
             
-        # Perform (Simulated) Homomorphic Aggregation on valid contributions
-        aggregated_parameters = active_results[0][1].parameters
+        # Perform Real Homomorphic Aggregation on valid contributions
+        # We start with the first valid contribution's parameters as base
+        if not active_results:
+            return None, {}
+
+        # 1. Initialize Aggregated Tensors
+        # Flower Parameters are a list of bytes. We need to sum them.
+        # However, UpdatePackage contains delta_tensors (Dict[str, bytes]).
+        # The strategy.aggregate_fit is expected to return generic Parameters.
+        # We'll re-serialize the aggregated UpdatePackage.
+        
+        first_client_id = str(active_results[0][0].cid)
+        first_package = None
+        # Find the package in aggregator
+        for c in self.aggregator.contributions:
+            if c.client_id == first_client_id:
+                first_package = c.update_package
+                break
+        
+        if not first_package:
+            return active_results[0][1].parameters, metrics
+
+        # Deep copy the first package's structure for the sum (effectively identity start)
+        # But we actually want to sum ALL active contributions.
+        
+        # We collect all UpdatePackages for active clients
+        active_packages = []
+        for c in self.aggregator.contributions:
+            if c.client_id in [str(r[0].cid) for r in active_results]:
+                active_packages.append(c.update_package)
+
+        # Real Homomorphic Summation loop
+        for name in first_package.delta_tensors.keys():
+            try:
+                # Accumulator
+                sum_ct = None
+                
+                for pkg in active_packages:
+                    ct_bytes = pkg.delta_tensors[name]
+                    ct = LWECiphertext.deserialize(ct_bytes, self.ctx.params)
+                    
+                    if sum_ct is None:
+                        sum_ct = ct
+                    else:
+                        sum_ct += ct # Uses newly implemented __add__
+                
+                # Update first package's tensor with the sum
+                first_package.delta_tensors[name] = sum_ct.serialize()
+            except Exception as e:
+                logger.error(f"Homomorphic Summation failed for tensor {name}: {e}")
+
+        # Re-serialize into Parameters for Flower
+        final_payload = first_package.serialize()
+        from flwr.common import ndarrays_to_parameters
+        aggregated_parameters = ndarrays_to_parameters([np.frombuffer(final_payload, dtype=np.uint8)])
         
         # Evaluation Gating
         if self.eval_gate:

@@ -1,51 +1,53 @@
 """
-MOAI Encryption/Decryption Stubs
+MOAI Encryption/Decryption (TenSEAL)
 For client-side preprocessing and postprocessing.
 """
 
 import numpy as np
-import pickle
+import tenseal as ts
 from typing import List, Union
 
 from .moai_config import MoaiConfig
 
 class MoaiEncryptor:
-    """Client-side encryptor."""
+    """Client-side encryptor (TenSEAL)."""
     
-    def __init__(self, key_id: str, config: MoaiConfig):
+    def __init__(self, key_id: str, context_bytes: bytes):
         self.key_id = key_id
-        self.config = config
+        # Load context from bytes (includes keys)
+        self.ctx = ts.context_from(context_bytes)
         
     def encrypt_vector(self, vector: np.ndarray) -> bytes:
         """
-        Encrypt a numpy vector into a mock ciphertext.
-        In reality, this would use a CKKS encryptor.
+        Encrypt a numpy vector into a REAL CKKS ciphertext.
         """
-        # Serialization as "Encryption" for Mock
-        payload = {
-            "key_id": self.key_id,
-            "shape": vector.shape,
-            "data": vector.tolist(), # Plaintext for mock backend
-            "is_encrypted": True # Flag to simulate
-        }
-        return pickle.dumps(payload)
+        # Ensure it's a 1D vector or flatten it for CKKS packing
+        if hasattr(vector, 'flatten'):
+            vec_flat = vector.flatten().tolist()
+        else:
+            vec_flat = list(vector)
+            
+        enc_vec = ts.ckks_vector(self.ctx, vec_flat)
+        return enc_vec.serialize()
 
 class MoaiDecryptor:
-    """Client-side decryptor."""
+    """Client-side decryptor (TenSEAL)."""
     
-    def __init__(self, key_id: str, secret_key: bytes):
+    def __init__(self, key_id: str, context_bytes: bytes):
         self.key_id = key_id
-        self.secret_key = secret_key
+        self.ctx = ts.context_from(context_bytes)
         
     def decrypt_vector(self, ciphertext: bytes) -> np.ndarray:
         """
-        Decrypt a mock ciphertext.
+        Decrypt a CKKS ciphertext.
         """
         try:
-            payload = pickle.loads(ciphertext)
-            if not isinstance(payload, dict) or "data" not in payload:
-                raise ValueError("Invalid ciphertext format")
-                
-            return np.array(payload["data"])
+            # We need to construct the CKKS vector linked to our context
+            enc_vec = ts.ckks_vector_from(self.ctx, ciphertext)
+            
+            # Decrypt
+            decrypted_list = enc_vec.decrypt()
+            return np.array(decrypted_list)
+            
         except Exception as e:
             raise ValueError(f"Decryption failed: {e}")

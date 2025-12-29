@@ -9,7 +9,7 @@ import uvicorn
 import base64
 
 from ..utils.logging import get_logger
-from .backend import MockBackend, MoaiBackend
+from .backend import TenSEALBackend, MoaiBackend
 from .auth import get_current_tenant
 from ..moai.modelpack import ModelPack
 
@@ -17,8 +17,8 @@ logger = get_logger(__name__)
 
 app = fastapi.FastAPI(title="TensorGuard MOAI Gateway", version="2.0.0")
 
-# Global State (In-memory for demo)
-backend: MoaiBackend = MockBackend()
+# Global State (Real FHE Backend)
+backend: MoaiBackend = TenSEALBackend()
 
 class InferenceRequest(BaseModel):
     ciphertext_base64: str

@@ -48,35 +48,64 @@ class PrivacyEvaluator:
         
         # 1. Setup Data (Simulate a sensitive image embedding)
         dim = 1024
-        secret_data = np.random.randn(dim).astype(np.float32)
+        secret_data = np.random.randn(dim).astype(np.float64)
         
-        # 2. Define Defense Levels
+        # 2. Setup Real Encryption
+        from ...moai.moai_config import MoaiConfig
+        from ...moai.keys import MoaiKeyManager
+        from ...moai.encrypt import MoaiEncryptor
+        
+        # Generate ephemeral keys for test
+        km = MoaiKeyManager()
+        cfg = MoaiConfig()
+        _, pk_ctx, sk_ctx, _ = km.generate_keypair("bench-tenant", cfg)
+        encryptor = MoaiEncryptor("bench-key", sk_ctx)
+
+        # 3. Define Defense Levels
+        # We need uniform output shapes for metric comparison.
+        # Encryption returns bytes. We must treat bytes as "noise" in float space 
+        # to compare "reconstructability" via simple MSE/Corel checks 
+        # (simulating an attacker interpreting ciphertext as floats).
+        
+        def encrypt_wrapper(x):
+            ct_bytes = encryptor.encrypt_vector(x)
+            # Interpret bytes as random floats normalized to data range
+            # This simulates an attacker trying to naive-read the ciphertext
+            ints = np.frombuffer(ct_bytes, dtype=np.uint8)
+            # Pad or truncate to match dim
+            if len(ints) > dim:
+                ints = ints[:dim]
+            else:
+                ints = np.pad(ints, (0, dim - len(ints)))
+            return ints.astype(np.float64) / 255.0
+
         scenarios = {
             "Baseline (No Defense)": lambda x: x,
             "TG-1 (Sparsify 90%)": lambda x: x * (np.random.rand(*x.shape) > 0.9),
             "TG-2 (Clip+Sparse)": lambda x: np.clip(x, -0.5, 0.5) * (np.random.rand(*x.shape) > 0.9),
             "TG-3 (DP Noise)": lambda x: np.clip(x, -0.5, 0.5) + np.random.normal(0, 0.5, size=x.shape),
-            "TG-4 (Full Encryption)": lambda x: np.random.randn(*x.shape) # Ideally statistically independent
+            "TG-4 (Full Encryption)": encrypt_wrapper
         }
         
         results = []
         
         for name, defense_fn in scenarios.items():
             print(f"  Testing {name}...")
-            # Simulate "Gradient" as being correlated to Secret Data
-            # (In linear models g ~ x, in deep models correlation exists)
             gradient_proxy = secret_data.copy()
             
             # Apply Defense
-            exposed_gradient = defense_fn(gradient_proxy)
-            
-            # Attack
-            attack_metrics = self._simulate_reconstruction(secret_data, exposed_gradient)
-            
-            results.append({
-                "scenario": name,
-                "metrics": attack_metrics
-            })
+            try:
+                exposed_gradient = defense_fn(gradient_proxy)
+                
+                # Attack
+                attack_metrics = self._simulate_reconstruction(secret_data, exposed_gradient)
+                
+                results.append({
+                    "scenario": name,
+                    "metrics": attack_metrics
+                })
+            except Exception as e:
+                print(f"FAILED {name}: {e}")
             
         # Save Report
         with open(os.path.join(self.output_dir, "inversion_results.json"), "w") as f:

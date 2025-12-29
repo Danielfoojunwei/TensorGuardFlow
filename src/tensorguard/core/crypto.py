@@ -112,6 +112,30 @@ class LWECiphertext:
         except Exception as e:
             raise CryptographyError(f"Deserialization failed: {e}")
 
+    def __add__(self, other: 'LWECiphertext') -> 'LWECiphertext':
+        """Homomorphic Addition: E(m1) + E(m2) = E(m1 + m2)."""
+        if self.params.q != other.params.q or self.params.n != other.params.n:
+            raise CryptographyError("Ciphertext parameters mismatch for addition")
+        
+        q = self.params.q
+        new_a = (self.a + other.a) % q
+        new_b = (self.b + other.b) % q
+        
+        # Heuristic noise tracking: variance adds linearly
+        new_noise = min(self.noise_budget, other.noise_budget) - 1.0 # Bit loss roughly log2(2)=1
+        
+        return LWECiphertext(
+            a=new_a, 
+            b=new_b, 
+            params=self.params, 
+            noise_budget=new_noise
+        )
+
+    def __iadd__(self, other: 'LWECiphertext') -> 'LWECiphertext':
+        res = self.__add__(other)
+        self.a, self.b, self.noise_budget = res.a, res.b, res.noise_budget
+        return self
+
 # CSPRNG-seeded RNG for cryptographic operations
 _crypto_rng = np.random.Generator(np.random.PCG64(secrets.randbits(128)))
 
