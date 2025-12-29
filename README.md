@@ -306,10 +306,10 @@ Based on the OpenVLA-OFT methodology (Kim et al., 2024):
 
 ### Visual Proof
 
-![Success Parity](docs/images/success_parity.png)
+![Success Parity](docs/images/success_parity_gen.png)
 *Figure 1: Performance comparison on LIBERO tasks. TensorGuard v2.0 (FedMoE) achieves parity or improvement over the OpenVLA-OFT baseline while providing ε=0.01 differential privacy guarantees.*
 
-![Latency Tax](docs/images/latency_tax.png)
+![Latency Tax](docs/images/latency_tax_gen.png)
 *Figure 2: Detailed latency breakdown showing the "Security Tax". Left: Per-task comparison between inference-only and TensorGuard's full security stack. Right: Component breakdown showing Training (850ms), Expert Gating (15ms), Random Sparsification (8ms), Compression (45ms), and N2HE Encryption (82ms). Total security overhead is only 15% of round time.*
 
 ---
@@ -348,6 +348,9 @@ We measured the strict cost of security during a live 5-robot federation round.
 | **Convergence** | 10 Rounds | **12 Rounds** | **+20% Rounds** (DP noise variance) |
 | **Privacy Guarantee** | None | **ε = 0.01 (Skellam DP)** | **Formal Mathematical Guarantee** |
 | **Byzantine Tolerance** | None | **MAD (3σ)** | **Robust to Malicious Clients** |
+
+![Privacy Tradeoff](docs/images/privacy_tradeoff_gen.png)
+*Figure 3: Privacy-Utility Trade-off Curve. Demonstrates how TensorGuard defenses (TG-1 to TG-4) increase reconstruction error (MSE) for attackers while maintaining high model utility.*
 
 > **Conclusion**: TensorGuard accepts a minor latency penalty (+150ms, 16%) and convergence delay (+2 rounds) to achieve **formal differential privacy guarantees** and **Byzantine fault tolerance** while achieving **53x bandwidth reduction**.
 
