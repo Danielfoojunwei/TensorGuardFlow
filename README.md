@@ -489,39 +489,69 @@ A: Random Sparsification (Rand-K) typically achieves a **50x reduction** (e.g., 
 ```
 tensorguard/
 ├── api/                      # Vercel serverless functions
-│   └── index.py              # Live demo API endpoint
-├── docs/
-│   └── images/               # Benchmark visualizations
-├── public/                   # Vercel static dashboard assets
+├── artifacts/                # [NEW] Benchmark & Compliance outputs
+├── configs/                  # [NEW] Hardware & Bench profiles
+├── docker/                   # [NEW] Dockerfiles (Bench, Serving)
+├── docs/                     # Architecture & Integration docs
+├── keys/                     # Local key storage
+├── public/                   # Static dashboard assets
+├── scripts/                  # Demo & Utility scripts
 ├── src/tensorguard/
-│   ├── api/                  # API schemas (Demonstration, ShieldConfig)
-│   ├── core/                 # Core SDK
-│   │   ├── client.py         # EdgeClient & Adaptive Sparsification
-│   │   ├── crypto.py         # Skellam-N2HE encryption
-│   │   ├── adapters.py       # VLA & MoE Adapters
-│   │   ├── pipeline.py       # Clipper, ExpertGater, Compressor
-│   │   └── production.py     # UpdatePackage, KMS, ResilientAggregator
-│   ├── server/               # Aggregation server
-│   │   ├── aggregator.py     # ExpertDrivenStrategy
-│   │   └── dashboard.py      # Telemetry & MoI Dashboard
+│   ├── api/                  # API schemas
+│   ├── bench/                # [NEW] Compliance & Benchmark Suite (tg-bench)
+│   │   ├── privacy/          # Gradient Inversion attacks
+│   │   ├── robustness/       # Byzantine fault injection
+│   │   └── compliance/       # SOC2/GDPR/HIPAA evidence
+│   ├── core/                 # Core SDK (Client, Crypto, Pipeline)
 │   ├── experiments/          # Validation & Simulation
-│   │   ├── fedmoe_benchmark.py # FedMoE vs Legacy comparison
-│   │   ├── integrity_test.py   # End-to-end data route test
-│   │   ├── outlier_test.py     # MAD detection verification
-│   │   └── validation_suite.py # LIBERO simulator, OFT Parity
-│   └── utils/                # Config, logging, exceptions
-├── tests/
-│   ├── test_crypto.py        # Encryption parity tests
-│   └── test_federation_integration.py # Multi-robot aggregation tests
-├── deploy/
-│   └── vercel/               # Vercel demo deployment
-├── DEPLOYMENT_GUIDE.md       # Comprehensive deployment guide
-└── README.md                 # This file
+│   ├── integrations/         # [NEW] Fleet Adapters (Open-RMF, VDA5050)
+│   ├── moai/                 # [NEW] FHE Inference Core (CKKS, ModelPack)
+│   ├── observability/        # [NEW] Prometheus/OTel Metrics
+│   ├── server/               # Training Aggregation Server
+│   ├── serving/              # [NEW] Inference Gateway (FastAPI)
+│   └── utils/                # Config & Logging
+├── tests/                    # Unit & Integration Tests
+├── Makefile                  # [NEW] Benchmark runner
+└── README.md
 ```
 
 ---
 
-## 📚 12. References (APA Style)
+## 🤖 11. MOAI Inference Service (New in v2.0)
+
+While N2HE secures *training*, the **MOAI Inference Service** extends protection to *deployment*. It enables robots to query large server-side models on encrypted inputs without revealing the input image or the server's model weights.
+
+### Key Capabilities
+- **Model Packaging (`ModelPack`)**: Securely exports specific submodules (e.g., Policy Head) into an FHE-optimized format.
+- **CKKS Encryption**: Uses homomorphic vector operations for high-precision inference.
+- **Fleet Integrations**: Native adapters for **Open-RMF** and **VDA5050**, allowing standard fleet managers to dispatch encrypted inference tasks.
+
+### Quick Demo
+```bash
+python scripts/demo_moai_flow.py
+# Runs end-to-end: KeyGen -> Export -> Serve -> Encrypted Inference
+```
+
+---
+
+## ⚖️ 12. Benchmark & Compliance Suite
+
+TensorGuard now includes `tg-bench`, a comprehensive harness for verifying performance and regulatory compliance.
+
+### Covered Domains
+1. **Privacy Verification**: Empirically tests resistance against Gradient Inversion and Membership Inference attacks.
+2. **Robustness**: Simulates Byzantine clients (sign-flipping, noise) to verify `ResilientAggregator` filtering.
+3. **Compliance Evidence**: Auto-generates artifact packs for **SOC 2**, **GDPR Art. 32**, and **HIPAA**.
+
+### Run the Suite
+```bash
+make bench
+# output: artifacts/report.html
+```
+
+---
+
+## 📚 13. References (APA Style)
 
 ### Core Technologies
 
@@ -553,7 +583,7 @@ Physical Intelligence. (2024). π₀: A vision-language-action model for general
 
 ---
 
-## 📜 13. License & Attribution
+## 📜 14. License & Attribution
 
 TensorGuard is developed in partnership with:
 - **DTC @ NTU** (Digital Trust Centre, Nanyang Technological University)
@@ -568,7 +598,7 @@ Licensed under **Apache 2.0**. See `LICENSE` for full terms.
 
 ---
 
-## 📚 14. Engineering Deep-Dive & FAQ
+## 📚 15. Engineering Deep-Dive & FAQ
 
 For a complete technical breakdown of all subsystems, see **[docs/ENGINEERING_DEEP_DIVE.md](docs/ENGINEERING_DEEP_DIVE.md)**.
 
