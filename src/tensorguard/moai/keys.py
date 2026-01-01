@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Dict, Optional, Tuple
 
 from .moai_config import MoaiConfig
+from ..core.keys import vault, KeyScope
 
 @dataclass
 class CkksKeyMetadata:
@@ -27,28 +28,18 @@ class CkksKeyMetadata:
 
 class MoaiKeyManager:
     """
-    Manages generation, storage, and loading of CKKS keys.
-    Note: Actual key generation logic would call into a C++ backend (SEAL/OpenFHE).
-    For now, this manages the lifecycle and metadata.
+    Manages generation, storage, and loading of CKKS keys via Unified Vault.
     """
     
-    def __init__(self, key_store_path: str = "keys/moai"):
-        self.key_store_path = Path(key_store_path)
-        self.key_store_path.mkdir(parents=True, exist_ok=True)
-        
+    def __init__(self, key_store_path: str = None):
+        # We now use the unified vault by default
+        self.vault = vault
+        self.scope = KeyScope.INFERENCE
+
     def generate_keypair(self, tenant_id: str, config: MoaiConfig) -> Tuple[str, bytes, bytes, bytes]:
-        """
-        Generate a REAL TenSEAL CKKS context and keys.
-        Returns: (key_id, public_context_bytes, secret_context_bytes, eval_keys_dummy)
-        
-        Note: TenSEAL bundles keys into the 'context' object.
-        - secret_context_bytes: Contains SK (Client only)
-        - public_context_bytes: Contains PK + Relin + Galois (Server)
-        """
         import tenseal as ts
         key_id = f"moai_{secrets.token_hex(8)}"
         
-        # 1. Create TenSEAL Context
         ctx = ts.context(
             ts.SCHEME_TYPE.CKKS,
             poly_modulus_degree=config.poly_modulus_degree,
@@ -58,68 +49,66 @@ class MoaiKeyManager:
         ctx.generate_galois_keys()
         ctx.generate_relin_keys()
         
-        # 2. Serialize
-        # Client Secret (Keep this safe!)
+        # Serialize
         secret_ctx = ctx.serialize(save_public_key=True, save_secret_key=True, save_galois_keys=True, save_relin_keys=True)
-        
-        # Server Public (No SK)
         public_ctx = ctx.serialize(save_public_key=True, save_secret_key=False, save_galois_keys=True, save_relin_keys=True)
-        
-        # In TenSEAL, eval keys are part of the context, so we return empty bytes for explicit eval_k arg
-        # to match signature, but the public_ctx acts as the eval_keys carrier.
         eval_k = b"" 
         
-        # Save metadata
-        meta = CkksKeyMetadata(
-            key_id=key_id,
-            tenant_id=tenant_id,
-            created_at=datetime.utcnow().isoformat(),
-            poly_modulus_degree=config.poly_modulus_degree,
-            has_relin_keys=True,
-            has_galois_keys=True
+        # Save to Vault
+        self.vault.save_key_artifact(
+            scope=self.scope,
+            name=key_id,
+            data=public_ctx,
+            algorithm="CKKS-TenSEAL",
+            params={
+                "tenant_id": tenant_id,
+                "poly_modulus_degree": config.poly_modulus_degree,
+                "has_relin_keys": True,
+                "has_galois_keys": True
+            },
+            suffix=".pub"
         )
         
-        self._save_metadata(key_id, meta)
+        # Also save secret ctx if required (usually client side)
+        self.vault.save_key_artifact(
+            scope=self.scope,
+            name=key_id,
+            data=secret_ctx,
+            algorithm="CKKS-TenSEAL",
+            suffix=".secret"
+        )
+        
         return key_id, public_ctx, secret_ctx, eval_k
 
-    def _save_metadata(self, key_id: str, meta: CkksKeyMetadata):
-        """Save key metadata to disk."""
-        meta_path = self.key_store_path / f"{key_id}.meta.json"
-        with open(meta_path, 'w') as f:
-            json.dump(asdict(meta), f, indent=2)
-
     def load_metadata(self, key_id: str) -> Optional[CkksKeyMetadata]:
-        """Load key metadata."""
-        meta_path = self.key_store_path / f"{key_id}.meta.json"
-        if not meta_path.exists():
+        try:
+            _, meta = self.vault.load_key_artifact(self.scope, key_id, suffix=".pub")
+            return CkksKeyMetadata(
+                key_id=meta.key_id,
+                tenant_id=meta.params.get("tenant_id", "unknown"),
+                created_at=meta.created_at,
+                poly_modulus_degree=meta.params.get("poly_modulus_degree", 8192),
+                has_relin_keys=meta.params.get("has_relin_keys", True),
+                has_galois_keys=meta.params.get("has_galois_keys", True)
+            )
+        except:
             return None
-            
-        with open(meta_path, 'r') as f:
-            data = json.load(f)
-        return CkksKeyMetadata(**data)
 
     def save_keys(self, key_id: str, pk: bytes, sk: Optional[bytes] = None, eval_k: Optional[bytes] = None):
-        """Save binary key artifacts."""
-        # Public Key
-        with open(self.key_store_path / f"{key_id}.pub", 'wb') as f:
-            f.write(pk)
-            
-        # Secret Key (Client side only usually, but stored here for dev/sim)
+        """Save binary key artifacts to vault."""
+        self.vault.save_key_artifact(self.scope, key_id, pk, "CKKS-TenSEAL", suffix=".pub")
         if sk:
-            with open(self.key_store_path / f"{key_id}.secret", 'wb') as f:
-                f.write(sk)
-                
-        # Evaluation Keys (Public, sent to server)
+            self.vault.save_key_artifact(self.scope, key_id, sk, "CKKS-TenSEAL", suffix=".secret")
         if eval_k:
-            with open(self.key_store_path / f"{key_id}.eval", 'wb') as f:
-                f.write(eval_k)
+            self.vault.save_key_artifact(self.scope, key_id, eval_k, "CKKS-TenSEAL", suffix=".eval")
 
     def load_public_context(self, key_id: str) -> Tuple[bytes, bytes]:
-        """Load public key and evaluation keys (server context)."""
-        pub_path = self.key_store_path / f"{key_id}.pub"
-        eval_path = self.key_store_path / f"{key_id}.eval"
-        
-        if not pub_path.exists() or not eval_path.exists():
-            raise FileNotFoundError(f"Keys not found for {key_id}")
+        """Load public context (and placeholder eval keys) from vault."""
+        pk_data, _ = self.vault.load_key_artifact(self.scope, key_id, suffix=".pub")
+        # In TenSEAL, eval keys are often bundled in the public context
+        try:
+            eval_data, _ = self.vault.load_key_artifact(self.scope, key_id, suffix=".eval")
+        except FileNotFoundError:
+            eval_data = b"" # Fallback to empty if not explicitly saved
             
-        return pub_path.read_bytes(), eval_path.read_bytes()
+        return pk_data, eval_data

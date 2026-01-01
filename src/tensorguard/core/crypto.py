@@ -20,6 +20,7 @@ from typing import List, Optional, Dict, Any, Union
 from ..utils.config import settings
 from ..utils.logging import get_logger
 from ..utils.exceptions import CryptographyError
+from .keys import vault, KeyScope
 
 # Performance: Bridge to HintSight's C++ N2HE-HEXL library if available
 try:
@@ -163,26 +164,43 @@ class N2HEContext:
         self.lwe_key = _crypto_rng.choice([-1, 0, 1], size=self.params.n).astype(np.int64)
         logger.debug("N2HE Keys generated with CSPRNG")
 
-    def save_key(self, path: Union[str, Path]):
-        """Save the secret key to a file."""
+    def save_key(self, name: str):
+        """Save the secret key to the unified vault (AGGREGATION scope)."""
         if self.lwe_key is None:
             raise CryptographyError("No key to save")
         
-        path = Path(path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        # In production, this would be encrypted with a Master Key/KMS
-        np.save(path, self.lwe_key)
-        path.chmod(0o600)
-        logger.info(f"N2HE key saved to {path}")
-
-    def load_key(self, path: Union[str, Path]):
-        """Load the secret key from a file."""
-        path = Path(path)
-        if not path.exists():
-            raise CryptographyError(f"Key file not found: {path}")
+        # Binary serialization of the numpy array
+        data = self.lwe_key.astype(np.int64).tobytes()
         
-        self.lwe_key = np.load(path)
-        logger.info(f"N2HE key loaded from {path}")
+        vault.save_key_artifact(
+            scope=KeyScope.AGGREGATION,
+            name=name,
+            data=data,
+            algorithm="N2HE-LWE",
+            params={
+                "n": self.params.n,
+                "q": self.params.q,
+                "t": self.params.t,
+                "mu": self.params.mu
+            },
+            suffix=".npy.bin"
+        )
+
+    def load_key(self, name: str):
+        """Load the secret key from the unified vault."""
+        try:
+            data, meta = vault.load_key_artifact(
+                scope=KeyScope.AGGREGATION,
+                name=name,
+                suffix=".npy.bin"
+            )
+            # Reconstruct from bytes
+            self.lwe_key = np.frombuffer(data, dtype=np.int64)
+            # Optionally validate params from meta
+            if meta.params.get("n") != self.params.n:
+                logger.warning(f"Key 'n' mismatch: {meta.params.get('n')} vs {self.params.n}")
+        except Exception as e:
+            raise CryptographyError(f"Failed to load N2HE key '{name}': {e}")
 
     def encrypt_batch(self, messages: np.ndarray) -> LWECiphertext:
         """

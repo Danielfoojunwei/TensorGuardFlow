@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
 import logging
+from ...core.keys import vault, KeyScope
 
 logger = logging.getLogger(__name__)
 
@@ -60,11 +61,11 @@ class CSRGenerator:
     
     def __init__(
         self,
-        key_storage_path: str = "/var/lib/tensorguard/keys",
+        key_storage_path: str = "keys/identity", # Standardized path
         encryption_key: Optional[bytes] = None,
     ):
-        self.key_storage = Path(key_storage_path)
-        self.key_storage.mkdir(parents=True, exist_ok=True)
+        self.vault = vault
+        self.scope = KeyScope.IDENTITY
         self.encryption_key = encryption_key
         
         # In-memory key cache (runtime only)
@@ -246,11 +247,9 @@ class CSRGenerator:
         )
     
     def _store_key(self, key_pair: KeyPair) -> None:
-        """Store key pair securely."""
+        """Store key pair securely via Unified Vault."""
         if not HAS_CRYPTOGRAPHY:
             return
-        
-        key_path = self.key_storage / f"{key_pair.key_id}.key"
         
         # Serialize with encryption if key provided
         if self.encryption_key:
@@ -267,25 +266,26 @@ class CSRGenerator:
                 encryption_algorithm=serialization.NoEncryption()
             )
         
-        key_path.write_bytes(pem_data)
-        os.chmod(key_path, 0o600)  # Restrict permissions
+        self.vault.save_key_artifact(
+            scope=self.scope,
+            name=key_pair.key_id,
+            data=pem_data,
+            algorithm=key_pair.key_type,
+            params={"key_size": key_pair.key_size},
+            suffix=".key"
+        )
     
     def _get_key(self, key_id: str) -> Optional[KeyPair]:
-        """Retrieve a stored key pair."""
+        """Retrieve a stored key pair from Unified Vault."""
         # Check cache first
         if key_id in self._key_cache:
             return self._key_cache[key_id]
-        
-        # Load from storage
-        key_path = self.key_storage / f"{key_id}.key"
-        if not key_path.exists():
-            return None
         
         if not HAS_CRYPTOGRAPHY:
             return None
         
         try:
-            pem_data = key_path.read_bytes()
+            pem_data, meta = self.vault.load_key_artifact(self.scope, key_id, suffix=".key")
             
             if self.encryption_key:
                 private_key = serialization.load_pem_private_key(
@@ -300,22 +300,11 @@ class CSRGenerator:
                     backend=default_backend()
                 )
             
-            # Determine key type and size
-            if isinstance(private_key, rsa.RSAPrivateKey):
-                key_type = "RSA"
-                key_size = private_key.key_size
-            elif isinstance(private_key, ec.EllipticCurvePrivateKey):
-                key_type = "ECDSA"
-                key_size = private_key.curve.key_size
-            else:
-                key_type = "UNKNOWN"
-                key_size = 0
-            
             key_pair = KeyPair(
                 private_key=private_key,
                 public_key=private_key.public_key(),
-                key_type=key_type,
-                key_size=key_size,
+                key_type=meta.algorithm,
+                key_size=meta.params.get("key_size", 0),
                 key_id=key_id,
             )
             
@@ -323,26 +312,21 @@ class CSRGenerator:
             return key_pair
             
         except Exception as e:
-            logger.error(f"Failed to load key {key_id}: {e}")
+            logger.error(f"Failed to load key {key_id} from vault: {e}")
             return None
     
     def delete_key(self, key_id: str) -> bool:
-        """Delete a key pair (after successful rotation)."""
-        key_path = self.key_storage / f"{key_id}.key"
-        
+        """Delete a key pair from vault."""
         if key_id in self._key_cache:
             del self._key_cache[key_id]
         
-        if key_path.exists():
-            key_path.unlink()
-            logger.info(f"Deleted key: {key_id}")
+        try:
+            self.vault.delete_key(self.scope, key_id, suffix=".key")
             return True
-        
-        return False
+        except:
+            return False
     
     def list_keys(self) -> List[str]:
-        """List all stored key IDs."""
-        keys = []
-        for key_file in self.key_storage.glob("*.key"):
-            keys.append(key_file.stem)
-        return keys
+        """List all stored key IDs from vault."""
+        keys = self.vault.list_keys(self.scope)
+        return [k['key_id'].replace(f"{self.scope.value}_", "") for k in keys]

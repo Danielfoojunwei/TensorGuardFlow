@@ -10,10 +10,10 @@ import logging
 import os
 from typing import Dict, Any, Optional
 
-from ..config_manager import ConfigManager
-from ...edge_agent.spooler import Spooler
-from ...edge_agent.uploader import Uploader
-from ...edge_agent.ros2_node import AgentNode, HAS_ROS2
+from .config_manager import ConfigManager
+from ..edge_agent.spooler import Spooler
+from ..edge_agent.uploader import Uploader
+from ..edge_agent.ros2_node import AgentNode, HAS_ROS2
 
 if HAS_ROS2:
     import rclpy
@@ -39,7 +39,13 @@ class EdgeAgentManager:
         logger.info("Starting Edge Agent Manager...")
         
         # 1. Spooler
-        db_path = "/var/lib/tensorguard/spool.db"  # Should be configurable
+        data_dir = getattr(self.config, 'data_dir', './storage')
+        if ".." in data_dir or data_dir.startswith("/") or data_dir.startswith("\\"):
+             # Local dev fallback
+             data_dir = "storage"
+             
+        os.makedirs(data_dir, exist_ok=True)
+        db_path = os.path.join(data_dir, "spool.db")
         self.spooler = Spooler(db_path)
         
         # 2. Uploader

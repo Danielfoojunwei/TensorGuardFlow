@@ -30,14 +30,40 @@ class ConfigManager:
     
     def __init__(
         self,
-        config_path: str = "/var/lib/tensorguard/config.json",
+        config_path: str = "config/agent_config.json",
         fleet_api_key: Optional[str] = None
     ):
+        # Sanitize path to prevent traversal if it ever comes from an untrusted source
+        # and ensure we don't use sensitive system paths like /var/lib/ without absolute intent
+        if ".." in config_path or config_path.startswith("/") or config_path.startswith("\\"):
+            logger.warning(f"Unsafe config path detected: {config_path}. Sanitizing to local config directory.")
+            config_path = os.path.join("config", os.path.basename(config_path))
+            
         self.config_path = Path(config_path)
         self.fleet_api_key = fleet_api_key or os.environ.get("TG_FLEET_API_KEY")
+        self.timeout = 15 # Default timeout for Control Plane sync
         
         self.current_config: Optional[AgentConfig] = None
         self._listeners: list[Callable[[AgentConfig], None]] = []
+
+    def _save_local(self, config: AgentConfig):
+        """Save configuration to disk with safety checks."""
+        try:
+            # Ensure we are saving in a subfolder relative to CWD if not absolute
+            if not self.config_path.is_absolute():
+                 abs_path = Path(os.getcwd()) / self.config_path
+            else:
+                 abs_path = self.config_path
+            
+            abs_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Atomic write pattern to prevent corrupt config on disk
+            temp_path = abs_path.with_suffix(".tmp")
+            temp_path.write_text(config.json(indent=2))
+            os.replace(temp_path, abs_path)
+            
+        except Exception as e:
+            logger.error(f"Failed to save local config: {e}")
         
     def add_listener(self, callback: Callable[[AgentConfig], None]):
         """Register a callback for config updates."""
@@ -111,7 +137,7 @@ class ConfigManager:
                 "Content-Type": "application/json"
             }
             
-            response = requests.post(url, json=payload, headers=headers, timeout=10)
+            response = requests.post(url, json=payload, headers=headers, timeout=self.timeout)
             response.raise_for_status()
             
             new_config_data = response.json()
@@ -137,11 +163,3 @@ class ConfigManager:
         except Exception as e:
             logger.error(f"Sync error: {e}")
             return False
-            
-    def _save_local(self, config: AgentConfig):
-        """Save configuration to disk."""
-        try:
-            self.config_path.parent.mkdir(parents=True, exist_ok=True)
-            self.config_path.write_text(config.json(indent=2))
-        except Exception as e:
-            logger.error(f"Failed to save local config: {e}")

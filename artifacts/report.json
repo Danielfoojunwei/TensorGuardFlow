@@ -1,0 +1,38 @@
+{
+  "schema": "tensorguard.artifact.run.v1",
+  "run_id": "5ef59aa2-0da0-4e9d-806d-db2c215bc834",
+  "timestamp": "2026-01-02T00:02:39.394964",
+  "sdk_version": "2.1.0",
+  "git_commit": "0b3f9a0babe8459c95a229b67e26d1531e907735",
+  "environment": {
+    "os": "Windows",
+    "release": "11",
+    "python": "3.13.5",
+    "processor": "Intel64 Family 6 Model 154 Stepping 3, GenuineIntel"
+  },
+  "metrics": {
+    "privacy_mse": 0.0,
+    "robustness_success": null,
+    "latency_p50": 10,
+    "latency_avg": 10.0
+  },
+  "details": {
+    "micro": [
+      {
+        "cpu_usage": 10.5,
+        "memory_mb": 512,
+        "fhe_ops_per_sec": 100,
+        "metrics": {
+          "latency_ms": 10
+        },
+        "test_id": "test_1",
+        "timestamp": 1234567890
+      }
+    ],
+    "privacy": [],
+    "robustness": {}
+  },
+  "artifacts_hashes": {
+    "report.html": "77fb3f28918140b1f770888d40f2ec9074f1f5c92b8bd104f54299957b0b642b"
+  }
+}

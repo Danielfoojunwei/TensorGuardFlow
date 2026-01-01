@@ -37,9 +37,86 @@ class ReportGenerator:
 
         return data, privacy_data, robust_data
 
+    def generate_json(self, micro, privacy, robust):
+        import platform
+        import subprocess
+        import hashlib
+        import uuid
+        
+        # Gather Environment Info
+        env_info = {
+            "os": platform.system(),
+            "release": platform.release(),
+            "python": platform.python_version(),
+            "processor": platform.processor(),
+        }
+        
+        # Gather Git Info
+        try:
+            commit = subprocess.check_output(["git", "rev-parse", "HEAD"]).strip().decode('utf-8')
+        except:
+            commit = "unknown"
+
+        # Calculate Latency Stats from Microbench
+        latencies = []
+        for m in micro:
+            mets = m.get('metrics', {})
+            # Try various common keys
+            l = mets.get('latency_ms') or mets.get('p50_latency_sec', 0) * 1000.0 or mets.get('latency_sec', 0) * 1000.0
+            if l:
+                latencies.append(l)
+        
+        metrics_summary = {
+            "privacy_mse": privacy[0]['metrics']['mse'] if privacy else 0.0,
+            "robustness_success": robust.get('success', False) if robust else None,
+            "latency_p50": sorted(latencies)[len(latencies)//2] if latencies else None,
+            "latency_avg": sum(latencies)/len(latencies) if latencies else None
+        }
+
+        # Construct Report Object
+        report_id = str(uuid.uuid4())
+        report_data = {
+            "schema": "tensorguard.artifact.run.v1",
+            "run_id": report_id,
+            "timestamp": datetime.now().isoformat(),
+            "sdk_version": "2.1.0",
+            "git_commit": commit,
+            "environment": env_info,
+            "metrics": metrics_summary,
+            "details": {
+                "micro": micro,
+                "privacy": privacy,
+                "robustness": robust
+            }
+        }
+        
+        # Save JSON
+        json_path = os.path.join(self.artifacts_dir, "report.json")
+        with open(json_path, 'w') as f:
+            json.dump(report_data, f, indent=2)
+            
+        # Hash HTML if exists
+        artifacts = {}
+        if os.path.exists(self.output_file):
+            with open(self.output_file, 'rb') as f:
+                artifacts["report.html"] = hashlib.sha256(f.read()).hexdigest()
+                
+        # Hash JSON itself (meta-circular but useful if signed separately)
+        # We can't hash the file we just wrote perfectly if we want to include the hash inside it.
+        # So we store the artifacts dictionary separate or strictly as "other artifacts".
+        
+        # Update JSON with available artifact hashes
+        report_data["artifacts_hashes"] = artifacts
+        with open(json_path, 'w') as f:
+            json.dump(report_data, f, indent=2)
+
+        print(f"JSON Report generated: {json_path}")
+        return json_path
+
     def generate(self):
         micro, privacy, robust = self.load_metrics()
         
+        # ... (Existing HTML Generation Logic - kept intact) ...
         html = f"""
         <!DOCTYPE html>
         <html>
@@ -130,6 +207,9 @@ class ReportGenerator:
         with open(self.output_file, 'w') as f:
             f.write(html)
         print(f"Report generated: {self.output_file}")
+        
+        # NEW: Generate JSON as well
+        self.generate_json(micro, privacy, robust)
 
 def run_report(args):
     gen = ReportGenerator()

@@ -30,7 +30,7 @@ class AgentDaemon:
     Main agent process.
     """
     
-    def __init__(self, config_path: str = "/var/lib/tensorguard/config.json"):
+    def __init__(self, config_path: str = "./config/agent_config.json"):
         self.config_manager = ConfigManager(config_path=config_path)
         self.running = False
         
@@ -93,10 +93,15 @@ class AgentDaemon:
         
     def _start_subsystems(self):
         """Start enabled subsystems."""
-        if self.identity_mgr: self.identity_mgr.start()
-        if self.network_guard: self.network_guard.start()
-        if self.ml_mgr: self.ml_mgr.start()
-        if self.edge_mgr: self.edge_mgr.start()
+        config = self.config_manager.current_config
+        if self.identity_mgr and config.identity.enabled:
+            self.identity_mgr.start()
+        if self.network_guard and config.network.enabled:
+            self.network_guard.start()
+        if self.ml_mgr and config.ml.enabled:
+            self.ml_mgr.start()
+        if self.edge_mgr:
+            self.edge_mgr.start()
 
     def _sync_loop(self):
         """Periodic sync with control plane."""

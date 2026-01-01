@@ -21,7 +21,7 @@ __author__ = "Daniel Foo & The TensorGuard Team"
 try:
     # Core interfaces
     from .core.client import EdgeClient, create_client
-    from .api.schemas import ShieldConfig, Demonstration, SubmissionReceipt, ClientStatus
+    from .schemas.common import ShieldConfig, Demonstration, SubmissionReceipt, ClientStatus
     from .core.adapters import VLAAdapter
     from .utils.config import settings
 

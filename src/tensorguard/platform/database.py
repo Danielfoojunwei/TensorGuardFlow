@@ -9,6 +9,7 @@ from .models.identity_models import (  # noqa: F401
     IdentityRenewalJob, IdentityAuditLog, IdentityAgent
 )
 from .models.enablement_models import * # noqa: F401
+from .models.evidence_models import * # noqa: F401
 
 # Default to local sqlite for ease of deployment in MVP
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./tg_platform.db")

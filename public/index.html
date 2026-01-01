@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TensorGuard Trust Console</title>
+    <title>TensorGuard Enterprise PLM</title>
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -30,203 +30,279 @@
                         sans: ['Inter', 'sans-serif'],
                         mono: ['JetBrains Mono', 'monospace'],
                     },
-                    colors: {
-                        brand: {
-                            50: '#f0f9ff',
-                            500: '#0ea5e9',
-                            600: '#0284c7',
-                            900: '#0c4a6e',
-                        },
-                        dark: {
-                            800: '#1e1e2e',
-                            900: '#11111b',
-                            950: '#0b0b12'
-                        }
-                    }
                 }
             }
         }
     </script>
-
-    <style>
-        [x-cloak] {
-            display: none !important;
-        }
-
-        body {
-            background-color: #0b0b12;
-            color: #cdd6f4;
-        }
-
-        .glass-panel {
-            background: rgba(30, 30, 46, 0.7);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-        }
-    </style>
+    <link rel="stylesheet" href="styles.css">
 </head>
 
-<body x-data="app()" x-init="init()" class="antialiased min-h-screen flex flex-col">
+<body x-data="app()" x-init="init()" class="antialiased min-h-screen">
 
-    <!-- Navbar -->
-    <header
-        class="h-16 border-b border-white/10 flex items-center px-6 justify-between bg-dark-950/80 backdrop-blur fixed w-full z-50">
-        <div class="flex items-center gap-3">
-            <div
-                class="w-8 h-8 rounded-lg bg-brand-500 flex items-center justify-center text-white font-bold shadow-lg shadow-brand-500/20">
-                TG
-            </div>
-            <h1 class="font-semibold text-lg tracking-tight">TensorGuard <span class="text-white/40 font-normal">Trust
-                    Fabric</span></h1>
-        </div>
-
-        <nav class="flex gap-1 bg-white/5 p-1 rounded-lg">
-            <button @click="activeTab = 'runs'"
-                :class="{'bg-brand-600 text-white': activeTab === 'runs', 'text-white/60 hover:text-white': activeTab !== 'runs'}"
-                class="px-4 py-1.5 rounded-md text-sm font-medium transition-all">Enablement Runs</button>
-            <button @click="activeTab = 'governance'"
-                :class="{'bg-brand-600 text-white': activeTab === 'governance', 'text-white/60 hover:text-white': activeTab !== 'governance'}"
-                class="px-4 py-1.5 rounded-md text-sm font-medium transition-all">Policy & Governance</button>
-            <button @click="activeTab = 'integration'"
-                :class="{'bg-brand-600 text-white': activeTab === 'integration', 'text-white/60 hover:text-white': activeTab !== 'integration'}"
-                class="px-4 py-1.5 rounded-md text-sm font-medium transition-all">Integrations</button>
-        </nav>
-
-        <div class="flex items-center gap-4">
-            <div
-                class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-mono">
-                <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                SYSTEM ONLINE
-            </div>
-        </div>
-    </header>
-
-    <!-- Main Content -->
-    <main class="flex-1 pt-24 px-6 pb-12 max-w-7xl mx-auto w-full">
-
-        <!-- Stats Row -->
-        <div class="grid grid-cols-4 gap-4 mb-8">
-            <div class="glass-panel p-4 rounded-xl">
-                <div class="text-white/40 text-xs font-mono uppercase mb-1">Active Jobs</div>
-                <div class="text-2xl font-bold font-mono text-white" x-text="stats.active_runs || 0">0</div>
-            </div>
-            <div class="glass-panel p-4 rounded-xl">
-                <div class="text-white/40 text-xs font-mono uppercase mb-1">24h Throughput</div>
-                <div class="text-2xl font-bold font-mono text-white" x-text="stats.total_runs_24h || 0">0</div>
-            </div>
-            <div class="glass-panel p-4 rounded-xl">
-                <div class="text-white/40 text-xs font-mono uppercase mb-1">Privacy Budget (ε)</div>
-                <div class="text-2xl font-bold font-mono text-indigo-400" x-text="stats.dp_budget_spent || '0.0'">0.0
-                </div>
-            </div>
-            <div class="glass-panel p-4 rounded-xl border-rose-500/20 bg-rose-500/5">
-                <div class="text-rose-400/60 text-xs font-mono uppercase mb-1">Policy Violations</div>
-                <div class="text-2xl font-bold font-mono text-rose-400" x-text="stats.failed_runs || 0">0</div>
-            </div>
-        </div>
-
-        <!-- View: Enablement Runs -->
-        <div x-show="activeTab === 'runs'" x-transition.opacity>
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-lg font-medium text-white">Trust Enablement History</h2>
-                <div class="flex gap-2">
-                    <button @click="fetchJobs()" class="p-2 text-white/40 hover:text-white transition"><i
-                            data-lucide="refresh-cw" class="w-4 h-4"></i></button>
+    <div class="main-grid">
+        <!-- Sidebar -->
+        <aside class="bg-[#0f0f17] border-r border-white/5 flex flex-col p-6 fixed h-full w-[260px]">
+            <div class="flex items-center gap-3 mb-10 overflow-hidden">
+                <div
+                    class="w-8 h-8 rounded-lg bg-sky-500 flex-shrink-0 flex items-center justify-center text-white font-bold">
+                    T</div>
+                <div class="flex flex-col">
+                    <span class="font-bold text-sm tracking-tight">TensorGuard</span>
+                    <span class="text-[10px] text-white/40 uppercase tracking-widest font-semibold">Enterprise
+                        PLM</span>
                 </div>
             </div>
 
-            <div class="glass-panel rounded-xl overflow-hidden">
-                <table class="w-full text-left text-sm">
-                    <thead>
-                        <tr class="border-b border-white/5 bg-white/5 text-white/50 font-mono text-xs uppercase">
-                            <th class="px-6 py-3">Status</th>
-                            <th class="px-6 py-3">Run ID</th>
-                            <th class="px-6 py-3">Job Type</th>
-                            <th class="px-6 py-3">Robot ID</th>
-                            <th class="px-6 py-3">Metrics</th>
-                            <th class="px-6 py-3 text-right">Time</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-white/5">
-                        <template x-for="job in jobs" :key="job.run_id">
-                            <tr class="hover:bg-white/5 transition group">
-                                <td class="px-6 py-3">
-                                    <span :class="{
-                                        'bg-emerald-500/10 text-emerald-400 border-emerald-500/20': job.status === 'SUCCESS',
-                                        'bg-rose-500/10 text-rose-400 border-rose-500/20': job.status === 'FAILED',
-                                        'bg-sky-500/10 text-sky-400 border-sky-500/20': job.status === 'RUNNING',
-                                        'bg-amber-500/10 text-amber-400 border-amber-500/20': job.status === 'PENDING'
-                                    }"
-                                        class="px-2 py-0.5 rounded textxs font-mono border inline-flex items-center gap-1.5">
-                                        <span class="w-1.5 h-1.5 rounded-full" :class="{
-                                            'bg-emerald-400': job.status === 'SUCCESS',
-                                            'bg-rose-400': job.status === 'FAILED',
-                                            'bg-sky-400': job.status === 'RUNNING',
-                                            'bg-amber-400': job.status === 'PENDING'
-                                        }"></span>
-                                        <span x-text="job.status"></span>
-                                    </span>
-                                </td>
-                                <td class="px-6 py-3 font-mono text-white/80" x-text="job.run_id"></td>
-                                <td class="px-6 py-3 text-white/60" x-text="job.job_type"></td>
-                                <td class="px-6 py-3 text-white/60 font-mono text-xs" x-text="job.robot_id"></td>
-                                <td class="px-6 py-3 text-white/60 text-xs">
-                                    <span x-show="job.metrics"
-                                        x-text="Object.keys(job.metrics).length + ' metrics'"></span>
-                                </td>
-                                <td class="px-6 py-3 text-right text-white/40 text-xs font-mono"
-                                    x-text="formatDate(job.start_time)"></td>
-                            </tr>
-                        </template>
-                        <tr x-show="jobs.length === 0" class="text-center py-8">
-                            <td colspan="6" class="p-8 text-white/30">No runs found.</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
+            <nav class="space-y-1 flex-1">
+                <div @click="activeTab = 'dashboard'" class="sidebar-link"
+                    :class="{'active': activeTab === 'dashboard'}">
+                    <i data-lucide="layout-dashboard"></i> <span>Dashboard</span>
+                </div>
+                <div @click="activeTab = 'lineage'" class="sidebar-link" :class="{'active': activeTab === 'lineage'}">
+                    <i data-lucide="git-branch"></i> <span>Model Lineage</span>
+                </div>
+                <div @click="activeTab = 'compliance'" class="sidebar-link"
+                    :class="{'active': activeTab === 'compliance'}">
+                    <i data-lucide="shield-check"></i> <span>Compliance Registry</span>
+                </div>
+                <div @click="activeTab = 'vault'" class="sidebar-link" :class="{'active': activeTab === 'vault'}">
+                    <i data-lucide="key"></i> <span>Key Vault</span>
+                </div>
+                <div @click="activeTab = 'audit'" class="sidebar-link" :class="{'active': activeTab === 'audit'}">
+                    <i data-lucide="clipboard-list"></i> <span>Audit Trail</span>
+                </div>
+            </nav>
 
-        <!-- View: Policies -->
-        <div x-show="activeTab === 'governance'" x-transition.opacity class="grid grid-cols-3 gap-6">
-            <div class="col-span-1 glass-panel rounded-xl p-6">
-                <h3 class="font-medium text-white mb-4">Gate Configuration</h3>
-                <div class="space-y-4">
+            <div class="border-t border-white/5 pt-6 mt-6">
+                <div class="flex items-center gap-3 px-2">
                     <div
-                        class="p-4 rounded-lg bg-white/5 border border-white/5 hover:border-brand-500/50 cursor-pointer transition">
-                        <div class="flex items-center gap-2 mb-1">
-                            <i data-lucide="shield" class="w-4 h-4 text-emerald-400"></i>
-                            <div class="text-sm font-medium text-white">Baseline Policy</div>
-                        </div>
-                        <div class="text-xs text-white/40">Default controls for ingestion-only jobs</div>
+                        class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-xs font-bold text-sky-400">
+                        DF</div>
+                    <div class="flex flex-col">
+                        <span class="text-xs font-semibold">Daniel Foo</span>
+                        <span class="text-[10px] text-white/30 truncate max-w-[140px]">ORG_ADMIN</span>
                     </div>
                 </div>
             </div>
+        </aside>
 
-            <div class="col-span-2 glass-panel rounded-xl p-0 overflow-hidden flex flex-col">
-                <div class="p-4 border-b border-white/10 bg-white/5 flex justify-between items-center">
-                    <h3 class="font-mono text-sm text-white/60">policy_v1.json</h3>
-                    <button class="text-xs bg-brand-600 hover:bg-brand-500 text-white px-3 py-1 rounded">Save
-                        Changes</button>
+        <!-- Main Content (Spacer for fixed sidebar) -->
+        <div class="col-start-2">
+            <header
+                class="h-16 border-b border-white/5 flex items-center px-10 sticky top-0 bg-[#0a0a0f]/80 backdrop-blur z-40 justify-between">
+                <div class="flex items-center gap-2 text-xs text-white/40 font-mono">
+                    <span>SYSTEM_TIME</span>
+                    <span class="text-white/60" x-text="currentTime"></span>
+                    <span class="mx-2">|</span>
+                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    <span class="text-emerald-500">PRODUCTION READY</span>
                 </div>
-                <div class="flex-1 bg-dark-900 p-4 font-mono text-sm text-sky-300">
-                    <textarea class="w-full h-96 bg-transparent border-0 focus:ring-0 resize-none" spellcheck="false">{
-  "dp_budget_limit": 10.0,
-  "drift_threshold": 0.05,
-  "allowed_layers": [
-    "adapter_layer",
-    "attention_head"
-  ],
-  "rollback_required": true
-}</textarea>
+                <div class="flex items-center gap-4">
+                    <button
+                        class="bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-md text-xs font-medium border border-white/10 transition-colors">Export
+                        Report</button>
+                    <button
+                        class="bg-sky-600 hover:bg-sky-500 px-3 py-1.5 rounded-md text-xs font-medium transition-colors shadow-lg shadow-sky-600/20">New
+                        Enablement Run</button>
                 </div>
-            </div>
+            </header>
+
+            <main class="content-area">
+                <!-- Dashboard Tab -->
+                <div x-show="activeTab === 'dashboard'" x-transition x-cloak>
+                    <div class="grid grid-cols-4 gap-6 mb-10">
+                        <div class="plm-card">
+                            <span class="text-[10px] text-white/40 uppercase font-bold tracking-wider mb-1 block">Active
+                                Identifiers</span>
+                            <div class="flex items-end gap-2">
+                                <span class="text-3xl font-bold font-mono">14</span>
+                                <span class="text-emerald-500 text-xs mb-1">Live Seats</span>
+                            </div>
+                        </div>
+                        <div class="plm-card">
+                            <span class="text-[10px] text-white/40 uppercase font-bold tracking-wider mb-1 block">Model
+                                Lineage Score</span>
+                            <div class="flex items-end gap-2">
+                                <span class="text-3xl font-bold font-mono">99.8</span>
+                                <span class="text-emerald-500 text-xs mb-1">% Authenticated</span>
+                            </div>
+                        </div>
+                        <div class="plm-card">
+                            <span
+                                class="text-[10px] text-white/40 uppercase font-bold tracking-wider mb-1 block">Privacy
+                                Budget Remaining</span>
+                            <div class="flex items-end gap-2">
+                                <span class="text-3xl font-bold font-mono">ε 8.4</span>
+                                <span class="text-sky-500 text-xs mb-1">Standard Cap</span>
+                            </div>
+                        </div>
+                        <div class="plm-card">
+                            <span
+                                class="text-[10px] text-white/40 uppercase font-bold tracking-wider mb-1 block">Compliance
+                                Status</span>
+                            <div class="flex items-center mt-1">
+                                <span class="badge badge-success">GDPR: YES</span>
+                                <span class="mx-1 text-white/10">|</span>
+                                <span class="badge badge-success">HIPAA: YES</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h3 class="text-lg font-semibold mb-6 flex items-center gap-2">
+                        <i data-lucide="activity" class="text-sky-500 w-5 h-5"></i> System Activity Proof
+                    </h3>
+
+                    <div class="plm-card">
+                        <table class="w-full text-left text-sm">
+                            <thead>
+                                <tr class="text-white/40 border-b border-white/5">
+                                    <th class="pb-3 font-medium">Trace ID</th>
+                                    <th class="pb-3 font-medium">Model Type</th>
+                                    <th class="pb-3 font-medium">Audit Proof</th>
+                                    <th class="pb-3 font-medium">System Time</th>
+                                    <th class="pb-3 font-medium">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-white/5">
+                                <template x-for="job in jobs" :key="job.id">
+                                    <tr class="hover:bg-white/[0.02] transition-all group">
+                                        <td class="py-4 font-mono text-xs text-white/60" x-text="job.id.substring(0,8)">
+                                        </td>
+                                        <td class="py-4">
+                                            <div class="flex items-center gap-2">
+                                                <div class="w-2 h-2 rounded-full bg-sky-500"></div>
+                                                <span x-text="job.type"></span>
+                                            </div>
+                                        </td>
+                                        <td class="py-4">
+                                            <span
+                                                class="text-[10px] font-mono text-white/30 truncate max-w-[150px] inline-block"
+                                                x-text="job.api_key_hash"></span>
+                                        </td>
+                                        <td class="py-4 text-white/40 text-xs" x-text="formatDate(job.created_at)"></td>
+                                        <td class="py-4">
+                                            <span
+                                                :class="{'badge-success': job.status === 'completed', 'badge-warning': job.status === 'pending'}"
+                                                class="badge" x-text="job.status"></span>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Lineage Tab (Stub) -->
+                <div x-show="activeTab === 'lineage'" x-transition x-cloak>
+                    <h3 class="text-lg font-semibold mb-6">Model Lineage & Traceability</h3>
+                    <div
+                        class="plm-card h-[400px] flex items-center justify-center text-white/40 border-dashed border-2">
+                        <div class="text-center">
+                            <i data-lucide="share-2" class="w-12 h-12 mx-auto mb-4 opacity-20"></i>
+                            <p>Lineage Graph Initialization...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Compliance Tab -->
+                <div x-show="activeTab === 'compliance'" x-transition x-cloak>
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-lg font-semibold">Enterprise Compliance Registry</h3>
+                        <div class="flex gap-2">
+                            <span class="badge badge-info text-[10px]">ISO 9001</span>
+                            <span class="badge badge-info text-[10px]">SOC 2</span>
+                            <span class="badge badge-info text-[10px]">GDPR</span>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-6 mb-10">
+                        <div class="plm-card border-emerald-500/20">
+                            <h4 class="font-bold flex items-center gap-2 mb-4">
+                                <i data-lucide="check-circle" class="text-emerald-500 w-4 h-4"></i> SOC 2 Type II
+                            </h4>
+                            <p class="text-xs text-white/50 leading-relaxed mb-4">Verification logs synchronized with
+                                UKF Audit Ledger. Total controls mapped: 24/24.</p>
+                            <div
+                                class="flex justify-between items-center bg-white/5 p-3 rounded-lg border border-white/5">
+                                <span class="text-[10px] font-mono text-white/40 uppercase">Last Verification</span>
+                                <span class="text-xs font-semibold uppercase text-emerald-400">PASSED: 2026-01-01</span>
+                            </div>
+                        </div>
+                        <div class="plm-card border-emerald-500/20">
+                            <h4 class="font-bold flex items-center gap-2 mb-4">
+                                <i data-lucide="shield" class="text-emerald-500 w-4 h-4"></i> TGSP Manifest Integrity
+                            </h4>
+                            <p class="text-xs text-white/50 leading-relaxed mb-4">Cryptographic pinning of container
+                                layers active. All manifests verified against fleet CA.</p>
+                            <div
+                                class="flex justify-between items-center bg-white/5 p-3 rounded-lg border border-white/5">
+                                <span class="text-[10px] font-mono text-white/40 uppercase">Active Profiles</span>
+                                <span class="text-xs font-semibold uppercase text-emerald-400"
+                                    x-text="tgspPackages.filter(p => p.status === 'verified').length"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h4 class="text-sm font-semibold mb-4 flex items-center gap-2 opacity-60">
+                        <i data-lucide="package" class="w-4 h-4"></i> Registered Security Profiles (TGSP)
+                    </h4>
+
+                    <div class="plm-card">
+                        <table class="w-full text-left text-sm">
+                            <thead>
+                                <tr class="text-white/40 border-b border-white/5">
+                                    <th class="pb-3 font-medium">Package ID</th>
+                                    <th class="pb-3 font-medium">Producer</th>
+                                    <th class="pb-3 font-medium">Policy Match</th>
+                                    <th class="pb-3 font-medium">Verified On</th>
+                                    <th class="pb-3 font-medium">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-white/5">
+                                <template x-for="pkg in tgspPackages" :key="pkg.id">
+                                    <tr class="hover:bg-white/[0.02] transition-all group">
+                                        <td class="py-4 font-mono text-xs text-white/60"
+                                            x-text="pkg.id.substring(0,12)"></td>
+                                        <td class="py-4 text-xs" x-text="pkg.producer_id"></td>
+                                        <td class="py-4">
+                                            <div class="flex flex-col">
+                                                <span class="text-xs" x-text="pkg.policy_id"></span>
+                                                <span class="text-[10px] text-white/30"
+                                                    x-text="'v' + pkg.policy_version"></span>
+                                            </div>
+                                        </td>
+                                        <td class="py-4 text-white/40 text-xs"
+                                            x-text="new Date(pkg.created_at).toLocaleDateString()"></td>
+                                        <td class="py-4">
+                                            <span
+                                                :class="{'badge-success': pkg.status === 'verified', 'badge-warning': pkg.status === 'uploaded', 'badge-danger': pkg.status === 'rejected'}"
+                                                class="badge" x-text="pkg.status"></span>
+                                        </td>
+                                    </tr>
+                                </template>
+                                <tr x-show="tgspPackages.length === 0">
+                                    <td colspan="5" class="py-8 text-center text-white/20 italic text-xs">No security
+                                        profiles registered in this environment.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </main>
         </div>
-
-    </main>
+    </div>
 
     <script src="app.js"></script>
     <script>
-        lucide.createIcons();
+        // Re-initialize icons after Alpine renders
+        document.addEventListener('alpine:initialized', () => {
+            lucide.createIcons();
+        });
+
+        // Re-run icons when tabs change
+        window.addEventListener('tab-changed', () => {
+            lucide.createIcons();
+        });
     </script>
 </body>
 

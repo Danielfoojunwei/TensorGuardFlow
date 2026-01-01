@@ -7,11 +7,15 @@ Shared data models used across Agent and Core.
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 
+import uuid
+
 class Demonstration(BaseModel):
     """A collected demonstration (visual/action data)."""
-    id: str
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     task_id: Optional[str] = None
-    data: Any  # Placeholder for actual tensor data (numpy/torch)
+    observations: Optional[List[Any]] = None
+    actions: Optional[List[Any]] = None
+    data: Any = None
     metadata: Dict[str, Any] = {}
 
 class ShieldConfig(BaseModel):

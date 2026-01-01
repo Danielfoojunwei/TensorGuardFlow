@@ -1,9 +1,22 @@
 __pycache__/
 *.pyc
 .pytest_cache/
-artifacts/
+# artifacts/  <-- I should probably keep this but allow the schema file?
+# Actually, the user wants artifacts/ to be part of the open core for some parts.
+# But the generated artifacts (the actual data) should stay ignored.
+# Let's keep artifacts/ ignored but allow the schema directory.
+!src/tensorguard/artifacts/schema/
+
 tests/keys_tmp/
 keys/moai/
 *.egg-info/
 dist/
 build/
+
+# TGSP Security
+*.priv
+*.pub
+*.tgsp
+recovered_assets/
+storage/
+*.db

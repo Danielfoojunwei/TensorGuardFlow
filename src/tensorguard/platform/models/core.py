@@ -48,3 +48,16 @@ class Job(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     fleet: Fleet = Relationship(back_populates="jobs")
+
+class AuditLog(SQLModel, table=True):
+    """Traceability ledger for SOC 2 and ISO 9001 compliance."""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
+    tenant_id: str = Field(foreign_key="tenant.id", index=True)
+    user_id: Optional[str] = Field(foreign_key="user.id", nullable=True)
+    action: str  # e.g., "KEY_SIGN", "PACKAGE_UPLOAD", "MODEL_DEPLOY"
+    resource_id: str
+    resource_type: str
+    details: str = Field(default="{}") # JSON blob
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    ip_address: Optional[str] = None
+    success: bool = True

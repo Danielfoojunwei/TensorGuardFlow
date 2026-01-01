@@ -2,8 +2,12 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from .database import init_db
-from .api import endpoints
 import os
+
+# Initialize database schema immediately to avoid OperationalErrors during import
+init_db()
+
+from .api import endpoints
 
 app = FastAPI(
     title="TensorGuard Management Platform",
@@ -23,11 +27,6 @@ app.add_middleware(
 # Output structure for dev convenience
 os.makedirs("public", exist_ok=True)
 
-# Helper to init DB on startup
-@app.on_event("startup")
-def on_startup():
-    init_db()
-
 # Routes
 app.include_router(endpoints.router, prefix="/api/v1")
 
@@ -42,6 +41,22 @@ app.include_router(config_endpoints.router, prefix="/api/v1/config", tags=["conf
 # Enablement routes (Trust Console)
 from .api import enablement_endpoints
 app.include_router(enablement_endpoints.router, prefix="/api/v1/enablement", tags=["enablement"])
+
+# Runs & Evidence
+from .api import runs_endpoints
+app.include_router(runs_endpoints.router, prefix="/api/v1", tags=["runs"])
+
+# Community TGSP
+from .api import community_tgsp
+app.include_router(community_tgsp.router, prefix="/api/community/tgsp", tags=["community-tgsp"])
+
+# Enterprise Stubs (Proprietary Boundary)
+try:
+    from .enterprise import check_entitlement, log_audit_event
+    print("Enterprise extensions found.")
+except ImportError:
+    def check_entitlement(user, feat): return True
+    def log_audit_event(ev): pass
 
 # Serve UI
 app.mount("/", StaticFiles(directory="public", html=True), name="static")

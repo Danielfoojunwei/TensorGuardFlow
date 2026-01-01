@@ -1,18 +1,35 @@
 function app() {
     return {
-        activeTab: 'runs',
+        activeTab: 'dashboard',
         stats: {},
         jobs: [],
+        tgspPackages: [],
+        currentTime: '',
 
         init() {
+            this.updateTime();
+            setInterval(() => this.updateTime(), 1000);
+
             this.fetchStats();
             this.fetchJobs();
+            this.fetchTGSP();
 
             // Poll every 5s
             setInterval(() => {
                 this.fetchStats();
-                if (this.activeTab === 'runs') this.fetchJobs();
+                this.fetchJobs();
+                this.fetchTGSP();
             }, 5000);
+
+            // Re-run icons when tab changes
+            this.$watch('activeTab', () => {
+                setTimeout(() => lucide.createIcons(), 50);
+            });
+        },
+
+        updateTime() {
+            const now = new Date();
+            this.currentTime = now.toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
         },
 
         async fetchStats() {
@@ -34,6 +51,17 @@ function app() {
                 }
             } catch (e) {
                 console.error("Jobs fetch failed", e);
+            }
+        },
+
+        async fetchTGSP() {
+            try {
+                const res = await fetch('/api/community/tgsp/packages');
+                if (res.ok) {
+                    this.tgspPackages = await res.json();
+                }
+            } catch (e) {
+                console.error("TGSP fetch failed", e);
             }
         },
 

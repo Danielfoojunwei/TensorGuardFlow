@@ -102,6 +102,11 @@ class PaddingDefense:
 
 class FrontDefense:
     """Simulates FRONT (Dummy packets) defense with ROBOTICS ENHANCEMENT."""
+    
+    def __init__(self):
+        self.total_delay = 0.0
+        self.packet_count = 0
+
     def apply(self, trace: List[Packet]) -> List[Packet]:
         defended = list(trace) # Copy
         
@@ -139,6 +144,12 @@ class FrontDefense:
                 if p.timestamp <= current_t:
                     # Packet is ready to send
                     defended_trace.append(Packet(current_t, 1400, p.direction))
+                    
+                    # TRACK LATENCY
+                    delay = (current_t - p.timestamp) * 1000.0 # ms
+                    self.total_delay += delay
+                    self.packet_count += 1
+                    
                     queue_idx += 1
                     has_real = True
             
@@ -148,7 +159,31 @@ class FrontDefense:
                 
             current_t += interval
             
+        # Metrics: Latency Calculation
+        # Map original timestamps to new timestamps for real packets
+        # latencies = []
+        # real_defended = [p for p in defended_trace if p.size > 0] # Simplified check (dummy logic handled by size/flag in Packet class?)
+        # Actually in this script Packet doesn't have 'dummy' flag, we just infer.
+        # But we know real packets are the ones we dequeued.
+        
+        # Let's just do a rough check: Time of last real packet out - Time of last real packet in?
+        # Better: Average delay.
+        # Since we re-ordered, we track indices?
+        # Simplify: We know the defense enforces `current_t`.
+        # The delay for a packet arriving at `p.timestamp` sent at `current_t` is `current_t - p.timestamp`.
+        
         return defended_trace
+    
+    # NOTE: To avoid breaking the signature `apply(trace) -> trace` expected by the loop, 
+    # we will implement a separate measure method or just print it inside apply if we want simplicity.
+    # Let's stick to the signature `apply` but print inside is messy.
+    # Let's modify the Loop in run_benchmark to handle the return if we change it.
+    
+    # Actually, simpler: Just modify the Loop to expect a tuple/extra info only if we want specific reporting.
+    # Or just print it inside 'apply' for this ad-hoc request.
+    
+    pass 
+
 
 # === 3. Feature Extraction (The "Signal Processing" Approach) ===
 
@@ -268,9 +303,13 @@ def run_benchmark():
     preds_front = clf_front.predict(X_test_front)
     front_acc = accuracy_score(y_test_front, preds_front)
     
-    print(f"\n[DEFENSE: FRONT] Attack Accuracy: {front_acc*100:.1f}%")
+    print(f"\n[DEFENSE: FRONT/CBR] Attack Accuracy: {front_acc*100:.1f}%")
     drop_front = baseline_acc - front_acc
     print(f"Privacy Gain: +{drop_front*100:.1f}% reduction in identification rate.")
+    
+    avg_latency = front_defense.total_delay / max(front_defense.packet_count, 1)
+    print(f"Average Network Latency Overhead: {avg_latency:.2f} ms")
+
     
     print("\nSummary:")
     print(f"Baseline: {baseline_acc:.2%}")

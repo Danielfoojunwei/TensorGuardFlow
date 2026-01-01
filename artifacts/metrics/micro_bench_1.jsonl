@@ -1,0 +1,1 @@
+{"cpu_usage": 10.5, "memory_mb": 512, "fhe_ops_per_sec": 100, "metrics": {"latency_ms": 10}, "test_id": "test_1", "timestamp": 1234567890}
