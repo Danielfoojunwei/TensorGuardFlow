@@ -1,7 +1,15 @@
 from typing import Optional, List
 from sqlmodel import SQLModel, Field, Relationship
 from datetime import datetime
+from enum import Enum
 import uuid
+
+class UserRole(str, Enum):
+    ORG_ADMIN = "org_admin"
+    SITE_ADMIN = "site_admin"
+    OPERATOR = "operator"
+    AUDITOR = "auditor"
+    SERVICE_ACCOUNT = "service_account"
 
 class Tenant(SQLModel, table=True):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
@@ -16,7 +24,7 @@ class User(SQLModel, table=True):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
     email: str = Field(unique=True, index=True)
     hashed_password: str
-    role: str = Field(default="operator") # owner, admin, operator, auditor
+    role: UserRole = Field(default=UserRole.OPERATOR) 
     tenant_id: str = Field(foreign_key="tenant.id")
     
     tenant: Tenant = Relationship(back_populates="users")

@@ -7,7 +7,7 @@ Incorporates Expert-Driven Aggregation (EDA) for federated robotics.
 import numpy as np
 from typing import Dict, Any, Callable, Optional, List
 
-from ..api.schemas import Demonstration
+from ..schemas.common import Demonstration
 from ..utils.logging import get_logger
 from ..utils.exceptions import ValidationError
 
@@ -125,6 +125,8 @@ class MoEAdapter(VLAAdapter):
                     param = f"block_{b_idx}.param"
                     if param in raw_grads:
                         expert_grads[expert][param] = raw_grads[param] * weight
+        
+        return expert_grads
         
 class FHEExportAdapter(VLAAdapter):
     """
