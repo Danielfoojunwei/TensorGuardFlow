@@ -263,7 +263,7 @@ class InventoryService:
     ) -> Dict[str, Any]:
         """
         Assess risk/blast radius if a certificate expires or fails.
-        
+
         Returns:
             Dict with affected endpoints, criticality breakdown, and total risk score.
         """
@@ -275,7 +275,7 @@ class InventoryService:
         else:
             # Assess all expiring certificates
             certs = self.list_certificates(tenant_id, expiry_within_days=30)
-        
+
         risk_data = {
             "certificates_at_risk": len(certs),
             "endpoints_affected": [],
@@ -287,7 +287,7 @@ class InventoryService:
             },
             "total_risk_score": 0,
         }
-        
+
         # Criticality weights
         weights = {
             Criticality.CRITICAL: 10,
@@ -295,9 +295,19 @@ class InventoryService:
             Criticality.MEDIUM: 2,
             Criticality.LOW: 1,
         }
-        
+
+        # Batch fetch all endpoints to avoid N+1 queries
+        endpoint_ids = list(set(cert.endpoint_id for cert in certs))
+        if endpoint_ids:
+            endpoints_result = self.session.exec(
+                select(IdentityEndpoint).where(IdentityEndpoint.id.in_(endpoint_ids))
+            ).all()
+            endpoints_map = {ep.id: ep for ep in endpoints_result}
+        else:
+            endpoints_map = {}
+
         for cert in certs:
-            endpoint = self.get_endpoint(cert.endpoint_id)
+            endpoint = endpoints_map.get(cert.endpoint_id)
             if endpoint:
                 risk_data["endpoints_affected"].append({
                     "endpoint_id": endpoint.id,
@@ -306,33 +316,45 @@ class InventoryService:
                     "criticality": endpoint.criticality.value,
                     "days_to_expiry": cert.days_to_expiry,
                 })
-                
+
                 risk_data["criticality_breakdown"][endpoint.criticality.value] += 1
                 risk_data["total_risk_score"] += weights.get(endpoint.criticality, 1)
-        
+
         return risk_data
     
     def detect_eku_violations(self, tenant_id: str) -> List[Dict[str, Any]]:
         """
         Detect certificates with EKU conflicts for Jun 2026 Chrome rule.
-        
+
         Returns list of certificates needing migration to private CA.
         """
         certs = self.list_certificates(tenant_id)
+
+        # Filter certificates with EKU conflicts
+        conflicting_certs = [cert for cert in certs if cert.has_eku_conflict]
+
+        # Batch fetch all endpoints to avoid N+1 queries
+        endpoint_ids = list(set(cert.endpoint_id for cert in conflicting_certs))
+        if endpoint_ids:
+            endpoints_result = self.session.exec(
+                select(IdentityEndpoint).where(IdentityEndpoint.id.in_(endpoint_ids))
+            ).all()
+            endpoints_map = {ep.id: ep for ep in endpoints_result}
+        else:
+            endpoints_map = {}
+
         violations = []
-        
-        for cert in certs:
-            if cert.has_eku_conflict:
-                endpoint = self.get_endpoint(cert.endpoint_id)
-                violations.append({
-                    "certificate_id": cert.id,
-                    "fingerprint": cert.fingerprint_sha256,
-                    "subject": cert.subject_dn,
-                    "endpoint": endpoint.name if endpoint else "Unknown",
-                    "days_to_expiry": cert.days_to_expiry,
-                    "recommendation": "Split into public (serverAuth) + private (clientAuth) certs",
-                })
-        
+        for cert in conflicting_certs:
+            endpoint = endpoints_map.get(cert.endpoint_id)
+            violations.append({
+                "certificate_id": cert.id,
+                "fingerprint": cert.fingerprint_sha256,
+                "subject": cert.subject_dn,
+                "endpoint": endpoint.name if endpoint else "Unknown",
+                "days_to_expiry": cert.days_to_expiry,
+                "recommendation": "Split into public (serverAuth) + private (clientAuth) certs",
+            })
+
         return violations
     
     # === Agents ===

@@ -6,10 +6,20 @@
 # Default target
 all: test
 
-# Installation
+# Installation (uses pyproject.toml for dependency management)
 install:
+	pip install -e ".[all]"
+
+# Install core only (minimal dependencies)
+install-core:
 	pip install -e .
-	pip install pytest pytest-asyncio tenseal numpy cryptography fastapi sqlmodel uvicorn pydantic-settings xgboost scikit-learn scipy
+
+# Install with specific extras
+install-dev:
+	pip install -e ".[dev]"
+
+install-bench:
+	pip install -e ".[bench]"
 
 # Project Setup
 setup:

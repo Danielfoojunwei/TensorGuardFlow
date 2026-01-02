@@ -57,13 +57,13 @@ class TenSEALBackend(MoaiBackend):
             idx = int(parts[0])
             if idx not in parsed_layers:
                 parsed_layers[idx] = {}
-                
+
             # Deserialize
             try:
                 data = pickle.loads(val)
-                parsed_layers[idx][parts[-1]] = data # e.g. "weight", "bias", "activation"
-            except:
-                logger.warning(f"Failed to deserialize weight {key}")
+                parsed_layers[idx][parts[-1]] = data  # e.g. "weight", "bias", "activation"
+            except (pickle.UnpicklingError, ValueError, TypeError, EOFError) as e:
+                logger.warning(f"Failed to deserialize weight {key}: {e}")
                 
         # Sort by index
         sorted_indices = sorted(parsed_layers.keys())

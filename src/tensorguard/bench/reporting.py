@@ -6,7 +6,11 @@ Generates HTML dashboard from JSONL artifacts.
 import os
 import json
 import glob
+import logging
+import statistics
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 class ReportGenerator:
     def __init__(self, artifacts_dir: str = "artifacts"):
@@ -54,7 +58,8 @@ class ReportGenerator:
         # Gather Git Info
         try:
             commit = subprocess.check_output(["git", "rev-parse", "HEAD"]).strip().decode('utf-8')
-        except:
+        except (subprocess.CalledProcessError, FileNotFoundError, OSError) as e:
+            logger.debug(f"Could not get git commit: {e}")
             commit = "unknown"
 
         # Calculate Latency Stats from Microbench
@@ -65,12 +70,13 @@ class ReportGenerator:
             l = mets.get('latency_ms') or mets.get('p50_latency_sec', 0) * 1000.0 or mets.get('latency_sec', 0) * 1000.0
             if l:
                 latencies.append(l)
-        
+
+        # Use statistics module for efficient percentile calculation
         metrics_summary = {
             "privacy_mse": privacy[0]['metrics']['mse'] if privacy else 0.0,
             "robustness_success": robust.get('success', False) if robust else None,
-            "latency_p50": sorted(latencies)[len(latencies)//2] if latencies else None,
-            "latency_avg": sum(latencies)/len(latencies) if latencies else None
+            "latency_p50": statistics.median(latencies) if latencies else None,
+            "latency_avg": statistics.mean(latencies) if latencies else None
         }
 
         # Construct Report Object

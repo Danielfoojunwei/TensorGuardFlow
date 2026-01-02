@@ -19,7 +19,6 @@ from ..schemas.unified_config import AgentConfig
 # Subsystems
 from .identity.manager import IdentityManager
 from .network.guardian import NetworkGuardian
-from .network.guardian import NetworkGuardian
 from .ml.manager import MLManager
 from .edge_manager import EdgeAgentManager
 
@@ -29,14 +28,19 @@ class AgentDaemon:
     """
     Main agent process.
     """
-    
+
+    # Sync configuration
+    SYNC_INTERVAL_SECONDS = 60
+    SYNC_MAX_BACKOFF_SECONDS = 300
+
     def __init__(self, config_path: str = "./config/agent_config.json"):
         self.config_manager = ConfigManager(config_path=config_path)
         self.running = False
-        
+        self._stop_event = threading.Event()
+
         # Threads
         self._sync_thread = None
-        
+
         # Subsystems
         self.identity_mgr: Optional[IdentityManager] = None
         self.network_guard: Optional[NetworkGuardian] = None
@@ -65,19 +69,20 @@ class AgentDaemon:
         self._sync_thread = threading.Thread(target=self._sync_loop, daemon=True)
         self._sync_thread.start()
         
-        # 6. Block main thread (or wait for signal)
+        # 6. Block main thread (or wait for signal) using event-based waiting
         logger.info("Agent daemon running. Press Ctrl+C to stop.")
         try:
-            while self.running:
-                time.sleep(1)
+            # Wait on event instead of polling with sleep(1)
+            self._stop_event.wait()
         except KeyboardInterrupt:
             self.stop()
-            
+
     def stop(self):
         """Stop the agent daemon."""
         logger.info("Stopping agent...")
         self.running = False
-        
+        self._stop_event.set()  # Signal all waiting threads to stop
+
         # Stop subsystems
         if self.identity_mgr: self.identity_mgr.stop()
         if self.network_guard: self.network_guard.stop()
@@ -104,15 +109,30 @@ class AgentDaemon:
             self.edge_mgr.start()
 
     def _sync_loop(self):
-        """Periodic sync with control plane."""
+        """Periodic sync with control plane with exponential backoff on errors."""
+        consecutive_failures = 0
+
         while self.running:
             try:
                 self.config_manager.sync_with_control_plane()
+                consecutive_failures = 0  # Reset on success
             except Exception as e:
-                logger.error(f"Sync loop error: {e}")
-            
-            # Simple fixed interval for now, could be adaptive/configured
-            time.sleep(60)
+                consecutive_failures += 1
+                logger.error(f"Sync loop error (attempt {consecutive_failures}): {e}")
+
+            # Calculate sleep interval with exponential backoff on failures
+            if consecutive_failures > 0:
+                backoff = min(
+                    self.SYNC_INTERVAL_SECONDS * (2 ** consecutive_failures),
+                    self.SYNC_MAX_BACKOFF_SECONDS
+                )
+                sleep_interval = backoff
+            else:
+                sleep_interval = self.SYNC_INTERVAL_SECONDS
+
+            # Use event-based wait for responsive shutdown
+            if self._stop_event.wait(timeout=sleep_interval):
+                break  # Stop event was set
 
     def _on_config_update(self, new_config: AgentConfig):
         """Handle hot-reload of configuration."""

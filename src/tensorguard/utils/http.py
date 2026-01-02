@@ -8,28 +8,50 @@ from .exceptions import CommunicationError
 
 logger = get_logger(__name__)
 
+# Connection pool configuration
+DEFAULT_POOL_CONNECTIONS = 10  # Number of connection pools
+DEFAULT_POOL_MAXSIZE = 20      # Max connections per pool
+DEFAULT_POOL_BLOCK = False     # Don't block when pool exhausted
+
+
 class StandardClient:
     """
     Standard HTTP Client for TensorGuard.
-    Enforces timeouts, retries, and standard headers.
+    Enforces timeouts, retries, connection pooling, and standard headers.
     """
-    def __init__(self, base_url: str, api_key: Optional[str] = None):
+    def __init__(
+        self,
+        base_url: str,
+        api_key: Optional[str] = None,
+        pool_connections: int = DEFAULT_POOL_CONNECTIONS,
+        pool_maxsize: int = DEFAULT_POOL_MAXSIZE,
+    ):
         self.base_url = base_url.rstrip("/")
         self.session = requests.Session()
-        
-        # Configure Retries
+
+        # Configure Retries with exponential backoff
         retries = Retry(
             total=3,
             backoff_factor=1,
-            status_forcelist=[500, 502, 503, 504]
+            status_forcelist=[500, 502, 503, 504],
+            allowed_methods=["HEAD", "GET", "OPTIONS", "POST", "PUT", "DELETE"],
         )
-        self.session.mount("https://", HTTPAdapter(max_retries=retries))
-        self.session.mount("http://", HTTPAdapter(max_retries=retries))
-        
-        # Standard Headers
+
+        # Configure HTTPAdapter with connection pooling for better performance
+        adapter = HTTPAdapter(
+            max_retries=retries,
+            pool_connections=pool_connections,
+            pool_maxsize=pool_maxsize,
+            pool_block=DEFAULT_POOL_BLOCK,
+        )
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
+
+        # Standard Headers with gzip support
         self.session.headers.update({
-            "User-Agent": "TensorGuard-Client/1.0",
-            "X-TG-Client-Version": "1.0.0"
+            "User-Agent": "TensorGuard-Client/2.1.0",
+            "X-TG-Client-Version": "2.1.0",
+            "Accept-Encoding": "gzip, deflate",
         })
         if api_key:
             self.session.headers.update({"X-TG-Fleet-API-Key": api_key})

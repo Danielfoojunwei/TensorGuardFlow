@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session, select, func
-from typing import List, Dict, Any
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlmodel import Session, select, func, case
+from typing import List, Dict, Any, Optional
 from ..database import get_session
 from ..models.enablement_models import PolicyProfile, EnablementJob, GovernanceEvent
 from ...core.privacy.ledger import PrivacyLedger
@@ -13,35 +13,38 @@ platform_ledger = PrivacyLedger(storage_path="./platform_privacy.json")
 @router.get("/stats")
 def get_stats(session: Session = Depends(get_session)):
     """Get aggregate statistics for enablement dashboard."""
-    total_jobs = session.exec(select(func.count(EnablementJob.run_id))).one()
-    pending_jobs = session.exec(
-        select(func.count(EnablementJob.run_id)).where(EnablementJob.status == "PENDING")
+    # Consolidated query: count all job statuses in a single round-trip
+    job_stats = session.exec(
+        select(
+            func.count(EnablementJob.run_id).label('total'),
+            func.sum(case((EnablementJob.status == "PENDING", 1), else_=0)).label('pending'),
+            func.sum(case((EnablementJob.status == "RUNNING", 1), else_=0)).label('running'),
+            func.sum(case((EnablementJob.status == "SUCCESS", 1), else_=0)).label('success'),
+            func.sum(case((EnablementJob.status == "FAILED", 1), else_=0)).label('failed'),
+        )
     ).one()
-    running_jobs = session.exec(
-        select(func.count(EnablementJob.run_id)).where(EnablementJob.status == "RUNNING")
-    ).one()
-    success_jobs = session.exec(
-        select(func.count(EnablementJob.run_id)).where(EnablementJob.status == "SUCCESS")
-    ).one()
-    failed_jobs = session.exec(
-        select(func.count(EnablementJob.run_id)).where(EnablementJob.status == "FAILED")
-    ).one()
+
     total_events = session.exec(select(func.count(GovernanceEvent.id))).one()
-    
+
     return {
-        "total_jobs": total_jobs,
-        "pending_jobs": pending_jobs,
-        "running_jobs": running_jobs,
-        "success_jobs": success_jobs,
-        "failed_jobs": failed_jobs,
+        "total_jobs": job_stats[0] or 0,
+        "pending_jobs": job_stats[1] or 0,
+        "running_jobs": job_stats[2] or 0,
+        "success_jobs": job_stats[3] or 0,
+        "failed_jobs": job_stats[4] or 0,
         "total_events": total_events,
         "privacy_consumed_epsilon": platform_ledger.total_epsilon,
-        "privacy_budget_total": 10.0, # Default budget cap
+        "privacy_budget_total": 10.0,  # Default budget cap
     }
 
 @router.get("/profiles", response_model=List[PolicyProfile])
-def list_profiles(session: Session = Depends(get_session)):
-    return session.exec(select(PolicyProfile)).all()
+def list_profiles(
+    session: Session = Depends(get_session),
+    limit: int = Query(default=100, le=1000, ge=1),
+    offset: int = Query(default=0, ge=0),
+):
+    """List policy profiles with pagination."""
+    return list(session.exec(select(PolicyProfile).offset(offset).limit(limit)).all())
 
 @router.post("/profiles", response_model=PolicyProfile)
 def create_profile(profile: PolicyProfile, session: Session = Depends(get_session)):
@@ -51,8 +54,13 @@ def create_profile(profile: PolicyProfile, session: Session = Depends(get_sessio
     return profile
 
 @router.get("/jobs", response_model=List[EnablementJob])
-def list_jobs(session: Session = Depends(get_session)):
-    return session.exec(select(EnablementJob)).all()
+def list_jobs(
+    session: Session = Depends(get_session),
+    limit: int = Query(default=100, le=1000, ge=1),
+    offset: int = Query(default=0, ge=0),
+):
+    """List enablement jobs with pagination."""
+    return list(session.exec(select(EnablementJob).offset(offset).limit(limit)).all())
 
 @router.get("/jobs/{run_id}", response_model=EnablementJob)
 def get_job(run_id: str, session: Session = Depends(get_session)):
@@ -62,5 +70,10 @@ def get_job(run_id: str, session: Session = Depends(get_session)):
     return job
 
 @router.get("/events", response_model=List[GovernanceEvent])
-def list_events(session: Session = Depends(get_session)):
-    return session.exec(select(GovernanceEvent)).all()
+def list_events(
+    session: Session = Depends(get_session),
+    limit: int = Query(default=100, le=1000, ge=1),
+    offset: int = Query(default=0, ge=0),
+):
+    """List governance events with pagination."""
+    return list(session.exec(select(GovernanceEvent).offset(offset).limit(limit)).all())

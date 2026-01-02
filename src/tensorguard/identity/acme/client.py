@@ -361,29 +361,33 @@ class ACMEClient:
     
     def poll_order(self, order: ACMEOrder, timeout: int = 120) -> ACMEOrder:
         """
-        Poll order status until ready or timeout.
+        Poll order status until ready or timeout with exponential backoff.
         """
         start = time.time()
-        
+        poll_interval = 1  # Start with 1 second
+        max_poll_interval = 10  # Cap at 10 seconds
+
         while time.time() - start < timeout:
             response = self._signed_request(order.order_url, None, kid=self._account_url)
-            
+
             if response.status_code != 200:
                 raise RuntimeError(f"Order poll failed: {response.text}")
-            
+
             order_data = response.json()
             order.status = order_data["status"]
             order.certificate_url = order_data.get("certificate")
-            
+
             if order.status == "ready":
                 return order
             elif order.status == "valid":
                 return order
             elif order.status == "invalid":
                 raise RuntimeError("Order became invalid")
-            
-            time.sleep(2)
-        
+
+            # Exponential backoff with cap
+            time.sleep(poll_interval)
+            poll_interval = min(poll_interval * 2, max_poll_interval)
+
         raise RuntimeError("Order poll timeout")
     
     def finalize_order(self, order: ACMEOrder, csr_pem: str) -> ACMEOrder:
