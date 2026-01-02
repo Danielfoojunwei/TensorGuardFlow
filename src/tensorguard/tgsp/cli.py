@@ -1,3 +1,4 @@
+
 import argparse
 import sys
 import json
@@ -7,42 +8,43 @@ import struct
 import hashlib
 import tarfile
 import tempfile
+import logging
 from typing import List, Dict
 
 from .manifest import PackageManifest
 from .tar_deterministic import create_deterministic_tar
-from .format import write_tgsp_container, read_tgsp_header
-from .wrap_v02 import wrap_dek_v02, unwrap_dek_v02, generate_x25519_keypair, load_x25519_priv, load_x25519_pub
-from .hpke_v03 import hpke_seal, hpke_open
-from .payload_crypto import PayloadDecryptor
-from ..evidence.signing import generate_keypair, load_private_key, load_public_key
-from cryptography.hazmat.primitives.asymmetric import x25519
-from cryptography.hazmat.primitives import serialization
+from .format import write_tgsp_package_v1, read_tgsp_header
+from ..crypto.kem import generate_hybrid_keypair, decap_hybrid
+from ..crypto.sig import generate_hybrid_sig_keypair
+from ..crypto.payload import PayloadDecryptor
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 def run_keygen(args):
     out = args.out
     os.makedirs(out, exist_ok=True)
     
     if args.type == "signing":
-        priv, pub = generate_keypair()
-        with open(os.path.join(out, "signing.priv"), "wb") as f:
-            f.write(priv.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()))
-        with open(os.path.join(out, "signing.pub"), "wb") as f:
-            f.write(pub.public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo))
-        print(f"Generated signing key in {out}")
+        pub, priv = generate_hybrid_sig_keypair()
+        with open(os.path.join(out, "signing.priv"), "w") as f:
+            json.dump(priv, f)
+        with open(os.path.join(out, "signing.pub"), "w") as f:
+            json.dump(pub, f)
+        print(f"Generated Hybrid-Dilithium Signing Key in {out}")
         
-    elif args.type == "x25519":
-        priv, pub = generate_x25519_keypair()
-        with open(os.path.join(out, "encryption.priv"), "wb") as f:
-            f.write(priv.private_bytes(serialization.Encoding.Raw, serialization.PrivateFormat.Raw, serialization.NoEncryption()))
-        with open(os.path.join(out, "encryption.pub"), "wb") as f:
-            f.write(pub.public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw))
-        print(f"Generated x25519 key in {out}")
+    elif args.type == "encryption":
+        pub, priv = generate_hybrid_keypair()
+        with open(os.path.join(out, "encryption.priv"), "w") as f:
+            json.dump(priv, f)
+        with open(os.path.join(out, "encryption.pub"), "w") as f:
+            json.dump(pub, f)
+        print(f"Generated Hybrid-Kyber Encryption Key in {out}")
 
 def run_build(args):
     # 1. Manifest
     manifest = PackageManifest(
-        tgsp_version=args.tgsp_version,
+        tgsp_version="1.0",
         package_id=secrets.token_hex(8),
         model_name=args.model_name,
         model_version=args.model_version,
@@ -50,76 +52,79 @@ def run_build(args):
         payload_hash="pending"
     )
     
-    # 2. Recipients & keys
-    recipients_data = []
-    dek = secrets.token_bytes(32)
+    # 2. Recipients
+    recipients_public_keys = []
     
     if args.recipients:
         for r_str in args.recipients:
-            # format: fleet:id:path
-            parts = r_str.split(':', 2)
-            if len(parts) < 3: continue
-            rid = f"{parts[0]}:{parts[1]}"
-            path = parts[2]
-            
-            pub_key = load_x25519_pub(path)
-            
-            if args.tgsp_version == "0.2":
-                wrap = wrap_dek_v02(dek, pub_key)
-                recipients_data.append({"recipient_id": rid, "wrap": wrap})
-            else: # 0.3
-                seal = hpke_seal(dek, pub_key)
-                recipients_data.append({"recipient_id": rid, "hpke": seal})
+            # format: path_to_pub_json
+            if os.path.exists(r_str):
+                with open(r_str, "r") as f:
+                    pk = json.load(f)
+                    recipients_public_keys.append(pk)
+            else:
+                logger.warning(f"Recipient key not found: {r_str}")
          
     # 3. Payload Stream (Tar)
     with tempfile.NamedTemporaryFile(delete=False) as tf:
         create_deterministic_tar(args.input_dir, tf.name)
         tf_path = tf.name
         
-    # 4. Sign
+    # 4. Signing Key
     if args.signing_key:
-        sk = load_private_key(args.signing_key)
+        with open(args.signing_key, "r") as f:
+            sk = json.load(f)
         sk_id = "key_1"
-        import base64
-        manifest.producer_pubkey_ed25519 = base64.b64encode(sk.public_key().public_bytes_raw()).decode()
     else:
-        sk = None
-        sk_id = "none"
+        raise ValueError("TGSP v1.0 requires signing key (Hybrid PQC)")
         
     # 5. Write Container
     with open(tf_path, "rb") as payload_stream:
-        evt = write_tgsp_container(args.out, manifest, payload_stream, recipients_data, dek, sk, sk_id, args.tgsp_version)
+        evt = write_tgsp_package_v1(args.out, manifest, payload_stream, recipients_public_keys, sk, sk_id)
         
     from ..evidence.store import get_store
-    store = get_store()
-    store.save_event(evt)
+    get_store().save_event(evt)
     
     os.unlink(tf_path)
-    print(f"TGSP Built: {args.out}")
+    print(f"TGSP v1.0 Built: {args.out}")
     print(json.dumps(evt, indent=2))
 
 def run_inspect(args):
     data = read_tgsp_header(args.file)
-    print(json.dumps(data["manifest"], indent=2))
-    print("Recipients:", len(data["recipients"]))
+    print(json.dumps(data["header"], indent=2))
+    print(f"Manifest Version: {data['manifest'].get('model_version')}")
+    print(f"PQC Mode: {data['header']['crypto'].get('kem')}")
 
 def run_open(args):
     data = read_tgsp_header(args.file)
     
-    my_rid = args.recipient_id
-    rec = next((r for r in data["recipients"] if r["recipient_id"] == my_rid), None)
-    if not rec:
-        print(f"Recipient {my_rid} not found")
+    if not args.key:
+        print("Private key required to open")
+        return
+
+    with open(args.key, "r") as f:
+        sk = json.load(f)
+        
+    dek = None
+    for rec in data["recipients"]:
+        try:
+            ss_hybrid = decap_hybrid(sk, rec["encap"])
+            
+            from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
+            wrapper = rec["wrapper"]
+            nonce = bytes.fromhex(wrapper["nonce"])
+            ct = bytes.fromhex(wrapper["ct"])
+            
+            aead = ChaCha20Poly1305(ss_hybrid)
+            dek = aead.decrypt(nonce, ct, None)
+            break
+        except Exception as e:
+            continue
+            
+    if not dek:
+        print("Failed to decrypt (No matching recipient or invalid key)")
         return
         
-    sk = load_x25519_priv(args.key)
-    
-    if "wrap" in rec: # v0.2
-        dek = unwrap_dek_v02(rec["wrap"], sk)
-    else: # v0.3
-        dek = hpke_open(rec["hpke"], sk)
-        
-    # Decrypt Payload
     h = data["header"]
     nonce_base = bytes.fromhex(h["crypto"]["nonce_base"])
     m_hash = h["hashes"]["manifest"]
@@ -140,77 +145,32 @@ def run_open(args):
                 out_f.write(chunk)
                 total_read += (4 + len(chunk) + 16)
         
-    # Untar and cleanup
-    try:
-        with tarfile.open(out_tar, "r") as tr:
-            tr.extractall(args.out_dir)
-        os.remove(out_tar)
-        print(f"Payload decrypted and extracted to {args.out_dir}")
-    except Exception as e:
-        print(f"Payload decrypted to {out_tar} (Extraction failed: {e})")
-
-# --- Legacy Shims for Backward Compatibility ---
-def create_tgsp(args):
-    import shutil
-    with tempfile.TemporaryDirectory() as tmp_in:
-        if hasattr(args, 'payload') and args.payload:
-            for p in args.payload:
-                parts = p.split(':')
-                if len(parts) == 3:
-                    shutil.copy(parts[2], os.path.join(tmp_in, os.path.basename(parts[2])))
-        
-        new_args = argparse.Namespace(
-            input_dir=tmp_in,
-            out=args.out,
-            tgsp_version="0.2",
-            model_name="legacy-model",
-            model_version="0.0.1",
-            recipients=[],
-            signing_key=getattr(args, 'producer_signing_key', None)
-        )
-        if hasattr(args, 'recipient') and args.recipient:
-            new_args.recipients = [f"legacy:{r}" for r in args.recipient]
-        run_build(new_args)
-
-def verify_tgsp(args):
-    try:
-        from .format import verify_tgsp_container
-        return verify_tgsp_container(args.in_file)
-    except Exception:
-        return False
-
-def decrypt_tgsp(args):
-    new_args = argparse.Namespace(
-        file=args.in_file,
-        recipient_id=f"legacy:{args.recipient_id}",
-        key=args.recipient_private_key,
-        out_dir=args.outdir
-    )
-    run_open(new_args)
+    with tarfile.open(out_tar, "r") as tr:
+        tr.extractall(args.out_dir)
+    os.remove(out_tar)
+    print(f"Payload decrypted and extracted to {args.out_dir}")
 
 def main():
     parser = argparse.ArgumentParser()
     subps = parser.add_subparsers(dest="cmd")
     
     kg = subps.add_parser("keygen")
-    kg.add_argument("--type", choices=["signing", "x25519"])
+    kg.add_argument("--type", choices=["signing", "encryption"], required=True)
     kg.add_argument("--out", required=True)
     
     bd = subps.add_parser("build")
     bd.add_argument("--input-dir", required=True)
     bd.add_argument("--out", required=True)
-    bd.add_argument("--tgsp-version", choices=["0.2", "0.3"], default="0.2")
     bd.add_argument("--model-name", default="unknown")
-    bd.add_argument("--model-version", default="0.0.1")
-    bd.add_argument("--recipients", nargs="+")
-    bd.add_argument("--signing-key")
+    bd.add_argument("--model-version", default="1.0.0")
+    bd.add_argument("--recipients", nargs="+", help="Paths to recipient public key JSONs")
+    bd.add_argument("--signing-key", required=True, help="Path to signing private key JSON")
     
     ins = subps.add_parser("inspect")
     ins.add_argument("--file", required=True)
     
     op = subps.add_parser("open")
     op.add_argument("--file", required=True)
-    op.add_argument("--recipient-id", required=True)
     op.add_argument("--key", required=True)
     op.add_argument("--out-dir", required=True)
     

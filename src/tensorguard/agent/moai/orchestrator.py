@@ -15,10 +15,11 @@ import pickle
 import numpy as np
 from typing import Optional, Dict
 
-from ...tgsp.payload_crypto import PayloadDecryptor
+from ...crypto.payload import PayloadDecryptor
 from ...serving.backend import TenSEALBackend
 from ...moai.modelpack import ModelPack
 from ...tgsp.format import read_tgsp_header
+from ...crypto.kem import decap_hybrid
 import tempfile
 import os
 import io
@@ -102,15 +103,48 @@ class MoaiOrchestrator:
             data = read_tgsp_header(tf_path)
             h = data["header"]
             
-            # 2. Setup Decryptor
+            # 2. Decrypt DEK (Hybrid Unwrapping)
+            # Find matching recipient for this device's key
+            # In production, 'dek' passed to this function might be the device PRIVATE key (sk).
+            # The signature of load_secure_package says 'dek', but previously this was "Data Encryption Key".
+            # Now, with Hybrid KEM, we need the Private Key to UNWRAP the session DEK.
+            # We assume the 'dek' arg is actually the device 'sk' (Private Key bundle dict).
+            
+            # We iterate recipients
+            session_dek = None
+            device_sk = pickle.loads(dek) if isinstance(dek, bytes) else dek # Safety shim if passed as bytes
+            
+            # If device_sk is bytes, it might be the raw SK bytes ? 
+            # Phase 16 refactor: We assume 'dek' arg is getting renamed to 'device_private_key' eventually.
+            # For now, let's treat 'dek' as the SK.
+            
+            for rec in data["recipients"]:
+                try:
+                    # capsulate logic from CLI
+                    ss_hybrid = decap_hybrid(device_sk, rec["encap"])
+                    
+                    from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
+                    wrapper = rec["wrapper"]
+                    nonce = bytes.fromhex(wrapper["nonce"])
+                    ct = bytes.fromhex(wrapper["ct"])
+                    
+                    aead = ChaCha20Poly1305(ss_hybrid)
+                    session_dek = aead.decrypt(nonce, ct, None)
+                    break
+                except Exception:
+                    continue
+            
+            if not session_dek:
+                raise ValueError("Could not unwrap DEK for this device")
+
+            # 3. Setup Decryptor
             nonce_base = bytes.fromhex(h["crypto"]["nonce_base"])
             m_hash = h["hashes"]["manifest"]
             r_hash = h["hashes"]["recipients"]
             
-            decryptor = PayloadDecryptor(dek, nonce_base, m_hash, r_hash)
+            decryptor = PayloadDecryptor(session_dek, nonce_base, m_hash, r_hash)
             
-            # 3. Stream Decrypt into Memory
-            # We decrypt the payload stream into a BytesIO buffer
+            # 4. Stream Decrypt into Memory
             decrypted_buffer = io.BytesIO()
             
             with open(tf_path, "rb") as f:
@@ -120,15 +154,14 @@ class MoaiOrchestrator:
                     chunk = decryptor.decrypt_chunk_from_stream(f)
                     if not chunk: break
                     decrypted_buffer.write(chunk)
-                    # Overhead: 4 len + chunk + 16 tag
                     total_read += (4 + len(chunk) + 16)
                     
             decrypted_buffer.seek(0)
             
-            # 4. Load ModelPack
-            model_pack = SecureMemoryLoader.load_from_stream(decrypted_buffer, dek)
+            # 5. Load ModelPack
+            model_pack = SecureMemoryLoader.load_from_stream(decrypted_buffer, session_dek) # Pass DEK just in case loader needs it
             
-            # 5. Load Backend
+            # 6. Load Backend
             self.backend.load_model(model_pack)
             self.active_model_id = model_pack.meta.model_id
             self.is_ready = True
@@ -140,7 +173,6 @@ class MoaiOrchestrator:
             self.is_ready = False
             raise
         finally:
-            # Secure cleanup of encrypted container
             if os.path.exists(tf_path):
                 os.unlink(tf_path)
 

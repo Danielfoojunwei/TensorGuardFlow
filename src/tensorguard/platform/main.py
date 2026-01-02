@@ -1,12 +1,11 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from .database import init_db, seed_db
+from .database import init_db
 import os
 
 # Initialize database schema immediately to avoid OperationalErrors during import
 init_db()
-    # seed_db() - Proactively disabled for production. Use CLI 'tensorguard platform seed' if needed.
 
 from .api import endpoints
 
