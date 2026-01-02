@@ -113,6 +113,36 @@ class ReportGenerator:
         print(f"JSON Report generated: {json_path}")
         return json_path
 
+    def generate_signed_evidence(self, report_path: str):
+        """Generate a Signed Evidence Event for the report."""
+        import hashlib
+        from tensorguard.evidence.schema import EvidenceEvent, EventType
+        from tensorguard.evidence.signing import sign_event, generate_keypair
+        from tensorguard.evidence.store import get_store
+        
+        # 1. Calc Hash
+        with open(report_path, "rb") as f:
+            h = hashlib.sha256(f.read()).hexdigest()
+            
+        # 2. Create Event
+        evt = EvidenceEvent(
+            event_type=EventType.BENCH_REPORT_GENERATED,
+            subject={"report_ref": report_path},
+            artifacts=[{"name": "report.json", "sha256": h}],
+            result={"status": "success"}
+        ).dict()
+        
+        # 3. Sign (Use Ephemeral Key for MVP if no CI key)
+        # In real CI, load_private_key from env.
+        priv, pub = generate_keypair()
+        evt = sign_event(evt, priv, "ci_ephemeral_key")
+        
+        # 4. Save
+        store = get_store()
+        out_path = store.save_event(evt)
+        print(f"Signed Evidence Generated: {out_path}")
+        return out_path
+
     def generate(self):
         micro, privacy, robust = self.load_metrics()
         
@@ -209,7 +239,11 @@ class ReportGenerator:
         print(f"Report generated: {self.output_file}")
         
         # NEW: Generate JSON as well
-        self.generate_json(micro, privacy, robust)
+        json_path = self.generate_json(micro, privacy, robust)
+        
+        # NEW: Generate Signed Evidence
+        self.generate_signed_evidence(json_path)
+
 
 def run_report(args):
     gen = ReportGenerator()

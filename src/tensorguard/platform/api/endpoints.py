@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
-from typing import List, Any, Dict
+from typing import List, Any, Dict, Optional
 from pydantic import BaseModel
 from datetime import timedelta
+import secrets
+import hashlib
 
 from ..database import get_session
 from ..models.core import Tenant, User, Fleet, Job
@@ -116,3 +118,68 @@ async def create_job(fleet_id: str, type: str, config: str, session: Session = D
     session.commit()
     session.refresh(job)
     return job
+
+# --- Attestation & Key Release ---
+class AttestationRequest(BaseModel):
+    agent_id: str
+    fleet_id: str
+    claims: Dict[str, Any]
+    nonce: str
+    signature: str
+
+@router.post("/attestation/verify")
+async def verify_attestation(req: AttestationRequest):
+    """Verify device integrity claims."""
+    # MVP: Log claims and return success
+    # In real world: check signature against device public key, validate TPM quotes
+    print(f"Verifying attestation for agent {req.agent_id}")
+    return {
+        "attestation_id": "att_" + secrets.token_hex(8),
+        "result": "allow",
+        "reason": "software_claims_valid_mvp",
+        "claims_hash": hashlib.sha256(str(req.claims).encode()).hexdigest()
+    }
+
+class KeyReleaseRequest(BaseModel):
+    package_id: str
+    recipient_id: str
+    tgsp_version: str
+    manifest_hash: str
+    claims_hash: str
+    device_hpke_pubkey: Optional[str] = None # Hex encoded
+
+@router.post("/tgsp/key-release")
+async def release_key(req: KeyReleaseRequest):
+    """
+    Authorize key release. 
+    If v0.3 and platform mediated, re-wrap the DEK (simulated).
+    """
+    # 1. Check Policy (Simulated)
+    # 2. If allow, perform re-wrap
+    
+    # Simulate fetching the DEK from KMS for this package/recipient
+    # For MVP, we presume the Platform *knows* the DEK or has a master key to unwrap the Platform-KEK entry?
+    # Here we just mockup the response logic.
+    
+    if req.tgsp_version == "0.3" and req.device_hpke_pubkey:
+        # Simulate Rewrap
+        # In reality: Platform unwraps its copy of DEK using Platform Priv Key, 
+        # then Seal(DEK, device_hpke_pubkey)
+        
+        # Mock DEK (would fail real decryption if not matching package, but sufficient for endpoint contract testing)
+        mock_dek = secrets.token_bytes(32) 
+        
+        # We need to import hpke_seal locally?
+        # Or just return a standard structure
+        from tensorguard.tgsp.hpke_v03 import hpke_seal
+        from cryptography.hazmat.primitives.asymmetric import x25519
+        
+        dev_key = x25519.X25519PublicKey.from_public_bytes(bytes.fromhex(req.device_hpke_pubkey))
+        seal = hpke_seal(mock_dek, dev_key)
+        
+        return {
+            "result": "allow",
+            "rewrapped": seal
+        }
+    
+    return {"result": "allow"}
