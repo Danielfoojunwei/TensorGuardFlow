@@ -18,13 +18,19 @@ class MLManager:
     """
     Subsystem controller for Machine Learning tasks.
     """
+
+    # Retry configuration
+    INITIAL_RETRY_INTERVAL = 5
+    MAX_RETRY_INTERVAL = 120
+
     def __init__(self, agent_config: 'AgentConfig', config_manager: 'ConfigManager'):
         self.config: MLConfig = agent_config.ml
         self.fleet_id = agent_config.fleet_id
-        
+
         self.worker: Optional[TrainingWorker] = None
         self.running = False
         self._thread: Optional[threading.Thread] = None
+        self._stop_event = threading.Event()
 
     def configure(self, new_config: MLConfig):
         """Reconfigure ML subsystem."""
@@ -62,6 +68,7 @@ class MLManager:
     def stop(self):
         """Stop training."""
         self.running = False
+        self._stop_event.set()  # Signal to stop waiting
         # Flower client is blocking, so we can't easily stop it from outside
         # unless we terminate the process or it has a timeout.
         if self._thread:
@@ -70,27 +77,31 @@ class MLManager:
         logger.info("ML Manager stopped")
 
     def _run_flower(self):
-        """Run the Flower client loop."""
+        """Run the Flower client loop with exponential backoff on errors."""
         if not self.worker:
             return
-            
+
         server_address = self.config.aggregator_url.replace("http://", "").replace("https://", "") if hasattr(self.config, 'aggregator_url') else "127.0.0.1:8080"
-        
+        retry_interval = self.INITIAL_RETRY_INTERVAL
+
         while self.running:
             try:
                 import flwr as fl
                 # Run if flwr is installed
                 if server_address:
-                     logger.info(f"Connecting to aggregator at {server_address}")
-                     fl.client.start_numpy_client(server_address=server_address, client=self.worker)
+                    logger.info(f"Connecting to aggregator at {server_address}")
+                    fl.client.start_numpy_client(server_address=server_address, client=self.worker)
+                    retry_interval = self.INITIAL_RETRY_INTERVAL  # Reset on success
             except ImportError:
                 logger.warning("Flower not installed, skipping FL loop")
                 break
             except Exception as e:
                 logger.error(f"Flower client error: {e}")
-            
-            # Retry interval
-            time.sleep(10)
+
+            # Exponential backoff with event-based wait for responsive shutdown
+            if self._stop_event.wait(timeout=retry_interval):
+                break  # Stop event was set
+            retry_interval = min(retry_interval * 2, self.MAX_RETRY_INTERVAL)
 
     def ingest_demonstration(self, demo_data: dict):
         """API for ingestion of local demonstrations."""

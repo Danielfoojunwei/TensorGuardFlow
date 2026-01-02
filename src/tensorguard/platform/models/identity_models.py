@@ -7,6 +7,7 @@ All identity entities are scoped to Tenant + Fleet for multi-tenancy.
 
 from typing import Optional, List
 from sqlmodel import SQLModel, Field, Relationship, Column, JSON
+from sqlalchemy import Index
 from datetime import datetime
 from enum import Enum
 import uuid
@@ -86,12 +87,16 @@ class AuditAction(str, Enum):
 class IdentityEndpoint(SQLModel, table=True):
     """
     A discoverable endpoint that hosts TLS certificates.
-    
+
     Can be a K8s Ingress, Nginx server, Envoy listener, etc.
     Scoped to tenant + fleet for multi-tenancy.
     """
     __tablename__ = "identity_endpoints"
-    
+    __table_args__ = (
+        Index('ix_endpoint_tenant_env_type', 'tenant_id', 'environment', 'endpoint_type'),
+        Index('ix_endpoint_tenant_fleet_active', 'tenant_id', 'fleet_id', 'is_active'),
+    )
+
     id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
     tenant_id: str = Field(index=True)
     fleet_id: str = Field(index=True)
@@ -128,11 +133,15 @@ class IdentityEndpoint(SQLModel, table=True):
 class IdentityCertificate(SQLModel, table=True):
     """
     A discovered or managed TLS/mTLS certificate.
-    
+
     Stores metadata only - private keys are NEVER stored in the control plane.
     """
     __tablename__ = "identity_certificates"
-    
+    __table_args__ = (
+        Index('ix_cert_tenant_current_expiry', 'tenant_id', 'is_current', 'not_after'),
+        Index('ix_cert_endpoint_type', 'endpoint_id', 'certificate_type'),
+    )
+
     id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
     endpoint_id: str = Field(foreign_key="identity_endpoints.id", index=True)
     tenant_id: str = Field(index=True)
@@ -313,12 +322,16 @@ class IdentityPolicy(SQLModel, table=True):
 class IdentityRenewalJob(SQLModel, table=True):
     """
     State machine for certificate renewal workflows.
-    
+
     Tracks the full lifecycle: CSR → Challenge → Issue → Deploy → Validate.
     Supports rollback on failure.
     """
     __tablename__ = "identity_renewal_jobs"
-    
+    __table_args__ = (
+        Index('ix_renewal_tenant_status', 'tenant_id', 'status'),
+        Index('ix_renewal_endpoint_status', 'endpoint_id', 'status'),
+    )
+
     id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
     tenant_id: str = Field(index=True)
     fleet_id: str = Field(index=True)

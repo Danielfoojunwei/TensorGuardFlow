@@ -72,14 +72,15 @@ class Spooler:
             c.execute('SELECT * FROM queue ORDER BY priority DESC, id ASC LIMIT ?', (batch_size,))
             rows = c.fetchall()
             conn.close()
-            
+
             result = []
             for r in rows:
                 try:
                     item = dict(r)
                     item['payload'] = json.loads(item['payload'])
                     result.append(item)
-                except:
+                except (json.JSONDecodeError, KeyError, TypeError) as e:
+                    logger.warning(f"Failed to deserialize spooler message id={r['id']}: {e}")
                     continue
             return result
 

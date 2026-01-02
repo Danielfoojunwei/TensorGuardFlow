@@ -114,8 +114,15 @@ def evaluate_run(
         raise HTTPException(status_code=400, detail=f"Evaluation failed: {str(e)}")
 
 @router.get("/runs", response_model=List[Run])
-def list_runs(session: Session = Depends(get_session)):
-    return session.exec(select(Run).order_by(Run.created_at.desc())).all()
+def list_runs(
+    session: Session = Depends(get_session),
+    limit: int = Query(default=100, le=1000, ge=1),
+    offset: int = Query(default=0, ge=0),
+):
+    """List runs with pagination."""
+    return list(session.exec(
+        select(Run).order_by(Run.created_at.desc()).offset(offset).limit(limit)
+    ).all())
 
 @router.get("/runs/{run_id}")
 def get_run(run_id: str, session: Session = Depends(get_session)):
@@ -125,5 +132,13 @@ def get_run(run_id: str, session: Session = Depends(get_session)):
     return run
 
 @router.get("/runs/{run_id}/results")
-def get_run_results(run_id: str, session: Session = Depends(get_session)):
-    return session.exec(select(RunPolicyResult).where(RunPolicyResult.run_id == run_id)).all()
+def get_run_results(
+    run_id: str,
+    session: Session = Depends(get_session),
+    limit: int = Query(default=100, le=1000, ge=1),
+    offset: int = Query(default=0, ge=0),
+):
+    """Get run results with pagination."""
+    return list(session.exec(
+        select(RunPolicyResult).where(RunPolicyResult.run_id == run_id).offset(offset).limit(limit)
+    ).all())

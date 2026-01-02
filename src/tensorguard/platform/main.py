@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from .database import init_db
 import os
 
@@ -14,6 +15,9 @@ app = FastAPI(
     description="White-label backend for TensorGuard fleets",
     version="2.1.0"
 )
+
+# GZip compression for responses > 1KB (60-70% bandwidth savings)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # CORS
 app.add_middleware(
