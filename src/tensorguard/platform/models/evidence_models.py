@@ -7,13 +7,15 @@ from sqlmodel import SQLModel, Field, Relationship, Session, select
 from sqlalchemy import Column, JSON
 
 class Run(SQLModel, table=True):
-    id: str = Field(primary_key=True)
-    schema: str
-    timestamp: datetime
+    run_id: str = Field(primary_key=True)
+    schema_version: str = Field(default="1.0", alias="schema")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
     sdk_version: str
-    git_commit: str
-    metrics: Dict[str, Any] = Field(default={}, sa_column=Column(JSON))
-    environment: Dict[str, Any] = Field(default={}, sa_column=Column(JSON))
+    git_commit: Optional[str] = None
+    status: str = "registered"
+    metrics_json: str = Field(default="{}")
+    env_json: str = Field(default="{}")
+    config_json: str = Field(default="{}")
     
     # Relationships
     artifacts: List["RunArtifact"] = Relationship(back_populates="run")
@@ -21,10 +23,10 @@ class Run(SQLModel, table=True):
 
 class RunArtifact(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    run_id: str = Field(foreign_key="run.id")
+    run_id: str = Field(foreign_key="run.run_id")
     artifact_type: str # report.json, report.html
     sha256: str
-    storage_path: str
+    path: str # storage path
     
     run: Run = Relationship(back_populates="artifacts")
 
@@ -38,12 +40,12 @@ class PolicyPack(SQLModel, table=True):
 
 class RunPolicyResult(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    run_id: str = Field(foreign_key="run.id")
+    run_id: str = Field(foreign_key="run.run_id")
     pack_id: str = Field(foreign_key="policypack.id")
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     score: float
     status: str # PASS, FAIL
-    details: Dict[str, Any] = Field(default={}, sa_column=Column(JSON))
+    details_json: str = Field(default="{}")
 
     run: Run = Relationship(back_populates="policy_results")
 

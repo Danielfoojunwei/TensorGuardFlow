@@ -76,27 +76,27 @@ class TestPlatformAPI:
         assert "total_jobs" in data
         assert data["total_jobs"] == 0
 
-    @patch("tensorguard.platform.api.community_tgsp.container.TGSPContainer") 
-    def test_platform_tgsp_upload_verify_pass(self, mock_container_cls, client, temp_storage, session):
-        # Mock TGSP Container context manager
-        mock_container = MagicMock()
-        mock_container_cls.return_value.__enter__.return_value = mock_container
+    @patch("tensorguard.platform.api.community_tgsp.read_tgsp_header") 
+    def test_platform_tgsp_upload_verify_pass(self, mock_read_header, client, temp_storage, session):
+        # Mock Header Data
+        mock_manifest = {
+            "package_id": "pkg-123",
+            "author_id": "prod-1",
+            "created_at": 1735732800.0, # 2026-01-01
+            "policy_id": "pol-1",
+            "policy_version": 1,
+            "content_index": [],
+            "compat_base_model_id": []
+        }
+        mock_read_header.return_value = {
+            "version": "0.2",
+            "header": {"hashes": {"manifest": "hash123"}},
+            "manifest": mock_manifest,
+            "recipients": []
+        }
         
-        # Mock Manifest
-        mock_manifest = MagicMock()
-        mock_manifest.package_id = "pkg-123"
-        mock_manifest.producer_id = "prod-1"
-        mock_manifest.created_at = "2026-01-01T12:00:00"
-        mock_manifest.policy_id = "pol-1"
-        mock_manifest.policy_version = 1
-        mock_manifest.file_inventory = {}
-        mock_manifest.payloads = []
-        mock_manifest.evidence = []
-        mock_manifest.base_model_ids = []
-        
-        with patch("tensorguard.tgsp.manifest.PackageManifest.from_cbor", return_value=mock_manifest):
-            files = {"file": ("test.tgsp", b"fake_content", "application/octet-stream")}
-            response = client.post("/api/community/tgsp/upload", files=files)
+        files = {"file": ("test.tgsp", b"fake_content", "application/octet-stream")}
+        response = client.post("/api/community/tgsp/upload", files=files)
             
         assert response.status_code == 200
         data = response.json()

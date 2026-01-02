@@ -10,29 +10,33 @@ class TestPlatformSecurity(unittest.TestCase):
 
     def test_upload_path_traversal_sanitization(self):
         """Test that uploaded filenames with ../ are sanitized."""
-        # Create a dummy TGSP file
+        import secrets
         filename = "../../../evil_script.py"
-        # We need a valid-ish TGSP for the inspector to not fail early
-        # Actually the inspector reads it, so let's just create a minimal ZIP
-        import zipfile
-        import io
-        from tensorguard.tgsp import spec
+        # Create a dummy TGSP file
+        from unittest.mock import patch
         
-        # We need a manifest in the ZIP
-        from tensorguard.tgsp.manifest import PackageManifest
-        m = PackageManifest()
-        m_bytes = m.to_canonical_cbor()
+        mock_manifest = {
+            "package_id": f"evil-{secrets.token_hex(4)}",
+            "author_id": "malicious",
+            "created_at": 1735732800.0,
+            "policy_id": "none",
+            "policy_version": 1,
+            "content_index": [],
+            "compat_base_model_id": []
+        }
         
-        zip_buffer = io.BytesIO()
-        with zipfile.ZipFile(zip_buffer, "w") as z:
-            z.writestr(spec.MANIFEST_PATH, m_bytes)
-        
-        zip_bytes = zip_buffer.getvalue()
-        
-        response = self.client.post(
-            "/api/community/tgsp/upload",
-            files={"file": (filename, zip_bytes, "application/octet-stream")}
-        )
+        with patch("tensorguard.platform.api.community_tgsp.read_tgsp_header") as mock_read:
+            mock_read.return_value = {
+                "version": "0.2",
+                "header": {"hashes": {"manifest": "hash123"}},
+                "manifest": mock_manifest,
+                "recipients": []
+            }
+            
+            response = self.client.post(
+                "/api/community/tgsp/upload",
+                files={"file": (filename, b"fake_tgsp_binary", "application/octet-stream")}
+            )
         
         self.assertEqual(response.status_code, 200)
         data = response.json()

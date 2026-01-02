@@ -29,21 +29,53 @@ class MoaiBackend(abc.ABC):
 class TenSEALBackend(MoaiBackend):
     """
     Real FHE backend using TenSEAL (CKKS).
+    Supports sequential execution of Linear layers and Polynomial Activations.
     """
     
     def __init__(self):
         self.active_model: ModelPack = None
-        self.unpacked_weights: Dict[str, np.ndarray] = {}
+        self.layers: List[Dict[str, Any]] = []
         
     def load_model(self, model_pack: ModelPack):
         self.active_model = model_pack
-        # Unpack weights (these are plaintext weights for hybrid homomorphic inference)
-        # In this scheme: Encrypted Input x Plaintext Weights = Encrypted Output
-        self.unpacked_weights = {}
-        for k, v in model_pack.weights.items():
-            self.unpacked_weights[k] = pickle.loads(v)
+        self.layers = []
+        
+        # Unpack weights and organize into layers
+        # Convention: keys are "layer_idx.type", e.g., "0.linear.weight", "0.linear.bias", "1.poly.degree"
+        # We need a robust parsing strategy. For this completion, we assume sorted keys imply structure
+        # or we look for a config. 
+        # Using a simplified heuristic: Group by prefix index.
+        
+        weights = model_pack.weights
+        parsed_layers = {}
+        
+        for key, val in weights.items():
+            parts = key.split('.')
+            if not parts[0].isdigit():
+                continue
+                
+            idx = int(parts[0])
+            if idx not in parsed_layers:
+                parsed_layers[idx] = {}
+                
+            # Deserialize
+            try:
+                data = pickle.loads(val)
+                parsed_layers[idx][parts[-1]] = data # e.g. "weight", "bias", "activation"
+            except:
+                logger.warning(f"Failed to deserialize weight {key}")
+                
+        # Sort by index
+        sorted_indices = sorted(parsed_layers.keys())
+        for idx in sorted_indices:
+            layer_data = parsed_layers[idx]
+            # Detect type
+            if "weight" in layer_data:
+                self.layers.append({"type": "linear", "data": layer_data})
+            elif "degree" in layer_data:
+                self.layers.append({"type": "poly", "data": layer_data})
             
-        logger.info(f"TenSEALBackend loaded model {model_pack.meta.model_id}")
+        logger.info(f"TenSEALBackend loaded model {model_pack.meta.model_id} with {len(self.layers)} layers")
 
     def infer(self, ciphertext: bytes, eval_keys: bytes) -> bytes:
         import tenseal as ts
@@ -52,49 +84,45 @@ class TenSEALBackend(MoaiBackend):
             raise RuntimeError("No model loaded")
             
         try:
-            # 1. Load Context (Server Side - Public Context Only)
+            # 1. Load Context & Input
             ctx = ts.context_from(eval_keys)
-            
-            # 2. Deserialize Encrypted Input
             enc_vec = ts.ckks_vector_from(ctx, ciphertext)
             
-            # 3. Homomorphic Linear Layer: x @ W + b
-            weights = list(self.unpacked_weights.values())
-            if len(weights) >= 2:
-                W = weights[0] # Expecting (Out, In) from PyTorch state_dict convention
-                b = weights[1] # Expecting (Out,)
+            # 2. Sequential Inference Loop
+            for i, layer in enumerate(self.layers):
+                ltype = layer["type"]
+                data = layer["data"]
                 
-                # Input vector shape matches In features?
-                # TenSEAL CKKS vector is essentially 1D.
-                # If we do x @ W.T (standard Linear), we need W.T to be (In, Out)
-                
-                # Convert to numpy if not already
-                if not isinstance(W, np.ndarray): W = np.array(W)
-                if not isinstance(b, np.ndarray): b = np.array(b)
-                
-                # Transpose for x @ W_transposed
-                W_t = W.T
-                
-                # TenSEAL expects pure Python lists for plain tensors
-                W_list = W_t.tolist()
-                b_list = b.tolist()
-                
-                # Perform MatMul: (1, In) @ (In, Out) -> (1, Out)
-                res = enc_vec.matmul(W_list)
-                res.add(b_list)
-                
-            else:
-                res = enc_vec
-                
-            # 4. Return Encrypted Result
-            return res.serialize()
-                
-            # 4. Return Encrypted Result
-            return res.serialize()
+                if ltype == "linear":
+                    # Linear: x @ W.T + b
+                    W = data["weight"]
+                    b = data.get("bias")
+                    
+                    # Ensure numpy and transpose
+                    if not isinstance(W, np.ndarray): W = np.array(W)
+                    W_t = W.T.tolist() # TenSEAL wants list
+                    
+                    enc_vec = enc_vec.matmul(W_t)
+                    
+                    if b is not None:
+                        if not isinstance(b, np.ndarray): b = np.array(b)
+                        enc_vec.add(b.tolist())
+                        
+                elif ltype == "poly":
+                    # Polynomial Activation: e.g. x^2
+                    degree = data.get("degree", 2)
+                    if degree == 2:
+                        enc_vec = enc_vec.square()
+                    else:
+                        enc_vec = enc_vec.polyval([0] * (degree) + [1]) # Simply x^d? TenSEAL polyval is coeff list
+                        
+            # 3. Return Encrypted Result
+            return enc_vec.serialize()
             
         except Exception as e:
             logger.error(f"FHE Inference Failed: {e}")
             raise ValueError(f"FHE Error: {e}")
+
 class NativeBackend(MoaiBackend):
     """Placeholder for C++ MOAI runtime."""
     def load_model(self, model_pack: ModelPack):

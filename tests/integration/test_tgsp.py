@@ -88,22 +88,18 @@ class TestTGSP(unittest.TestCase):
         
         cli.create_tgsp(Args())
         
-        # Tamper ZIP
-        import zipfile
-        temp_zip = os.path.join(self.test_dir, "temp.zip")
-        with zipfile.ZipFile(tgsp_file, 'r') as zin:
-            with zipfile.ZipFile(temp_zip, 'w') as zout:
-                for item in zin.infolist():
-                    data = zin.read(item.filename)
-                    if item.filename == "PAYLOAD/adapter1.enc":
-                        # Flip a bit
-                        data = bytearray(data)
-                        data[20] ^= 0xFF
-                        data = bytes(data)
-                    zout.writestr(item, data)
+        cli.create_tgsp(Args())
         
-        os.remove(tgsp_file)
-        os.rename(temp_zip, tgsp_file)
+        # Tamper Binary bytes
+        with open(tgsp_file, 'rb') as f:
+            data = bytearray(f.read())
+        
+        # Flip a bit in the middle of the file (likely payload or recipients)
+        if len(data) > 200:
+            data[150] ^= 0xFF
+            
+        with open(tgsp_file, 'wb') as f:
+            f.write(data)
         
         class VerifyArgs:
             in_file = tgsp_file

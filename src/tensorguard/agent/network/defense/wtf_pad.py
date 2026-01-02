@@ -154,3 +154,66 @@ class WTFPAD:
                 await self._timer_task
             except asyncio.CancelledError:
                 pass
+
+
+@dataclass
+class JitterConfig:
+    """Configuration for timing obfuscation."""
+    enabled: bool = True
+    min_latency_ms: float = 5.0
+    max_latency_ms: float = 50.0
+    
+class JitterBuffer:
+    """
+    Timing obfuscation buffer.
+    Adds random delays to decorrelate packet arrival times from processing times.
+    """
+    def __init__(self, config: JitterConfig = JitterConfig()):
+        self.config = config
+        self.queue = asyncio.PriorityQueue()
+        self._process_task: Optional[asyncio.Task] = None
+        self._send_callback: Optional[Callable[[bytes], Awaitable[None]]] = None
+        self.rng = np.random.default_rng()
+
+    def start(self, send_callback: Callable[[bytes], Awaitable[None]]):
+        self._send_callback = send_callback
+        self._process_task = asyncio.create_task(self._process_queue())
+
+    async def stop(self):
+        if self._process_task:
+            self._process_task.cancel()
+            try:
+                await self._process_task
+            except asyncio.CancelledError:
+                pass
+
+    async def send(self, data: bytes):
+        """Schedule a packet for sending with random delay."""
+        if not self.config.enabled:
+            if self._send_callback:
+                await self._send_callback(data)
+            return
+
+        delay_s = self.rng.uniform(self.config.min_latency_ms, self.config.max_latency_ms) / 1000.0
+        send_time = time.monotonic() + delay_s
+        await self.queue.put((send_time, data))
+
+    async def _process_queue(self):
+        while True:
+            try:
+                # Get next scheduled packet
+                send_time, data = await self.queue.get()
+                
+                # Wait until scheduled time
+                now = time.monotonic()
+                if send_time > now:
+                    await asyncio.sleep(send_time - now)
+                
+                if self._send_callback:
+                    await self._send_callback(data)
+                    
+                self.queue.task_done()
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Jitter buffer error: {e}")

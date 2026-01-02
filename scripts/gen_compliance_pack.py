@@ -38,25 +38,31 @@ def main():
     output_dir = Path("artifacts/compliance")
     output_dir.mkdir(parents=True, exist_ok=True)
     
+    evidence_dir = Path("artifacts/evidence")
+    
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     zip_path = output_dir / f"compliance_pack_{timestamp}.zip"
     
     print(f"Generating Compliance Pack: {zip_path}")
     
     with zipfile.ZipFile(zip_path, 'w') as zf:
-        # 1. Inventory
+        # 1. Inventory & Static Data
         zf.writestr("inventory.json", json.dumps(fetch_inventory(), indent=2))
-        
-        # 2. Audit Logs
-        zf.writestr("audit_logs.json", json.dumps(fetch_audit_logs(), indent=2))
-        
-        # 3. Policies
         zf.writestr("policies.json", json.dumps(fetch_policies(), indent=2))
         
-        # 4. Readme
-        zf.writestr("README.txt", f"TensorGuard Compliance Evidence\nGenerated: {timestamp}\nScope: Global")
+        # 2. Real Signed Evidence (NEW)
+        if evidence_dir.exists():
+            print(f"Adding evidence from {evidence_dir}")
+            for f in evidence_dir.glob("*.tge.json"):
+                zf.write(f, arcname=f"evidence/{f.name}")
+        
+        # 3. Audit Logs (Legacy/Mock bridge)
+        zf.writestr("logs/system_audit.json", json.dumps(fetch_audit_logs(), indent=2))
+        
+        # 4. Readme & Compliance Mapping
+        zf.writestr("README.txt", f"TensorGuard Compliance Evidence\nGenerated: {timestamp}\nScope: Global\n\nThis pack contains Signed Evidence Events (.tge.json) verifying TGSP integrity and platform attestation.")
 
-    print("Done.")
+    print(f"Done. Pack created at {zip_path}")
 
 if __name__ == "__main__":
     main()

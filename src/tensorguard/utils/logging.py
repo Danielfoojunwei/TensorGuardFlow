@@ -13,6 +13,17 @@ class StructuredFormatter(logging.Formatter):
             "logger": record.name,
             "message": record.getMessage(),
         }
+        
+        # OpenTelemetry integration (optional)
+        try:
+            from opentelemetry import trace
+            span = trace.get_current_span()
+            if span and span.get_span_context().is_valid:
+                log_entry["trace_id"] = format(span.get_span_context().trace_id, '032x')
+                log_entry["span_id"] = format(span.get_span_context().span_id, '016x')
+        except ImportError:
+            pass
+
         if record.exc_info:
             log_entry["exception"] = self.formatException(record.exc_info)
         
@@ -31,10 +42,15 @@ def get_logger(name: str) -> logging.Logger:
         handler = logging.StreamHandler(sys.stdout)
         
         # In production, use JSON. In dev, use standard format.
-        # For simplicity in this refactor, we provide both options.
-        from .config import settings
+        try:
+            from .config import settings
+            env = settings.ENVIRONMENT
+            lvl = settings.LOG_LEVEL
+        except (ImportError, AttributeError):
+            env = "dev"
+            lvl = "INFO"
         
-        if settings.ENVIRONMENT == "production":
+        if env == "production":
             handler.setFormatter(StructuredFormatter())
         else:
             formatter = logging.Formatter(
@@ -43,7 +59,8 @@ def get_logger(name: str) -> logging.Logger:
             handler.setFormatter(formatter)
             
         logger.addHandler(handler)
-        logger.setLevel(settings.LOG_LEVEL)
+        logger.setLevel(lvl)
+        logger.propagate = False
         
     return logger
 

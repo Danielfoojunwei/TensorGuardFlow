@@ -130,7 +130,7 @@ class ReportGenerator:
             subject={"report_ref": report_path},
             artifacts=[{"name": "report.json", "sha256": h}],
             result={"status": "success"}
-        ).dict()
+        ).model_dump()
         
         # 3. Sign (Use Ephemeral Key for MVP if no CI key)
         # In real CI, load_private_key from env.

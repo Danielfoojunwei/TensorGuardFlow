@@ -111,27 +111,20 @@ class TestTGSPCore:
         # The verify_package logic loads pubkey FROM manifest. 
         # So we need to tamper the signature file ITSELF in the ZIP.
 
-        import zipfile
+        # 2. Tamper Binary bytes
+        with open(pkg_path, 'rb') as f:
+            data = bytearray(f.read())
         
-        # Extract everything
-        extract_dir = f"{OUT_DIR}/extract_for_tamper"
-        with zipfile.ZipFile(pkg_path, 'r') as z:
-            z.extractall(extract_dir)
+        # Corrupt near the end where signature resides
+        if len(data) > 64:
+            data[-10] ^= 0xFF
             
-        # Tamper signature
-        with open(f"{extract_dir}/META/signature", "wb") as f: # Assuming spec path
-            f.write(b"invalid_signature_bytes_00000000")
+        with open(pkg_path, 'wb') as f:
+            f.write(data)
             
-        # Repackage? Zip file structure might differ (order etc).
-        # We can append to the existing zip with 'a' mode? No, signature is specific entry.
-        # TGSPContainer might support overwrite.
-        
-        # Let's trust the unit test for verify_ed25519 in test_crypto.py for low level.
-        # Here we really want to test the Service integration.
-        
-        # We can simulate failure by modifying the verify Logic OR by feeding a corrupted file.
-        # Let's try to corrupt the file via Byte flipping if we know offsets, but zip is complex.
-        pass # Placeholder for complex zip surgery implementation
+        # 3. Verify should fail
+        ok, msg = TGSPService.verify_package(pkg_path)
+        assert not ok
 
     def test_tgsp_wrong_recipient_cannot_decrypt(self, setup_keys, clean_dirs):
         payload_path = f"{FIXTURE_DIR}/secret.bin"

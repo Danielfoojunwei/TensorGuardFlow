@@ -9,10 +9,6 @@ CHUNK_SIZE = 4 * 1024 * 1024 # 4MB
 
 def derive_nonce(base_nonce: bytes, chunk_index: int) -> bytes:
     """Derive deterministic nonce for chunk."""
-    # Simple derivation: base_nonce XOR low 4 bytes with index?
-    # Or SHA256(base || index)[:12]. 
-    # ChaCha20Poly1305 requires 12 byte nonce.
-    # To be safe and deterministic over huge indices:
     idx_bytes = struct.pack(">Q", chunk_index)
     hash_input = base_nonce + idx_bytes
     return hashlib.sha256(hash_input).digest()[:12]
@@ -26,20 +22,14 @@ class PayloadEncryptor:
         self.recipients_hash = recipients_hash
         
     def encrypt_chunk(self, plaintext: bytes, is_last: bool = False) -> bytes:
-        # AAD = manifest_hash + recipients_hash + chunk_index
-        # Use simple concatenation of strings encoded? Or raw bytes?
-        # Prompt said: "manifest_hash || recipients_hash || uint64(chunk_index)"
+        # AAD includes hashes and index for strong binding
         aad = (self.manifest_hash + self.recipients_hash).encode() + struct.pack(">Q", self.chunk_index)
-        
         nonce = derive_nonce(self.nonce_base, self.chunk_index)
+        
         ciphertext = self.aead.encrypt(nonce, plaintext, aad)
         
         # Format: [u32 plain_len][ciphertext(includes tag)]
-        # This allows verifying plain_len easily on decrypt before decrypting if needed, 
-        # but AEAD tag verifies integrity anyway. 
-        # Requirement: streaming-friendly. 
         res = struct.pack(">I", len(plaintext)) + ciphertext
-        
         self.chunk_index += 1
         return res
 

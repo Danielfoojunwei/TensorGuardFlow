@@ -72,8 +72,10 @@ def test_full_flow_v02(tgsp_test_env):
     with patch("sys.argv", open_cmd):
         main()
         
-    # Verify Content
-    assert (extract_dir / "payload.tar").exists()
+    # Verify Content - automated extraction untars and removes payload.tar
+    assert (extract_dir / "weights.bin").exists()
+    assert (extract_dir / "config.json").exists()
+    assert not (extract_dir / "payload.tar").exists()
     # Check Evidence exists
     # It writes to artifacts/evidence by default.
     # We can check global store or file existence if path known.
@@ -116,4 +118,6 @@ def test_full_flow_v03_hpke(tgsp_test_env):
     with patch("sys.argv", open_cmd):
         main()
         
-    assert (extract_dir / "payload.tar").exists()
+    assert (extract_dir / "weights.bin").exists()
+    assert (extract_dir / "config.json").exists()
+    assert not (extract_dir / "payload.tar").exists()

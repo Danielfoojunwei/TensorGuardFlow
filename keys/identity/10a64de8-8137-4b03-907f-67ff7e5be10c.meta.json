@@ -1,0 +1,11 @@
+{
+  "key_id": "identity_10a64de8-8137-4b03-907f-67ff7e5be10c",
+  "scope": "identity",
+  "algorithm": "RSA",
+  "created_at": "2026-01-02T07:06:17.831158+00:00",
+  "owner_id": "agent-local",
+  "version": "2.0.0",
+  "params": {
+    "key_size": 2048
+  }
+}

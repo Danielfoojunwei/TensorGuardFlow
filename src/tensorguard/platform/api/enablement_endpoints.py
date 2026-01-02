@@ -3,8 +3,12 @@ from sqlmodel import Session, select, func
 from typing import List, Dict, Any
 from ..database import get_session
 from ..models.enablement_models import PolicyProfile, EnablementJob, GovernanceEvent
+from ...core.privacy.ledger import PrivacyLedger
 
 router = APIRouter()
+# Simple global ledger instance for the platform
+# In a real distributed system, this would aggregate from agents
+platform_ledger = PrivacyLedger(storage_path="./platform_privacy.json")
 
 @router.get("/stats")
 def get_stats(session: Session = Depends(get_session)):
@@ -31,6 +35,8 @@ def get_stats(session: Session = Depends(get_session)):
         "success_jobs": success_jobs,
         "failed_jobs": failed_jobs,
         "total_events": total_events,
+        "privacy_consumed_epsilon": platform_ledger.total_epsilon,
+        "privacy_budget_total": 10.0, # Default budget cap
     }
 
 @router.get("/profiles", response_model=List[PolicyProfile])

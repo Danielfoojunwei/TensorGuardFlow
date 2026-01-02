@@ -4,6 +4,10 @@ function app() {
         stats: {},
         jobs: [],
         tgspPackages: [],
+        runs: [],
+        certificates: [],
+        endpoints: [],
+        auditLogs: [],
         currentTime: '',
 
         init() {
@@ -13,12 +17,18 @@ function app() {
             this.fetchStats();
             this.fetchJobs();
             this.fetchTGSP();
+            this.fetchRuns();
+            this.fetchInventory();
+            this.fetchAudit();
 
             // Poll every 5s
             setInterval(() => {
                 this.fetchStats();
                 this.fetchJobs();
                 this.fetchTGSP();
+                this.fetchRuns();
+                this.fetchInventory();
+                this.fetchAudit();
             }, 5000);
 
             // Re-run icons when tab changes
@@ -62,6 +72,43 @@ function app() {
                 }
             } catch (e) {
                 console.error("TGSP fetch failed", e);
+            }
+        },
+
+        // --- NEW FETCHERS for Missing Tabs ---
+
+        async fetchRuns() {
+            try {
+                const res = await fetch('/api/v1/runs');
+                if (res.ok) {
+                    this.runs = await res.json();
+                }
+            } catch (e) {
+                console.error("Runs fetch failed", e);
+            }
+        },
+
+        async fetchInventory() {
+            try {
+                const res = await fetch('/api/v1/identity/inventory');
+                if (res.ok) {
+                    const data = await res.json();
+                    this.certificates = data.certificates || [];
+                    this.endpoints = data.endpoints || [];
+                }
+            } catch (e) {
+                console.error("Inventory fetch failed", e);
+            }
+        },
+
+        async fetchAudit() {
+            try {
+                const res = await fetch('/api/v1/identity/audit?limit=50');
+                if (res.ok) {
+                    this.auditLogs = await res.json();
+                }
+            } catch (e) {
+                console.error("Audit fetch failed", e);
             }
         },
 

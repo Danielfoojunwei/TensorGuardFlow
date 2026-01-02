@@ -66,5 +66,15 @@ def bench(subcommand_args):
     sys.argv = ["bench"] + list(subcommand_args)
     bench_main()
 
+# === COMPLIANCE ===
+@cli.command("compliance")
+@click.option("--evidence-dir", default="./artifacts/evidence", help="Directory containing .tge.json files")
+@click.option("--output", "-o", default="./compliance_bundle.zip", help="Output ZIP file path")
+def compliance_export(evidence_dir, output):
+    """Export compliance evidence bundle for ISO 27001 / NIST CSF audit."""
+    from .compliance.export import export_compliance_bundle
+    result = export_compliance_bundle(evidence_dir, output)
+    click.echo(f"✅ Compliance bundle exported: {result}")
+
 if __name__ == "__main__":
     cli()

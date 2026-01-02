@@ -44,8 +44,19 @@ def generate_keypair():
 
 def load_private_key(path: str) -> ed25519.Ed25519PrivateKey:
     with open(path, "rb") as f:
-        return serialization.load_pem_private_key(f.read(), password=None)
+        data = f.read()
+    if data.startswith(b"-----BEGIN"):
+        return serialization.load_pem_private_key(data, password=None)
+    if len(data) == 32:
+        return ed25519.Ed25519PrivateKey.from_private_bytes(data)
+    # Default to DER if not PEM or Raw 32
+    return serialization.load_der_private_key(data, password=None)
 
 def load_public_key(path: str) -> ed25519.Ed25519PublicKey:
     with open(path, "rb") as f:
-        return serialization.load_pem_public_key(f.read())
+        data = f.read()
+    if data.startswith(b"-----BEGIN"):
+        return serialization.load_pem_public_key(data)
+    if len(data) == 32:
+        return ed25519.Ed25519PublicKey.from_public_bytes(data)
+    return serialization.load_der_public_key(data)

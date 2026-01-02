@@ -7,6 +7,7 @@ from sqlmodel import Session, select
 from ..database import get_session
 from ..models.evidence_models import TGSPPackage, TGSPRelease
 from ...tgsp import cli, container, manifest, spec
+from ...tgsp.format import read_tgsp_header
 
 router = APIRouter()
 
@@ -27,27 +28,26 @@ async def upload_tgsp(
     
     # 2. Inspect (Open Tooling)
     try:
-        with container.TGSPContainer(file_path, 'r') as z:
-            m_bytes = z.read_file(spec.MANIFEST_PATH)
-            m = manifest.PackageManifest.from_cbor(m_bytes)
+        data = read_tgsp_header(file_path)
+        m = data["manifest"]
     except Exception as e:
-        os.remove(file_path)
+        if os.path.exists(file_path): os.remove(file_path)
         raise HTTPException(status_code=400, detail=f"Invalid TGSP container: {e}")
 
     # 3. Registry Entry
     pkg = TGSPPackage(
-        id=m.package_id,
+        id=m["package_id"],
         filename=safe_filename,
-        producer_id=m.producer_id,
-        created_at=datetime.fromisoformat(m.created_at),
-        policy_id=m.policy_id,
-        policy_version=m.policy_version,
-        manifest_hash=m.file_inventory.get(spec.MANIFEST_PATH, "unknown"),
+        producer_id=m.get("author_id") or m.get("producer_id", "unknown"),
+        created_at=datetime.fromtimestamp(m["created_at"]),
+        policy_id=m.get("policy_id", "none"),
+        policy_version=str(m.get("policy_version", "1")),
+        manifest_hash=data["header"]["hashes"]["manifest"],
         storage_path=file_path,
         metadata_json={
-            "payloads": [p.payload_id for p in m.payloads],
-            "evidence": [e.filename for e in m.evidence],
-            "base_models": m.base_model_ids
+            "payloads": [p.get("name", "payload") for p in m.get("content_index", [])],
+            "evidence": [],
+            "base_models": m.get("compat_base_model_id", [])
         },
         status="uploaded"
     )

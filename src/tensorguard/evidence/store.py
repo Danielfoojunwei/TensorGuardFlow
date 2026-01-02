@@ -6,12 +6,21 @@ from typing import IO
 from .canonical import canonical_bytes
 
 class EvidenceStore:
-    def __init__(self, output_dir: str = "artifacts/evidence"):
-        self.output_dir = output_dir
-        os.makedirs(output_dir, exist_ok=True)
+    def __init__(self, output_dir: str = None):
+        from pathlib import Path
+        if output_dir is None:
+            # Absolute path to artifacts/evidence in the project root
+            # store.py is at src/tensorguard/evidence/store.py
+            base_dir = Path(__file__).resolve().parent.parent.parent.parent
+            self.output_dir = str(base_dir / "artifacts" / "evidence")
+        else:
+            self.output_dir = os.path.abspath(output_dir)
+        
+        os.makedirs(self.output_dir, exist_ok=True)
         
     def save_event(self, event_dict: dict) -> str:
         """Write signed event to disk."""
+        os.makedirs(self.output_dir, exist_ok=True)
         # Use simple naming: timestamp_type_id.tge.json
         ts = int(event_dict.get("timestamp", 0))
         etype = event_dict.get("event_type", "UNKNOWN")

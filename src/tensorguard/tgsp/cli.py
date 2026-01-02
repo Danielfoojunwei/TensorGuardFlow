@@ -1,14 +1,18 @@
-
 import argparse
 import sys
 import json
 import os
 import secrets
 import struct
-from .manifest import TGSPManifest
+import hashlib
+import tarfile
+import tempfile
+from typing import List, Dict
+
+from .manifest import PackageManifest
 from .tar_deterministic import create_deterministic_tar
 from .format import write_tgsp_container, read_tgsp_header
-from .wrap_v02 import wrap_dek_v02, unwrap_dek_v02, generate_x25519_keypair
+from .wrap_v02 import wrap_dek_v02, unwrap_dek_v02, generate_x25519_keypair, load_x25519_priv, load_x25519_pub
 from .hpke_v03 import hpke_seal, hpke_open
 from .payload_crypto import PayloadDecryptor
 from ..evidence.signing import generate_keypair, load_private_key, load_public_key
@@ -37,7 +41,7 @@ def run_keygen(args):
 
 def run_build(args):
     # 1. Manifest
-    manifest = TGSPManifest(
+    manifest = PackageManifest(
         tgsp_version=args.tgsp_version,
         package_id=secrets.token_hex(8),
         model_name=args.model_name,
@@ -46,48 +50,28 @@ def run_build(args):
         payload_hash="pending"
     )
     
-    # 2. Recipients
+    # 2. Recipients & keys
     recipients_data = []
-    # Dummy list for now if no recipients (but we need Key to wrap!)
-    # Generate random DEK
     dek = secrets.token_bytes(32)
     
     if args.recipients:
         for r_str in args.recipients:
             # format: fleet:id:path
-            # Use maxsplit=2 to handle Windows paths with colons
             parts = r_str.split(':', 2)
-            if len(parts) < 3:
-                print(f"Warning: Invalid recipient format: {r_str}")
-                continue
+            if len(parts) < 3: continue
             rid = f"{parts[0]}:{parts[1]}"
             path = parts[2]
             
-            with open(path, "rb") as f:
-                pub_bytes = f.read()
-            
-            pub_key = x25519.X25519PublicKey.from_public_bytes(pub_bytes)
+            pub_key = load_x25519_pub(path)
             
             if args.tgsp_version == "0.2":
                 wrap = wrap_dek_v02(dek, pub_key)
-                recipients_data.append({
-                    "recipient_id": rid,
-                    "wrap": wrap
-                })
+                recipients_data.append({"recipient_id": rid, "wrap": wrap})
             else: # 0.3
-                # HPKE
-                seal = hpke_seal(dek, pub_key)  # Direct seal of DEK
-                recipients_data.append({
-                    "recipient_id": rid,
-                    "hpke": seal
-                })
-    else:
-         print("Warning: No recipients! DEK lost.")
+                seal = hpke_seal(dek, pub_key)
+                recipients_data.append({"recipient_id": rid, "hpke": seal})
          
     # 3. Payload Stream (Tar)
-    # We create tar in memory or temp file?
-    # tar_deterministic writes to file if path given.
-    import tempfile
     with tempfile.NamedTemporaryFile(delete=False) as tf:
         create_deterministic_tar(args.input_dir, tf.name)
         tf_path = tf.name
@@ -96,13 +80,15 @@ def run_build(args):
     if args.signing_key:
         sk = load_private_key(args.signing_key)
         sk_id = "key_1"
+        import base64
+        manifest.producer_pubkey_ed25519 = base64.b64encode(sk.public_key().public_bytes_raw()).decode()
     else:
         sk = None
         sk_id = "none"
         
-    # 5. Write
+    # 5. Write Container
     with open(tf_path, "rb") as payload_stream:
-        evt = write_tgsp_container(args.out, manifest, payload_stream, recipients_data, sk, sk_id, args.tgsp_version)
+        evt = write_tgsp_container(args.out, manifest, payload_stream, recipients_data, dek, sk, sk_id, args.tgsp_version)
         
     from ..evidence.store import get_store
     store = get_store()
@@ -120,17 +106,13 @@ def run_inspect(args):
 def run_open(args):
     data = read_tgsp_header(args.file)
     
-    # Find recipient
     my_rid = args.recipient_id
     rec = next((r for r in data["recipients"] if r["recipient_id"] == my_rid), None)
     if not rec:
-        print("Recipient not found")
+        print(f"Recipient {my_rid} not found")
         return
         
-    # Unwrap
-    with open(args.key, "rb") as f:
-        priv_bytes = f.read()
-    sk = x25519.X25519PrivateKey.from_private_bytes(priv_bytes)
+    sk = load_x25519_priv(args.key)
     
     if "wrap" in rec: # v0.2
         dek = unwrap_dek_v02(rec["wrap"], sk)
@@ -145,29 +127,66 @@ def run_open(args):
     
     decryptor = PayloadDecryptor(dek, nonce_base, m_hash, r_hash)
     
+    os.makedirs(args.out_dir, exist_ok=True)
+    out_tar = os.path.join(args.out_dir, "payload_decrypted_temp.tar")
+    
     with open(args.file, "rb") as f:
         f.seek(data["payload_offset"])
-        # Read u64 len
-        total_len = struct.unpack(">Q", f.read(8))[0]
-        
-        # Stream out
-        out_tar = os.path.join(args.out_dir, "payload.tar")
+        total_read = 0
         with open(out_tar, "wb") as out_f:
-            while True:
-                # Decrypt chunk by chunk
-                # We need to read length prefix
-                # Peek 4 bytes? Or just read?
-                # decrypt_chunk_from_stream reads length itself.
-                
-                try:
-                    chunk = decryptor.decrypt_chunk_from_stream(f)
-                    if not chunk: break
-                    out_f.write(chunk)
-                except Exception as e:
-                    # End of stream or error
-                    break
-                    
-    print(f"Payload extracted to {out_tar}")
+            while total_read < data["payload_len"]:
+                chunk = decryptor.decrypt_chunk_from_stream(f)
+                if not chunk: break
+                out_f.write(chunk)
+                total_read += (4 + len(chunk) + 16)
+        
+    # Untar and cleanup
+    try:
+        with tarfile.open(out_tar, "r") as tr:
+            tr.extractall(args.out_dir)
+        os.remove(out_tar)
+        print(f"Payload decrypted and extracted to {args.out_dir}")
+    except Exception as e:
+        print(f"Payload decrypted to {out_tar} (Extraction failed: {e})")
+
+# --- Legacy Shims for Backward Compatibility ---
+def create_tgsp(args):
+    import shutil
+    with tempfile.TemporaryDirectory() as tmp_in:
+        if hasattr(args, 'payload') and args.payload:
+            for p in args.payload:
+                parts = p.split(':')
+                if len(parts) == 3:
+                    shutil.copy(parts[2], os.path.join(tmp_in, os.path.basename(parts[2])))
+        
+        new_args = argparse.Namespace(
+            input_dir=tmp_in,
+            out=args.out,
+            tgsp_version="0.2",
+            model_name="legacy-model",
+            model_version="0.0.1",
+            recipients=[],
+            signing_key=getattr(args, 'producer_signing_key', None)
+        )
+        if hasattr(args, 'recipient') and args.recipient:
+            new_args.recipients = [f"legacy:{r}" for r in args.recipient]
+        run_build(new_args)
+
+def verify_tgsp(args):
+    try:
+        from .format import verify_tgsp_container
+        return verify_tgsp_container(args.in_file)
+    except Exception:
+        return False
+
+def decrypt_tgsp(args):
+    new_args = argparse.Namespace(
+        file=args.in_file,
+        recipient_id=f"legacy:{args.recipient_id}",
+        key=args.recipient_private_key,
+        out_dir=args.outdir
+    )
+    run_open(new_args)
 
 def main():
     parser = argparse.ArgumentParser()
@@ -183,7 +202,7 @@ def main():
     bd.add_argument("--tgsp-version", choices=["0.2", "0.3"], default="0.2")
     bd.add_argument("--model-name", default="unknown")
     bd.add_argument("--model-version", default="0.0.1")
-    bd.add_argument("--recipients", nargs="+", help="fleet:id:pubkey_path")
+    bd.add_argument("--recipients", nargs="+")
     bd.add_argument("--signing-key")
     
     ins = subps.add_parser("inspect")

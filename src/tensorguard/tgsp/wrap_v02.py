@@ -8,6 +8,24 @@ import os
 import base64
 from typing import Optional
 
+def load_x25519_priv(path: str) -> x25519.X25519PrivateKey:
+    with open(path, "rb") as f:
+        data = f.read()
+    if data.startswith(b"-----BEGIN"):
+        return serialization.load_pem_private_key(data, password=None)
+    if len(data) == 32:
+        return x25519.X25519PrivateKey.from_private_bytes(data)
+    return serialization.load_der_private_key(data, password=None)
+
+def load_x25519_pub(path: str) -> x25519.X25519PublicKey:
+    with open(path, "rb") as f:
+        data = f.read()
+    if data.startswith(b"-----BEGIN"):
+        return serialization.load_pem_public_key(data)
+    if len(data) == 32:
+        return x25519.X25519PublicKey.from_public_bytes(data)
+    return serialization.load_der_public_key(data)
+
 def generate_x25519_keypair():
     priv = x25519.X25519PrivateKey.generate()
     pub = priv.public_key()

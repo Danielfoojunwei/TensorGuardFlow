@@ -140,10 +140,12 @@
                             <span
                                 class="text-[10px] text-white/40 uppercase font-bold tracking-wider mb-1 block">Compliance
                                 Status</span>
-                            <div class="flex items-center mt-1">
-                                <span class="badge badge-success">GDPR: YES</span>
-                                <span class="mx-1 text-white/10">|</span>
-                                <span class="badge badge-success">HIPAA: YES</span>
+                            <div class="flex flex-wrap items-center gap-1 mt-1">
+                                <span class="badge badge-success text-[9px]">ISO 27001</span>
+                                <span class="badge badge-success text-[9px]">NIST CSF</span>
+                                <span class="badge badge-success text-[9px]">SOC 2</span>
+                                <span class="badge badge-success text-[9px]">GDPR</span>
+                                <span class="badge badge-success text-[9px]">HIPAA</span>
                             </div>
                         </div>
                     </div>
@@ -192,15 +194,44 @@
                     </div>
                 </div>
 
-                <!-- Lineage Tab (Stub) -->
+                <!-- Lineage Tab -->
                 <div x-show="activeTab === 'lineage'" x-transition x-cloak>
-                    <h3 class="text-lg font-semibold mb-6">Model Lineage & Traceability</h3>
-                    <div
-                        class="plm-card h-[400px] flex items-center justify-center text-white/40 border-dashed border-2">
-                        <div class="text-center">
-                            <i data-lucide="share-2" class="w-12 h-12 mx-auto mb-4 opacity-20"></i>
-                            <p>Lineage Graph Initialization...</p>
-                        </div>
+                    <h3 class="text-lg font-semibold mb-6 flex items-center gap-2">
+                        <i data-lucide="git-branch" class="text-sky-500 w-5 h-5"></i> Model Lineage & Runs
+                    </h3>
+                    <div class="plm-card">
+                        <table class="w-full text-left text-sm">
+                            <thead>
+                                <tr class="text-white/40 border-b border-white/5">
+                                    <th class="pb-3 font-medium">Run ID</th>
+                                    <th class="pb-3 font-medium">Git Commit</th>
+                                    <th class="pb-3 font-medium">SDK Version</th>
+                                    <th class="pb-3 font-medium">Created At</th>
+                                    <th class="pb-3 font-medium">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-white/5">
+                                <template x-for="run in runs" :key="run.run_id">
+                                    <tr class="hover:bg-white/[0.02] transition-all">
+                                        <td class="py-4 font-mono text-xs text-white/60"
+                                            x-text="run.run_id.substring(0,8)"></td>
+                                        <td class="py-4 font-mono text-xs text-sky-400"
+                                            x-text="run.git_commit ? run.git_commit.substring(0,7) : '-'"></td>
+                                        <td class="py-4 text-xs" x-text="run.sdk_version"></td>
+                                        <td class="py-4 text-white/40 text-xs" x-text="formatDate(run.created_at)"></td>
+                                        <td class="py-4">
+                                            <span
+                                                :class="{'badge-success': run.status === 'completed' || run.status === 'evaluated', 'badge-warning': run.status === 'registered'}"
+                                                class="badge" x-text="run.status"></span>
+                                        </td>
+                                    </tr>
+                                </template>
+                                <tr x-show="runs.length === 0">
+                                    <td colspan="5" class="py-8 text-center text-white/20 italic text-xs">No runs
+                                        recorded.</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
 
@@ -283,6 +314,89 @@
                                 <tr x-show="tgspPackages.length === 0">
                                     <td colspan="5" class="py-8 text-center text-white/20 italic text-xs">No security
                                         profiles registered in this environment.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Key Vault Tab -->
+                <div x-show="activeTab === 'vault'" x-transition x-cloak>
+                    <h3 class="text-lg font-semibold mb-6 flex items-center gap-2">
+                        <i data-lucide="key" class="text-sky-500 w-5 h-5"></i> Machine Identity Vault
+                    </h3>
+                    <div class="plm-card">
+                        <table class="w-full text-left text-sm">
+                            <thead>
+                                <tr class="text-white/40 border-b border-white/5">
+                                    <th class="pb-3 font-medium">Subject DN</th>
+                                    <th class="pb-3 font-medium">Issuer</th>
+                                    <th class="pb-3 font-medium">Expires</th>
+                                    <th class="pb-3 font-medium">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-white/5">
+                                <template x-for="cert in certificates" :key="cert.id">
+                                    <tr class="hover:bg-white/[0.02] transition-all">
+                                        <td class="py-4 text-xs font-mono text-white/80" x-text="cert.subject"></td>
+                                        <td class="py-4 text-xs text-white/50" x-text="cert.issuer"></td>
+                                        <td class="py-4 text-xs text-white/50"
+                                            x-text="new Date(cert.not_after).toLocaleDateString()"></td>
+                                        <td class="py-4">
+                                            <span
+                                                :class="{'text-emerald-400': cert.days_to_expiry > 30, 'text-amber-400': cert.days_to_expiry <= 30}"
+                                                class="text-xs font-bold" x-text="cert.days_to_expiry + ' days'"></span>
+                                        </td>
+                                    </tr>
+                                </template>
+                                <tr x-show="certificates.length === 0">
+                                    <td colspan="4" class="py-8 text-center text-white/20 italic text-xs">No
+                                        certificates found.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Audit Tab -->
+                <div x-show="activeTab === 'audit'" x-transition x-cloak>
+                    <h3 class="text-lg font-semibold mb-6 flex items-center gap-2">
+                        <i data-lucide="clipboard-list" class="text-sky-500 w-5 h-5"></i> Tamper-Proof Audit Trail
+                    </h3>
+                    <div class="plm-card">
+                        <table class="w-full text-left text-sm">
+                            <thead>
+                                <tr class="text-white/40 border-b border-white/5">
+                                    <th class="pb-3 font-medium">Timestamp</th>
+                                    <th class="pb-3 font-medium">Actor</th>
+                                    <th class="pb-3 font-medium">Action</th>
+                                    <th class="pb-3 font-medium">Target</th>
+                                    <th class="pb-3 font-medium">Hash</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-white/5">
+                                <template x-for="log in auditLogs" :key="log.id">
+                                    <tr class="hover:bg-white/[0.02] transition-all">
+                                        <td class="py-4 text-xs text-white/40" x-text="formatDate(log.timestamp)"></td>
+                                        <td class="py-4">
+                                            <div class="flex flex-col">
+                                                <span class="text-xs font-bold" x-text="log.actor_type"></span>
+                                                <span class="text-[10px] text-white/30 truncate max-w-[100px]"
+                                                    x-text="log.actor_id"></span>
+                                            </div>
+                                        </td>
+                                        <td class="py-4">
+                                            <span class="badge badge-info" x-text="log.action"></span>
+                                        </td>
+                                        <td class="py-4 text-xs font-mono text-white/60"
+                                            x-text="log.target_type + ':' + log.target_id"></td>
+                                        <td class="py-4 text-[10px] font-mono text-white/20 truncate max-w-[80px]"
+                                            x-text="log.entry_hash"></td>
+                                    </tr>
+                                </template>
+                                <tr x-show="auditLogs.length === 0">
+                                    <td colspan="5" class="py-8 text-center text-white/20 italic text-xs">No audit logs
+                                        available.</td>
                                 </tr>
                             </tbody>
                         </table>

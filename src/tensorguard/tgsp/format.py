@@ -3,7 +3,7 @@ import struct
 import json
 import hashlib
 from typing import IO, List, Dict, Any, Optional
-from .manifest import TGSPManifest
+from .manifest import PackageManifest
 from .payload_crypto import encrypt_stream, PayloadDecryptor
 from ..evidence.canonical import canonical_bytes
 
@@ -20,9 +20,10 @@ class TGSPContainer:
         pass
 
 def write_tgsp_container(output_path: str, 
-                         manifest: TGSPManifest, 
+                         manifest: PackageManifest, 
                          payload_stream: IO[bytes], 
                          recipients_data: List[Dict],
+                         dek: bytes,
                          signing_key, # Ed25519 Private Key
                          signing_key_id: str,
                          version: str = "0.2") -> Dict:
@@ -43,8 +44,6 @@ def write_tgsp_container(output_path: str,
     
     # 1. Encrypt Payload
     payload_temp = tempfile.TemporaryFile()
-    import secrets
-    dek = secrets.token_bytes(32)
     
     # We need manifest_hash and recipients_hash for AAD *during* encryption?
     # Yes, per spec.
@@ -102,25 +101,18 @@ def write_tgsp_container(output_path: str,
     header_bytes = canonical_bytes(header)
     
     # 3. Sign Header
-    from ..evidence.signing import sign_event
-    # We construct a signable object: The Header.
-    # Actually prompt says: "Signature covers canonical bytes of: header ... manifest ... recipients ... payload_hash"
-    # If Header contains hashes of all these, signing Header is sufficient.
-    sig_payload = header.copy()
-    # Sign
-    from cryptography.hazmat.primitives.asymmetric import ed25519
-    import base64
     if signing_key:
-        sig = signing_key.sign(header_bytes)
+        signed_area = header_bytes + manifest_bytes + recipients_bytes
+        sig = signing_key.sign(signed_area)
         sig_block = {
             "key_id": signing_key_id,
             "alg": "ed25519",
-            "sig": base64.b64encode(sig).decode()
+            "signature": sig.hex()
         }
     else:
         sig_block = {}
         
-    sig_bytes = canonical_bytes(sig_block)
+    sig_bytes = json.dumps(sig_block, separators=(',', ':')).encode()
     
     # 4. Write
     # Offsets? Header needs offsets.
@@ -171,26 +163,84 @@ def write_tgsp_container(output_path: str,
         "key_id": signing_key_id
     }
 
+# Backward compatibility alias
+create_tgsp = write_tgsp_container
+
 def read_tgsp_header(path: str) -> dict:
-    """Read just the header/manifest/recipients structures."""
+    """Read just the header/manifest/recipients structures and signature."""
     with open(path, "rb") as f:
         magic = f.read(4)
         if magic != b"TGSP": raise ValueError("Invalid Magic")
         version = struct.unpack(">H", f.read(2))[0]
         
         h_len = struct.unpack(">I", f.read(4))[0]
-        header = json.loads(f.read(h_len))
+        h_bytes = f.read(h_len)
+        header = json.loads(h_bytes)
         
         m_len = struct.unpack(">I", f.read(4))[0]
-        manifest = json.loads(f.read(m_len))
+        m_bytes = f.read(m_len)
+        manifest = json.loads(m_bytes)
         
         r_len = struct.unpack(">I", f.read(4))[0]
-        recipients = json.loads(f.read(r_len))
+        r_bytes = f.read(r_len)
+        recipients = json.loads(r_bytes)
+        
+        signed_area = h_bytes + m_bytes + r_bytes
+        
+        p_len_data = f.read(8)
+        if not p_len_data: raise ValueError("Truncated file (no payload len)")
+        p_len = struct.unpack(">Q", p_len_data)[0]
+        payload_offset = f.tell()
+        
+        f.seek(p_len, 1)
+        sig_len_data = f.read(4)
+        sig_block = {}
+        if len(sig_len_data) == 4:
+            s_len = struct.unpack(">I", sig_len_data)[0]
+            if s_len > 0:
+                sig_block = json.loads(f.read(s_len))
         
         return {
             "version": f"0.{version}",
             "header": header,
             "manifest": manifest,
             "recipients": recipients,
-            "payload_offset": f.tell() + 8 # Skip payload len (8 bytes)
+            "signature_block": sig_block,
+            "signed_area": signed_area,
+            "payload_offset": payload_offset,
+            "payload_len": p_len
         }
+
+def verify_tgsp_container(path: str) -> bool:
+    """Complete integrity verification of a container."""
+    try:
+        data = read_tgsp_header(path)
+        sig_block = data.get("signature_block", {})
+        if not sig_block:
+            print("DEBUG: No sig_block")
+            return False
+            
+        manifest_data = data["manifest"]
+        pub64 = manifest_data.get("producer_pubkey_ed25519")
+        if not pub64:
+            print("DEBUG: No producer_pubkey_ed25519")
+            return False
+            
+        import base64
+        from cryptography.hazmat.primitives.asymmetric import ed25519
+        pub_bytes = base64.b64decode(pub64)
+        pub_key = ed25519.Ed25519PublicKey.from_public_bytes(pub_bytes)
+        
+        sig_hex = sig_block.get("signature")
+        if not sig_hex:
+            print("DEBUG: No signature hex")
+            return False
+            
+        sig_bytes = bytes.fromhex(sig_hex)
+        try:
+            pub_key.verify(sig_bytes, data["signed_area"])
+            return True
+        except Exception:
+            return False
+    except Exception:
+        return False
