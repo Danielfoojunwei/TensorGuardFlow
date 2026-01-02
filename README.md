@@ -25,6 +25,7 @@ TensorGuard is the industry-first **Post-Quantum Secure MLOps Platform** designe
     *   [TGSP (TensorGuard Security Protocol)](#tgsp-tensorguard-security-protocol)
     *   [MOAI (Secure Runtime)](#moai-secure-runtime)
 5.  [Key Features & Capabilities](#key-features--capabilities)
+    *   [PEFT Pipeline](#peft-pipeline)
     *   [Orthogonal Finetuning (OFT)](#orthogonal-finetuning-oft)
     *   [Federated Learning (FL)](#federated-learning-fl)
     *   [Network Defense (WTFPAD)](#network-defense)
@@ -160,17 +161,180 @@ MOAI (Model Obfuscation & Anonymous Inference) is the runtime engine within the 
 
 ## 5. <a name="key-features--capabilities"></a>Key Features & Capabilities
 
-### <a name="orthogonal-finetuning-oft"></a>5.1 Orthogonal Finetuning (OFT)
+### <a name="peft-pipeline"></a>5.1 Parameter-Efficient Fine-Tuning (PEFT) Pipeline
+
+TensorGuard implements a production-grade **PEFT (Parameter-Efficient Fine-Tuning)** system designed for secure, privacy-preserving model adaptation on edge devices. This is the core innovation that enables fleet-wide learning while maintaining strict confidentiality and integrity guarantees.
+
+#### 5.1.1 Why PEFT?
+
+Training full-sized Vision-Language-Action (VLA) models on edge robots is infeasible due to:
+- **Compute constraints**: Edge devices lack GPU power for full fine-tuning
+- **Memory limitations**: 7B+ parameter models exceed embedded RAM
+- **Bandwidth costs**: Transmitting full model updates (500MB+) is prohibitive
+- **Privacy exposure**: Larger updates leak more information about local data
+
+PEFT solves this by updating only a **small subset of parameters** (typically <1% of the model), achieving:
+- **100-1000x** reduction in trainable parameters
+- **50-500x** reduction in communication bandwidth
+- **Equivalent task performance** to full fine-tuning
+- **Stronger privacy** through reduced parameter surface
+
+#### 5.1.2 Supported PEFT Strategies
+
+TensorGuard supports multiple PEFT approaches, configurable via the `OperatingEnvelope`:
+
+| Strategy | Description | Use Case | Trainable Params |
+| :--- | :--- | :--- | :--- |
+| **LoRA** | Low-Rank Adaptation: Injects trainable rank-decomposition matrices into frozen layers | General-purpose adaptation | ~0.1-1% |
+| **Adapter** | Bottleneck layers inserted between frozen transformer blocks | Task-specific specialization | ~0.5-2% |
+| **Prefix Tuning** | Learns virtual "prompt" tokens prepended to input sequences | Instruction tuning | ~0.01-0.1% |
+| **Prompt Tuning** | Similar to prefix tuning but applied only to input layer | Lightweight task switching | ~0.001-0.01% |
+
+**Default Configuration** (`src/tensorguard/core/production.py:64`):
+```python
+peft_strategy: PEFTStrategy = PEFTStrategy.LORA
+trainable_modules: List[str] = ["policy_head", "last_4_blocks"]
+max_trainable_params: int = 10_000_000  # 10M hard limit
+```
+
+#### 5.1.3 Expert-Driven PEFT with MoE Gating
+
+TensorGuard extends traditional PEFT with **Expert-Driven Aggregation (EDA)**, a novel technique for heterogeneous robot fleets where different agents encounter different task distributions.
+
+**Problem**: In standard Federated Learning, all agents update the same global parameters. This causes **parameter interference** when agents have conflicting objectives (e.g., one robot does manipulation, another does navigation).
+
+**Solution**: The `MoEAdapter` (`src/tensorguard/core/adapters.py:69`) routes gradients to specialized **expert modules** based on **Instruction-Oriented Scene Parsing (IOSP)**:
+
+1. **Task Analysis**: Parses the natural language instruction (e.g., "Pick up the red apple")
+2. **Expert Selection**: Activates relevant experts:
+   - `visual_primary`: Geometric reasoning, object detection
+   - `visual_aux`: Color, texture, lighting
+   - `language_semantic`: Intent parsing, verb understanding
+   - `manipulation_grasp`: Force control, contact dynamics
+3. **Gated Aggregation**: Only experts with gate weight > threshold (default: 0.15) contribute gradients
+4. **Weighted Update**: Expert contributions are combined using softmax-normalized relevance scores
+
+**Result**: Each agent trains only the experts relevant to its local task distribution, preventing interference while enabling knowledge sharing within expert domains.
+
+#### 5.1.4 The Complete PEFT Training Pipeline
+
+The `TrainingWorker` (`src/tensorguard/agent/ml/worker.py:54`) orchestrates a **7-stage pipeline** that transforms local robot demonstrations into encrypted, privacy-preserving model updates:
+
+```mermaid
+flowchart TD
+    A[Robot Demonstrations] --> B[1. Gradient Computation]
+    B --> C[2. Expert Gating]
+    C --> D[3. Gradient Clipping DP]
+    D --> E[4. Random Sparsification]
+    E --> F[5. Error Compensation]
+    F --> G[6. Compression APHE]
+    G --> H[7. Encryption N2HE]
+    H --> I[UpdatePackage .tgsp]
+
+    style A fill:#e1f5ff
+    style I fill:#d4edda
+    style D fill:#fff3cd
+    style H fill:#f8d7da
+```
+
+**Stage-by-Stage Breakdown**:
+
+1. **Gradient Computation** (`worker.py:125-151`)
+   - Processes buffered demonstrations through the `VLAAdapter`
+   - Computes gradients via backpropagation (simulated for mock models)
+   - Returns expert-specific gradients: `Dict[expert_name, Dict[param_name, gradient]]`
+
+2. **Expert Gating** (`pipeline.py:25-44`)
+   - Applies IOSP-based gate weights from instruction parsing
+   - Filters out experts below threshold (0.15)
+   - Combines gated gradients: `combined[param] += grad * gate_weight`
+
+3. **Gradient Clipping** (`pipeline.py:15-23`)
+   - **Differential Privacy (DP) enforcement**: Clips L2 norm to configured maximum (default: 1.0)
+   - Formula: `clip_coef = min(max_norm / (||g|| + ε), 1.0)`
+   - Prevents privacy leakage from unbounded gradients
+   - **Privacy cost**: ε ≈ 0.1-1.0 per round (tracked in `DPPolicyProfile`)
+
+4. **Random Sparsification** (`pipeline.py:46-95`)
+   - Selects random subset of parameters (default: 1% sparsity = keep 1%)
+   - **Rand-K algorithm**: Uniform random sampling of indices
+   - **Why random?** Unlike top-K (magnitude-based), random selection is **data-agnostic** and prevents gradient starvation
+   - **Bandwidth savings**: 99% reduction in transmission size
+
+5. **Error Compensation** (`worker.py:155-168`)
+   - **Error Feedback Memory**: Stores residuals from sparsification
+   - Adds residuals back to next round's gradients: `grad[t+1] += error[t]`
+   - Prevents accumulated quantization drift over rounds
+   - Memory is pruned after 10 stale rounds to prevent staleness
+
+6. **Compression** (`pipeline.py:97-135`)
+   - **APHE (Approximate Homomorphic Encryption) Compressor**
+   - Quantizes gradients to low-bit representation (default: 2-8 bits)
+   - Serializes with `msgpack` (safe, no pickle RCE risk)
+   - Compresses with `gzip`
+   - **Compression ratio**: 4-32x size reduction
+
+7. **Encryption** (`core/crypto.py`)
+   - **N2HE (NIST-compliant Homomorphic Encryption)**
+   - Encrypts compressed payload with post-quantum hybrid KEM
+   - Server can perform **ciphertext aggregation** without decryption
+   - **Key property**: `Decrypt(Σ Enc(grad_i)) = Σ grad_i` (secure sum)
+
+**Final Output**: The `UpdatePackage` is serialized to bytes and transmitted to the Platform. It includes:
+- `delta_tensors`: Encrypted gradient payload
+- `expert_weights`: MoE gate distributions (for server-side routing)
+- `training_meta`: Steps, learning rate, objective type (IL/RL)
+- `safety_stats`: DP epsilon consumed, gradient norms, constraint violations
+- `compression_metadata`: Sparsity ratio, compression ratio, payload size
+
+#### 5.1.5 Integration with Other Components
+
+The PEFT pipeline is the **central orchestration layer** that ties together all TensorGuard subsystems:
+
+| Component | Integration Point | Purpose |
+| :--- | :--- | :--- |
+| **TGSP** | Encrypted updates packaged as `.tgsp` files | Tamper-proof delivery to Platform |
+| **Federated Learning** | Aggregation server sums encrypted `UpdatePackage`s | Fleet-wide knowledge synthesis |
+| **Differential Privacy** | Gradient clipping + noise injection | Formal privacy guarantees (ε-DP) |
+| **Post-Quantum Crypto** | N2HE encryption with Kyber/Dilithium | Quantum-safe confidentiality |
+| **MOAI Runtime** | Applies aggregated updates to local model | Closes the learning loop |
+| **Observability** | Metrics logged via `ObservabilityCollector` | SRE visibility into training health |
+| **Evaluation Gate** | Quality checks before deployment | Prevents regression/drift |
+
+**Key Insight**: PEFT is not a standalone feature—it's the **data plane** of TensorGuard's secure MLOps platform. Every gradient flows through this pipeline before leaving the device.
+
+#### 5.1.6 Production Operating Envelope
+
+The `OperatingEnvelope` (`production.py:54`) enforces strict production constraints:
+
+```python
+# Communication constraints
+target_update_size_kb: int = 500  # Target: 500KB updates
+max_update_size_kb: int = 5120    # Hard limit: 5MB
+
+# Round cadence
+round_interval_seconds: int = 3600        # Hourly rounds
+min_round_interval_seconds: int = 600     # Minimum: 10 minutes
+max_round_interval_seconds: int = 86400   # Maximum: daily
+
+# Safety controls
+enable_canary: bool = True            # 10% canary rollout
+enable_rollback: bool = True          # Automatic rollback on failure
+```
+
+**Enforcement**: The `enforce_update_size()` method rejects updates exceeding limits, preventing bandwidth overruns and ensuring predictable system behavior.
+
+### <a name="orthogonal-finetuning-oft"></a>5.2 Orthogonal Finetuning (OFT)
 TensorGuard supports **OFT** for efficient on-device adaptation. Unlike LoRA which adds adapter matrices, OFT multiplies weights by an orthogonal matrix $R$. This preserves the hyperspherical energy of the pre-trained model, ensuring stability during continuous learning on robotics hardware.
 
 <img src="artifacts/oft_mechanism.png" width="600" alt="OFT Mechanism">
 
-### <a name="federated-learning-fl"></a>5.2 Federated Learning (FL)
+### <a name="federated-learning-fl"></a>5.3 Federated Learning (FL)
 Secure Aggregation topology allows thousands of agents to train locally and submit encrypted gradients to the central parameter server.
 
 <img src="artifacts/fl_architecture.png" width="600" alt="Federated Learning">
 
-### <a name="network-defense"></a>5.3 Network Defense (WTFPAD)
+### <a name="network-defense"></a>5.4 Network Defense (WTFPAD)
 **Adaptive Padding** and **Traffic Morphing** are used to defeat Traffic Analysis attacks.
 *   **Jitter Buffering**: Randomizes packet inter-arrival times.
 *   **Dummy Traffic**: Injects chaff packets to mask idle periods vs. inference bursts.
