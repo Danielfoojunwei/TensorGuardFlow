@@ -19,6 +19,9 @@
     <!-- Alpine.js -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
     <!-- Tailwind CSS (Dev CDN) -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -111,86 +114,211 @@
                 <!-- Dashboard Tab -->
                 <div x-show="activeTab === 'dashboard'" x-transition x-cloak>
                     <div class="grid grid-cols-4 gap-6 mb-10">
-                        <div class="plm-card">
-                            <span class="text-[10px] text-white/40 uppercase font-bold tracking-wider mb-1 block">Active
+                        <!-- Active Identifiers Card -->
+                        <div class="plm-card gradient-card-blue">
+                            <span class="text-[10px] text-white/60 uppercase font-bold tracking-wider mb-1 block">Active
                                 Identifiers</span>
-                            <div class="flex items-end gap-2">
-                                <span class="text-3xl font-bold font-mono">14</span>
-                                <span class="text-emerald-500 text-xs mb-1">Live Seats</span>
-                            </div>
+                            <template x-if="loading.stats">
+                                <div class="skeleton h-8 w-20 mt-2"></div>
+                            </template>
+                            <template x-if="!loading.stats && !errors.stats">
+                                <div class="flex items-end gap-2">
+                                    <span class="text-3xl font-bold font-mono"
+                                        x-text="endpoints.length || certificates.length || 14"></span>
+                                    <span class="text-emerald-400 text-xs mb-1 flex items-center gap-1">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                        Live Seats
+                                    </span>
+                                </div>
+                            </template>
+                            <template x-if="errors.stats">
+                                <div class="text-red-400 text-xs mt-2 flex items-center gap-1">
+                                    <i data-lucide="alert-circle" class="w-3 h-3"></i>
+                                    <span x-text="errors.stats"></span>
+                                </div>
+                            </template>
                         </div>
-                        <div class="plm-card">
-                            <span class="text-[10px] text-white/40 uppercase font-bold tracking-wider mb-1 block">Model
+
+                        <!-- Model Lineage Card -->
+                        <div class="plm-card gradient-card-purple">
+                            <span class="text-[10px] text-white/60 uppercase font-bold tracking-wider mb-1 block">Model
                                 Lineage Score</span>
                             <div class="flex items-end gap-2">
                                 <span class="text-3xl font-bold font-mono">99.8</span>
-                                <span class="text-emerald-500 text-xs mb-1">% Authenticated</span>
+                                <span class="text-violet-400 text-xs mb-1">% Authenticated</span>
                             </div>
                         </div>
-                        <div class="plm-card">
+
+                        <!-- Privacy Budget Card with Chart -->
+                        <div class="plm-card gradient-card-amber relative overflow-hidden">
                             <span
-                                class="text-[10px] text-white/40 uppercase font-bold tracking-wider mb-1 block">Privacy
-                                Budget Remaining</span>
-                            <div class="flex items-end gap-2">
-                                <span class="text-3xl font-bold font-mono">ε 8.4</span>
-                                <span class="text-sky-500 text-xs mb-1">Standard Cap</span>
+                                class="text-[10px] text-white/60 uppercase font-bold tracking-wider mb-1 block">Privacy
+                                Budget</span>
+                            <div class="flex items-center gap-3">
+                                <div class="w-16 h-16">
+                                    <canvas id="privacyChart"></canvas>
+                                </div>
+                                <div>
+                                    <span class="text-2xl font-bold font-mono"
+                                        x-text="'ε ' + ((stats.privacy_cap || 10) - (stats.privacy_consumed || 1.6)).toFixed(1)"></span>
+                                    <div class="text-[10px] text-white/40">Remaining</div>
+                                </div>
                             </div>
                         </div>
-                        <div class="plm-card">
+
+                        <!-- Compliance Status Card -->
+                        <div class="plm-card gradient-card-green">
                             <span
-                                class="text-[10px] text-white/40 uppercase font-bold tracking-wider mb-1 block">Compliance
+                                class="text-[10px] text-white/60 uppercase font-bold tracking-wider mb-1 block">Compliance
                                 Status</span>
-                            <div class="flex flex-wrap items-center gap-1 mt-1">
-                                <span class="badge badge-success text-[9px]">ISO 27001</span>
-                                <span class="badge badge-success text-[9px]">NIST CSF</span>
-                                <span class="badge badge-success text-[9px]">SOC 2</span>
-                                <span class="badge badge-success text-[9px]">GDPR</span>
-                                <span class="badge badge-success text-[9px]">HIPAA</span>
+                            <div class="flex flex-wrap items-center gap-1 mt-2">
+                                <span
+                                    class="badge badge-success text-[9px] hover:scale-105 transition-transform cursor-default">ISO
+                                    27001</span>
+                                <span
+                                    class="badge badge-success text-[9px] hover:scale-105 transition-transform cursor-default">NIST
+                                    CSF</span>
+                                <span
+                                    class="badge badge-success text-[9px] hover:scale-105 transition-transform cursor-default">SOC
+                                    2</span>
+                                <span
+                                    class="badge badge-success text-[9px] hover:scale-105 transition-transform cursor-default">GDPR</span>
+                                <span
+                                    class="badge badge-success text-[9px] hover:scale-105 transition-transform cursor-default">HIPAA</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Lineage Chart Section -->
+                    <div class="grid grid-cols-3 gap-6 mb-10">
+                        <div class="plm-card col-span-2">
+                            <h4 class="text-sm font-semibold mb-4 flex items-center gap-2 text-white/80">
+                                <i data-lucide="bar-chart-3" class="w-4 h-4 text-sky-400"></i>
+                                Recent Run Scores
+                            </h4>
+                            <div class="h-48">
+                                <canvas id="lineageChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="plm-card">
+                            <h4 class="text-sm font-semibold mb-4 flex items-center gap-2 text-white/80">
+                                <i data-lucide="shield-check" class="w-4 h-4 text-emerald-400"></i>
+                                Quick Stats
+                            </h4>
+                            <div class="space-y-4">
+                                <div class="flex justify-between items-center">
+                                    <span class="text-xs text-white/40">Total Runs</span>
+                                    <span class="font-mono text-sm" x-text="runs.length"></span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-xs text-white/40">Certificates</span>
+                                    <span class="font-mono text-sm" x-text="certificates.length"></span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-xs text-white/40">Audit Events</span>
+                                    <span class="font-mono text-sm" x-text="auditLogs.length"></span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-xs text-white/40">TGSP Packages</span>
+                                    <span class="font-mono text-sm" x-text="tgspPackages.length"></span>
+                                </div>
                             </div>
                         </div>
                     </div>
 
                     <h3 class="text-lg font-semibold mb-6 flex items-center gap-2">
                         <i data-lucide="activity" class="text-sky-500 w-5 h-5"></i> System Activity Proof
+                        <template x-if="loading.jobs">
+                            <span class="ml-2 text-xs text-white/30 animate-pulse">Loading...</span>
+                        </template>
                     </h3>
 
                     <div class="plm-card">
-                        <table class="w-full text-left text-sm">
-                            <thead>
-                                <tr class="text-white/40 border-b border-white/5">
-                                    <th class="pb-3 font-medium">Trace ID</th>
-                                    <th class="pb-3 font-medium">Model Type</th>
-                                    <th class="pb-3 font-medium">Audit Proof</th>
-                                    <th class="pb-3 font-medium">System Time</th>
-                                    <th class="pb-3 font-medium">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-white/5">
-                                <template x-for="job in jobs" :key="job.id">
-                                    <tr class="hover:bg-white/[0.02] transition-all group">
-                                        <td class="py-4 font-mono text-xs text-white/60" x-text="job.id.substring(0,8)">
-                                        </td>
-                                        <td class="py-4">
-                                            <div class="flex items-center gap-2">
-                                                <div class="w-2 h-2 rounded-full bg-sky-500"></div>
-                                                <span x-text="job.type"></span>
-                                            </div>
-                                        </td>
-                                        <td class="py-4">
-                                            <span
-                                                class="text-[10px] font-mono text-white/30 truncate max-w-[150px] inline-block"
-                                                x-text="job.api_key_hash"></span>
-                                        </td>
-                                        <td class="py-4 text-white/40 text-xs" x-text="formatDate(job.created_at)"></td>
-                                        <td class="py-4">
-                                            <span
-                                                :class="{'badge-success': job.status === 'completed', 'badge-warning': job.status === 'pending'}"
-                                                class="badge" x-text="job.status"></span>
-                                        </td>
-                                    </tr>
+                        <!-- Error State -->
+                        <template x-if="errors.jobs">
+                            <div class="flex flex-col items-center justify-center py-12 text-center">
+                                <div class="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center mb-4">
+                                    <i data-lucide="alert-triangle" class="w-6 h-6 text-red-400"></i>
+                                </div>
+                                <p class="text-white/60 text-sm">Failed to load activity data</p>
+                                <p class="text-white/30 text-xs mt-1" x-text="errors.jobs"></p>
+                                <button @click="fetchJobs()"
+                                    class="mt-4 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-xs transition-colors">
+                                    Retry
+                                </button>
+                            </div>
+                        </template>
+
+                        <!-- Loading Skeleton -->
+                        <template x-if="loading.jobs && !errors.jobs">
+                            <div class="space-y-4">
+                                <template x-for="i in 5">
+                                    <div class="flex items-center gap-4">
+                                        <div class="skeleton h-4 w-20"></div>
+                                        <div class="skeleton h-4 w-32"></div>
+                                        <div class="skeleton h-4 w-40"></div>
+                                        <div class="skeleton h-4 w-24"></div>
+                                        <div class="skeleton h-4 w-16"></div>
+                                    </div>
                                 </template>
-                            </tbody>
-                        </table>
+                            </div>
+                        </template>
+
+                        <!-- Empty State -->
+                        <template x-if="!loading.jobs && !errors.jobs && jobs.length === 0">
+                            <div class="flex flex-col items-center justify-center py-12 text-center">
+                                <div class="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-4">
+                                    <i data-lucide="inbox" class="w-6 h-6 text-white/20"></i>
+                                </div>
+                                <p class="text-white/40 text-sm">No activity recorded yet</p>
+                                <p class="text-white/20 text-xs mt-1">Run an enablement job to see activity here</p>
+                            </div>
+                        </template>
+
+                        <!-- Data Table -->
+                        <template x-if="!loading.jobs && !errors.jobs && jobs.length > 0">
+                            <table class="w-full text-left text-sm">
+                                <thead>
+                                    <tr class="text-white/40 border-b border-white/5">
+                                        <th class="pb-3 font-medium">Trace ID</th>
+                                        <th class="pb-3 font-medium">Model Type</th>
+                                        <th class="pb-3 font-medium">Audit Proof</th>
+                                        <th class="pb-3 font-medium">Time</th>
+                                        <th class="pb-3 font-medium">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-white/5">
+                                    <template x-for="job in jobs" :key="job.id">
+                                        <tr class="hover:bg-white/[0.02] transition-all group cursor-pointer">
+                                            <td class="py-4 font-mono text-xs text-sky-400/80"
+                                                x-text="job.id.substring(0,8)">
+                                            </td>
+                                            <td class="py-4">
+                                                <div class="flex items-center gap-2">
+                                                    <div
+                                                        class="w-2 h-2 rounded-full bg-sky-500 group-hover:animate-pulse">
+                                                    </div>
+                                                    <span x-text="job.type"></span>
+                                                </div>
+                                            </td>
+                                            <td class="py-4">
+                                                <span
+                                                    class="text-[10px] font-mono text-white/30 truncate max-w-[150px] inline-block hover:text-white/60 transition-colors"
+                                                    x-text="job.api_key_hash"></span>
+                                            </td>
+                                            <td class="py-4 text-white/40 text-xs"
+                                                x-text="formatRelativeTime(job.created_at)"></td>
+                                            <td class="py-4">
+                                                <span
+                                                    :class="getStatusBg(job.status) + ' ' + getStatusColor(job.status)"
+                                                    class="px-2 py-1 rounded-full text-[10px] font-medium"
+                                                    x-text="job.status"></span>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </template>
                     </div>
                 </div>
 
@@ -198,40 +326,87 @@
                 <div x-show="activeTab === 'lineage'" x-transition x-cloak>
                     <h3 class="text-lg font-semibold mb-6 flex items-center gap-2">
                         <i data-lucide="git-branch" class="text-sky-500 w-5 h-5"></i> Model Lineage & Runs
+                        <template x-if="loading.runs">
+                            <span class="ml-2 text-xs text-white/30 animate-pulse">Loading...</span>
+                        </template>
                     </h3>
+
                     <div class="plm-card">
-                        <table class="w-full text-left text-sm">
-                            <thead>
-                                <tr class="text-white/40 border-b border-white/5">
-                                    <th class="pb-3 font-medium">Run ID</th>
-                                    <th class="pb-3 font-medium">Git Commit</th>
-                                    <th class="pb-3 font-medium">SDK Version</th>
-                                    <th class="pb-3 font-medium">Created At</th>
-                                    <th class="pb-3 font-medium">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-white/5">
-                                <template x-for="run in runs" :key="run.run_id">
-                                    <tr class="hover:bg-white/[0.02] transition-all">
-                                        <td class="py-4 font-mono text-xs text-white/60"
-                                            x-text="run.run_id.substring(0,8)"></td>
-                                        <td class="py-4 font-mono text-xs text-sky-400"
-                                            x-text="run.git_commit ? run.git_commit.substring(0,7) : '-'"></td>
-                                        <td class="py-4 text-xs" x-text="run.sdk_version"></td>
-                                        <td class="py-4 text-white/40 text-xs" x-text="formatDate(run.created_at)"></td>
-                                        <td class="py-4">
-                                            <span
-                                                :class="{'badge-success': run.status === 'completed' || run.status === 'evaluated', 'badge-warning': run.status === 'registered'}"
-                                                class="badge" x-text="run.status"></span>
-                                        </td>
-                                    </tr>
+                        <!-- Error State -->
+                        <template x-if="errors.runs">
+                            <div class="flex flex-col items-center justify-center py-12 text-center">
+                                <div class="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center mb-4">
+                                    <i data-lucide="alert-triangle" class="w-6 h-6 text-red-400"></i>
+                                </div>
+                                <p class="text-white/60 text-sm">Failed to load lineage data</p>
+                                <p class="text-white/30 text-xs mt-1" x-text="errors.runs"></p>
+                                <button @click="fetchRuns()"
+                                    class="mt-4 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-xs transition-colors">
+                                    Retry
+                                </button>
+                            </div>
+                        </template>
+
+                        <!-- Loading Skeleton -->
+                        <template x-if="loading.runs && !errors.runs">
+                            <div class="space-y-4">
+                                <template x-for="i in 5">
+                                    <div class="flex items-center gap-4">
+                                        <div class="skeleton h-4 w-24"></div>
+                                        <div class="skeleton h-4 w-32"></div>
+                                        <div class="skeleton h-4 w-20"></div>
+                                        <div class="skeleton h-4 w-32"></div>
+                                        <div class="skeleton h-4 w-16"></div>
+                                    </div>
                                 </template>
-                                <tr x-show="runs.length === 0">
-                                    <td colspan="5" class="py-8 text-center text-white/20 italic text-xs">No runs
-                                        recorded.</td>
-                                </tr>
-                            </tbody>
-                        </table>
+                            </div>
+                        </template>
+
+                        <!-- Empty State -->
+                        <template x-if="!loading.runs && !errors.runs && runs.length === 0">
+                            <div class="flex flex-col items-center justify-center py-12 text-center">
+                                <div class="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-4">
+                                    <i data-lucide="git-branch" class="w-6 h-6 text-white/20"></i>
+                                </div>
+                                <p class="text-white/40 text-sm">No runs recorded</p>
+                                <p class="text-white/20 text-xs mt-1">Register a model run to see lineage data</p>
+                            </div>
+                        </template>
+
+                        <!-- Data Table -->
+                        <template x-if="!loading.runs && !errors.runs && runs.length > 0">
+                            <table class="w-full text-left text-sm">
+                                <thead>
+                                    <tr class="text-white/40 border-b border-white/5">
+                                        <th class="pb-3 font-medium">Run ID</th>
+                                        <th class="pb-3 font-medium">Git Commit</th>
+                                        <th class="pb-3 font-medium">SDK Version</th>
+                                        <th class="pb-3 font-medium">Created At</th>
+                                        <th class="pb-3 font-medium">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-white/5">
+                                    <template x-for="run in runs" :key="run.run_id">
+                                        <tr class="hover:bg-white/[0.02] transition-all hover-lift">
+                                            <td class="py-4 font-mono text-xs text-white/80"
+                                                x-text="run.run_id.substring(0,8)"></td>
+                                            <td class="py-4 font-mono text-xs text-sky-400"
+                                                x-text="run.git_commit ? run.git_commit.substring(0,7) : '-'"></td>
+                                            <td class="py-4 text-xs font-mono text-white/60" x-text="run.sdk_version">
+                                            </td>
+                                            <td class="py-4 text-white/40 text-xs" x-text="formatDate(run.created_at)">
+                                            </td>
+                                            <td class="py-4">
+                                                <span
+                                                    :class="getStatusBg(run.status) + ' ' + getStatusColor(run.status)"
+                                                    class="px-2 py-1 rounded-full text-[10px] font-medium"
+                                                    x-text="run.status"></span>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </template>
                     </div>
                 </div>
 
@@ -247,7 +422,8 @@
                     </div>
 
                     <div class="grid grid-cols-2 gap-6 mb-10">
-                        <div class="plm-card border-emerald-500/20">
+                        <div
+                            class="plm-card border-emerald-500/20 hover:border-emerald-500/40 glow-emerald transition-all">
                             <h4 class="font-bold flex items-center gap-2 mb-4">
                                 <i data-lucide="check-circle" class="text-emerald-500 w-4 h-4"></i> SOC 2 Type II
                             </h4>
@@ -256,10 +432,14 @@
                             <div
                                 class="flex justify-between items-center bg-white/5 p-3 rounded-lg border border-white/5">
                                 <span class="text-[10px] font-mono text-white/40 uppercase">Last Verification</span>
-                                <span class="text-xs font-semibold uppercase text-emerald-400">PASSED: 2026-01-01</span>
+                                <span class="text-xs font-semibold uppercase text-emerald-400 flex items-center gap-2">
+                                    <span class="w-2 h-2 rounded-full bg-emerald-500 pulse-dot"></span>
+                                    PASSED: 2026-01-01
+                                </span>
                             </div>
                         </div>
-                        <div class="plm-card border-emerald-500/20">
+                        <div
+                            class="plm-card border-emerald-500/20 hover:border-emerald-500/40 glow-emerald transition-all">
                             <h4 class="font-bold flex items-center gap-2 mb-4">
                                 <i data-lucide="shield" class="text-emerald-500 w-4 h-4"></i> TGSP Manifest Integrity
                             </h4>
@@ -268,55 +448,102 @@
                             <div
                                 class="flex justify-between items-center bg-white/5 p-3 rounded-lg border border-white/5">
                                 <span class="text-[10px] font-mono text-white/40 uppercase">Active Profiles</span>
-                                <span class="text-xs font-semibold uppercase text-emerald-400"
-                                    x-text="tgspPackages.filter(p => p.status === 'verified').length"></span>
+                                <span class="text-xs font-semibold uppercase text-emerald-400 flex items-center gap-2">
+                                    <span class="w-2 h-2 rounded-full bg-emerald-500 pulse-dot"></span>
+                                    <span x-text="tgspPackages.filter(p => p.status === 'verified').length"></span>
+                                    Verified
+                                </span>
                             </div>
                         </div>
                     </div>
 
-                    <h4 class="text-sm font-semibold mb-4 flex items-center gap-2 opacity-60">
-                        <i data-lucide="package" class="w-4 h-4"></i> Registered Security Profiles (TGSP)
+                    <h4 class="text-sm font-semibold mb-4 flex items-center gap-2 text-white/80">
+                        <i data-lucide="package" class="w-4 h-4 text-sky-400"></i> Registered Security Profiles (TGSP)
+                        <template x-if="loading.tgsp">
+                            <span class="ml-2 text-xs text-white/30 animate-pulse">Loading...</span>
+                        </template>
                     </h4>
 
                     <div class="plm-card">
-                        <table class="w-full text-left text-sm">
-                            <thead>
-                                <tr class="text-white/40 border-b border-white/5">
-                                    <th class="pb-3 font-medium">Package ID</th>
-                                    <th class="pb-3 font-medium">Producer</th>
-                                    <th class="pb-3 font-medium">Policy Match</th>
-                                    <th class="pb-3 font-medium">Verified On</th>
-                                    <th class="pb-3 font-medium">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-white/5">
-                                <template x-for="pkg in tgspPackages" :key="pkg.id">
-                                    <tr class="hover:bg-white/[0.02] transition-all group">
-                                        <td class="py-4 font-mono text-xs text-white/60"
-                                            x-text="pkg.id.substring(0,12)"></td>
-                                        <td class="py-4 text-xs" x-text="pkg.producer_id"></td>
-                                        <td class="py-4">
-                                            <div class="flex flex-col">
-                                                <span class="text-xs" x-text="pkg.policy_id"></span>
-                                                <span class="text-[10px] text-white/30"
-                                                    x-text="'v' + pkg.policy_version"></span>
-                                            </div>
-                                        </td>
-                                        <td class="py-4 text-white/40 text-xs"
-                                            x-text="new Date(pkg.created_at).toLocaleDateString()"></td>
-                                        <td class="py-4">
-                                            <span
-                                                :class="{'badge-success': pkg.status === 'verified', 'badge-warning': pkg.status === 'uploaded', 'badge-danger': pkg.status === 'rejected'}"
-                                                class="badge" x-text="pkg.status"></span>
-                                        </td>
-                                    </tr>
+                        <!-- Error State -->
+                        <template x-if="errors.tgsp">
+                            <div class="flex flex-col items-center justify-center py-12 text-center">
+                                <div class="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center mb-4">
+                                    <i data-lucide="alert-triangle" class="w-6 h-6 text-red-400"></i>
+                                </div>
+                                <p class="text-white/60 text-sm">Failed to load security profiles</p>
+                                <p class="text-white/30 text-xs mt-1" x-text="errors.tgsp"></p>
+                                <button @click="fetchTGSP()"
+                                    class="mt-4 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-xs transition-colors">
+                                    Retry
+                                </button>
+                            </div>
+                        </template>
+
+                        <!-- Loading Skeleton -->
+                        <template x-if="loading.tgsp && !errors.tgsp">
+                            <div class="space-y-4">
+                                <template x-for="i in 3">
+                                    <div class="flex items-center gap-4">
+                                        <div class="skeleton h-4 w-32"></div>
+                                        <div class="skeleton h-4 w-24"></div>
+                                        <div class="skeleton h-4 w-40"></div>
+                                        <div class="skeleton h-4 w-24"></div>
+                                        <div class="skeleton h-4 w-16"></div>
+                                    </div>
                                 </template>
-                                <tr x-show="tgspPackages.length === 0">
-                                    <td colspan="5" class="py-8 text-center text-white/20 italic text-xs">No security
-                                        profiles registered in this environment.</td>
-                                </tr>
-                            </tbody>
-                        </table>
+                            </div>
+                        </template>
+
+                        <!-- Empty State -->
+                        <template x-if="!loading.tgsp && !errors.tgsp && tgspPackages.length === 0">
+                            <div class="flex flex-col items-center justify-center py-12 text-center">
+                                <div class="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-4">
+                                    <i data-lucide="package" class="w-6 h-6 text-white/20"></i>
+                                </div>
+                                <p class="text-white/40 text-sm">No security profiles registered</p>
+                            </div>
+                        </template>
+
+                        <!-- Data Table -->
+                        <template x-if="!loading.tgsp && !errors.tgsp && tgspPackages.length > 0">
+                            <table class="w-full text-left text-sm">
+                                <thead>
+                                    <tr class="text-white/40 border-b border-white/5">
+                                        <th class="pb-3 font-medium">Package ID</th>
+                                        <th class="pb-3 font-medium">Producer</th>
+                                        <th class="pb-3 font-medium">Policy Match</th>
+                                        <th class="pb-3 font-medium">Verified On</th>
+                                        <th class="pb-3 font-medium">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-white/5">
+                                    <template x-for="pkg in tgspPackages" :key="pkg.id">
+                                        <tr class="hover:bg-white/[0.02] transition-all hover-lift">
+                                            <td class="py-4 font-mono text-xs text-white/80"
+                                                x-text="pkg.id.substring(0,12)"></td>
+                                            <td class="py-4 text-xs text-white/60" x-text="pkg.producer_id"></td>
+                                            <td class="py-4">
+                                                <div class="flex flex-col">
+                                                    <span class="text-xs font-medium text-sky-400"
+                                                        x-text="pkg.policy_id"></span>
+                                                    <span class="text-[10px] font-mono text-white/30"
+                                                        x-text="'v' + pkg.policy_version"></span>
+                                                </div>
+                                            </td>
+                                            <td class="py-4 text-white/40 text-xs"
+                                                x-text="new Date(pkg.created_at).toLocaleDateString()"></td>
+                                            <td class="py-4">
+                                                <span
+                                                    :class="getStatusBg(pkg.status) + ' ' + getStatusColor(pkg.status)"
+                                                    class="px-2 py-1 rounded-full text-[10px] font-medium"
+                                                    x-text="pkg.status"></span>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </template>
                     </div>
                 </div>
 
@@ -324,37 +551,80 @@
                 <div x-show="activeTab === 'vault'" x-transition x-cloak>
                     <h3 class="text-lg font-semibold mb-6 flex items-center gap-2">
                         <i data-lucide="key" class="text-sky-500 w-5 h-5"></i> Machine Identity Vault
+                        <template x-if="loading.inventory">
+                            <span class="ml-2 text-xs text-white/30 animate-pulse">Loading...</span>
+                        </template>
                     </h3>
+
                     <div class="plm-card">
-                        <table class="w-full text-left text-sm">
-                            <thead>
-                                <tr class="text-white/40 border-b border-white/5">
-                                    <th class="pb-3 font-medium">Subject DN</th>
-                                    <th class="pb-3 font-medium">Issuer</th>
-                                    <th class="pb-3 font-medium">Expires</th>
-                                    <th class="pb-3 font-medium">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-white/5">
-                                <template x-for="cert in certificates" :key="cert.id">
-                                    <tr class="hover:bg-white/[0.02] transition-all">
-                                        <td class="py-4 text-xs font-mono text-white/80" x-text="cert.subject"></td>
-                                        <td class="py-4 text-xs text-white/50" x-text="cert.issuer"></td>
-                                        <td class="py-4 text-xs text-white/50"
-                                            x-text="new Date(cert.not_after).toLocaleDateString()"></td>
-                                        <td class="py-4">
-                                            <span
-                                                :class="{'text-emerald-400': cert.days_to_expiry > 30, 'text-amber-400': cert.days_to_expiry <= 30}"
-                                                class="text-xs font-bold" x-text="cert.days_to_expiry + ' days'"></span>
-                                        </td>
-                                    </tr>
+                        <!-- Error State -->
+                        <template x-if="errors.inventory">
+                            <div class="flex flex-col items-center justify-center py-12 text-center">
+                                <div class="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center mb-4">
+                                    <i data-lucide="alert-triangle" class="w-6 h-6 text-red-400"></i>
+                                </div>
+                                <p class="text-white/60 text-sm">Failed to load identity vault</p>
+                                <p class="text-white/30 text-xs mt-1" x-text="errors.inventory"></p>
+                                <button @click="fetchInventory()"
+                                    class="mt-4 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-xs transition-colors">
+                                    Retry
+                                </button>
+                            </div>
+                        </template>
+
+                        <!-- Loading Skeleton -->
+                        <template x-if="loading.inventory && !errors.inventory">
+                            <div class="space-y-4">
+                                <template x-for="i in 5">
+                                    <div class="flex items-center gap-4">
+                                        <div class="skeleton h-4 w-40"></div>
+                                        <div class="skeleton h-4 w-32"></div>
+                                        <div class="skeleton h-4 w-32"></div>
+                                        <div class="skeleton h-4 w-24"></div>
+                                    </div>
                                 </template>
-                                <tr x-show="certificates.length === 0">
-                                    <td colspan="4" class="py-8 text-center text-white/20 italic text-xs">No
-                                        certificates found.</td>
-                                </tr>
-                            </tbody>
-                        </table>
+                            </div>
+                        </template>
+
+                        <!-- Empty State -->
+                        <template x-if="!loading.inventory && !errors.inventory && certificates.length === 0">
+                            <div class="flex flex-col items-center justify-center py-12 text-center">
+                                <div class="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-4">
+                                    <i data-lucide="key" class="w-6 h-6 text-white/20"></i>
+                                </div>
+                                <p class="text-white/40 text-sm">Vault empty</p>
+                                <p class="text-white/20 text-xs mt-1">No machine identities found</p>
+                            </div>
+                        </template>
+
+                        <!-- Data Table -->
+                        <template x-if="!loading.inventory && !errors.inventory && certificates.length > 0">
+                            <table class="w-full text-left text-sm">
+                                <thead>
+                                    <tr class="text-white/40 border-b border-white/5">
+                                        <th class="pb-3 font-medium">Subject DN</th>
+                                        <th class="pb-3 font-medium">Issuer</th>
+                                        <th class="pb-3 font-medium">Expires</th>
+                                        <th class="pb-3 font-medium">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-white/5">
+                                    <template x-for="cert in certificates" :key="cert.id">
+                                        <tr class="hover:bg-white/[0.02] transition-all hover-lift">
+                                            <td class="py-4 text-xs font-mono text-white/80" x-text="cert.subject"></td>
+                                            <td class="py-4 text-xs text-white/50" x-text="cert.issuer"></td>
+                                            <td class="py-4 text-xs text-white/50"
+                                                x-text="new Date(cert.not_after).toLocaleDateString()"></td>
+                                            <td class="py-4">
+                                                <span :class="getCertExpiryClass(cert.days_to_expiry)"
+                                                    class="px-2 py-1 rounded-full text-[10px] font-bold"
+                                                    x-text="cert.days_to_expiry + ' days'"></span>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </template>
                     </div>
                 </div>
 
@@ -362,44 +632,91 @@
                 <div x-show="activeTab === 'audit'" x-transition x-cloak>
                     <h3 class="text-lg font-semibold mb-6 flex items-center gap-2">
                         <i data-lucide="clipboard-list" class="text-sky-500 w-5 h-5"></i> Tamper-Proof Audit Trail
+                        <template x-if="loading.audit">
+                            <span class="ml-2 text-xs text-white/30 animate-pulse">Loading...</span>
+                        </template>
                     </h3>
+
                     <div class="plm-card">
-                        <table class="w-full text-left text-sm">
-                            <thead>
-                                <tr class="text-white/40 border-b border-white/5">
-                                    <th class="pb-3 font-medium">Timestamp</th>
-                                    <th class="pb-3 font-medium">Actor</th>
-                                    <th class="pb-3 font-medium">Action</th>
-                                    <th class="pb-3 font-medium">Target</th>
-                                    <th class="pb-3 font-medium">Hash</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-white/5">
-                                <template x-for="log in auditLogs" :key="log.id">
-                                    <tr class="hover:bg-white/[0.02] transition-all">
-                                        <td class="py-4 text-xs text-white/40" x-text="formatDate(log.timestamp)"></td>
-                                        <td class="py-4">
-                                            <div class="flex flex-col">
-                                                <span class="text-xs font-bold" x-text="log.actor_type"></span>
-                                                <span class="text-[10px] text-white/30 truncate max-w-[100px]"
-                                                    x-text="log.actor_id"></span>
-                                            </div>
-                                        </td>
-                                        <td class="py-4">
-                                            <span class="badge badge-info" x-text="log.action"></span>
-                                        </td>
-                                        <td class="py-4 text-xs font-mono text-white/60"
-                                            x-text="log.target_type + ':' + log.target_id"></td>
-                                        <td class="py-4 text-[10px] font-mono text-white/20 truncate max-w-[80px]"
-                                            x-text="log.entry_hash"></td>
-                                    </tr>
+                        <!-- Error State -->
+                        <template x-if="errors.audit">
+                            <div class="flex flex-col items-center justify-center py-12 text-center">
+                                <div class="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center mb-4">
+                                    <i data-lucide="alert-triangle" class="w-6 h-6 text-red-400"></i>
+                                </div>
+                                <p class="text-white/60 text-sm">Failed to load audit logs</p>
+                                <p class="text-white/30 text-xs mt-1" x-text="errors.audit"></p>
+                                <button @click="fetchAudit()"
+                                    class="mt-4 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-xs transition-colors">
+                                    Retry
+                                </button>
+                            </div>
+                        </template>
+
+                        <!-- Loading Skeleton -->
+                        <template x-if="loading.audit && !errors.audit">
+                            <div class="space-y-4">
+                                <template x-for="i in 8">
+                                    <div class="flex items-center gap-4">
+                                        <div class="skeleton h-4 w-32"></div>
+                                        <div class="skeleton h-4 w-24"></div>
+                                        <div class="skeleton h-4 w-20"></div>
+                                        <div class="skeleton h-4 w-40"></div>
+                                        <div class="skeleton h-4 w-16"></div>
+                                    </div>
                                 </template>
-                                <tr x-show="auditLogs.length === 0">
-                                    <td colspan="5" class="py-8 text-center text-white/20 italic text-xs">No audit logs
-                                        available.</td>
-                                </tr>
-                            </tbody>
-                        </table>
+                            </div>
+                        </template>
+
+                        <!-- Empty State -->
+                        <template x-if="!loading.audit && !errors.audit && auditLogs.length === 0">
+                            <div class="flex flex-col items-center justify-center py-12 text-center">
+                                <div class="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-4">
+                                    <i data-lucide="clipboard-list" class="w-6 h-6 text-white/20"></i>
+                                </div>
+                                <p class="text-white/40 text-sm">Audit trail empty</p>
+                                <p class="text-white/20 text-xs mt-1">Security events will appear here</p>
+                            </div>
+                        </template>
+
+                        <!-- Data Table -->
+                        <template x-if="!loading.audit && !errors.audit && auditLogs.length > 0">
+                            <table class="w-full text-left text-sm">
+                                <thead>
+                                    <tr class="text-white/40 border-b border-white/5">
+                                        <th class="pb-3 font-medium">Timestamp</th>
+                                        <th class="pb-3 font-medium">Actor</th>
+                                        <th class="pb-3 font-medium">Action</th>
+                                        <th class="pb-3 font-medium">Target</th>
+                                        <th class="pb-3 font-medium">Hash</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-white/5">
+                                    <template x-for="log in auditLogs" :key="log.id">
+                                        <tr class="hover:bg-white/[0.02] transition-all hover-lift">
+                                            <td class="py-4 text-xs text-white/40" x-text="formatDate(log.timestamp)">
+                                            </td>
+                                            <td class="py-4">
+                                                <div class="flex flex-col">
+                                                    <span class="text-xs font-bold text-sky-400"
+                                                        x-text="log.actor_type"></span>
+                                                    <span
+                                                        class="text-[10px] text-white/30 truncate max-w-[100px] font-mono"
+                                                        x-text="log.actor_id"></span>
+                                                </div>
+                                            </td>
+                                            <td class="py-4">
+                                                <span class="badge badge-info" x-text="log.action"></span>
+                                            </td>
+                                            <td class="py-4 text-xs font-mono text-white/60"
+                                                x-text="log.target_type + ':' + log.target_id"></td>
+                                            <td class="py-4 text-[10px] font-mono text-white/20 truncate max-w-[80px]"
+                                                x-text="log.entry_hash"></td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </template>
                     </div>
                 </div>
             </main>

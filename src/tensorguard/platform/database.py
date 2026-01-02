@@ -12,7 +12,12 @@ from .models.enablement_models import * # noqa: F401
 from .models.evidence_models import * # noqa: F401
 
 # Default to local sqlite for ease of deployment in MVP
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./tg_platform.db")
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    # Fallback for dev, but warn loudly
+    import logging
+    logging.getLogger(__name__).warning("DATABASE_URL not set, using local SQLite (NOT FOR PRODUCTION)")
+    DATABASE_URL = "sqlite:///./tg_platform.db"
 
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 

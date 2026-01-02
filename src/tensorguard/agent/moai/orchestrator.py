@@ -18,6 +18,10 @@ from typing import Optional, Dict
 from ...tgsp.payload_crypto import PayloadDecryptor
 from ...serving.backend import TenSEALBackend
 from ...moai.modelpack import ModelPack
+from ...tgsp.format import read_tgsp_header
+import tempfile
+import os
+import io
 
 logger = logging.getLogger(__name__)
 
@@ -82,32 +86,49 @@ class MoaiOrchestrator:
         Load a TGSP package into the runtime.
         
         Args:
-            package_bytes: The raw encrypted payload bytes from the TGSP container.
+            package_bytes: The FULL TGSP container bytes.
             dek: The Data Encryption Key unwrapped for this device.
         """
         logger.info("Loading secure package into MOAI runtime...")
         
+        # Security: Write ENCRYPTED container to temp file for parsing.
+        # Plaintext is NEVER written to disk.
+        with tempfile.NamedTemporaryFile(delete=False) as tf:
+            tf.write(package_bytes)
+            tf_path = tf.name
+            
         try:
-            # 1. In-Memory Decryption
-            # In production, this would use PayloadDecryptor(dek).decrypt_chunk(...)
-            # Here we simulate the cleartext payload being available or just pass through
-            # if we are in a mock environment, OR we implement the actual decrypt loop buffer.
+            # 1. Parse Header
+            data = read_tgsp_header(tf_path)
+            h = data["header"]
             
-            # Simulating correct decryption by just accepting the bytes (assuming test sent pickle)
-            # In real integration, we'd hook up to src.tensorguard.tgsp.cli logic but diverted to RAM.
+            # 2. Setup Decryptor
+            nonce_base = bytes.fromhex(h["crypto"]["nonce_base"])
+            m_hash = h["hashes"]["manifest"]
+            r_hash = h["hashes"]["recipients"]
             
-            # Let's assume package_bytes IS the decrypted content for this stage of "Completion"
-            # unless we want to import the full crypto stack here. 
-            # Given "SecureMemoryLoader" requirement, let's wrap it.
+            decryptor = PayloadDecryptor(dek, nonce_base, m_hash, r_hash)
             
-            decrypted_stream = io.BytesIO(package_bytes) # Mock: Assume pre-decrypted for step 1
+            # 3. Stream Decrypt into Memory
+            # We decrypt the payload stream into a BytesIO buffer
+            decrypted_buffer = io.BytesIO()
             
-            model_pack = SecureMemoryLoader.load_from_stream(decrypted_stream, dek)
+            with open(tf_path, "rb") as f:
+                f.seek(data["payload_offset"])
+                total_read = 0
+                while total_read < data["payload_len"]:
+                    chunk = decryptor.decrypt_chunk_from_stream(f)
+                    if not chunk: break
+                    decrypted_buffer.write(chunk)
+                    # Overhead: 4 len + chunk + 16 tag
+                    total_read += (4 + len(chunk) + 16)
+                    
+            decrypted_buffer.seek(0)
             
-            # 2. Validation
-            # verify hash...
+            # 4. Load ModelPack
+            model_pack = SecureMemoryLoader.load_from_stream(decrypted_buffer, dek)
             
-            # 3. Load Backend
+            # 5. Load Backend
             self.backend.load_model(model_pack)
             self.active_model_id = model_pack.meta.model_id
             self.is_ready = True
@@ -118,6 +139,10 @@ class MoaiOrchestrator:
             logger.error(f"Failed to load secure package: {e}")
             self.is_ready = False
             raise
+        finally:
+            # Secure cleanup of encrypted container
+            if os.path.exists(tf_path):
+                os.unlink(tf_path)
 
     def infer(self, ciphertext: bytes, eval_keys: bytes) -> bytes:
         """Proxy inference request to backend."""

@@ -143,3 +143,149 @@ body {
 [x-cloak] {
     display: none !important;
 }
+
+/* Gradient Cards */
+.gradient-card-blue {
+    background: linear-gradient(135deg, rgba(14, 165, 233, 0.1) 0%, transparent 60%);
+}
+
+.gradient-card-purple {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, transparent 60%);
+}
+
+.gradient-card-amber {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, transparent 60%);
+}
+
+.gradient-card-green {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, transparent 60%);
+}
+
+.gradient-card-rose {
+    background: linear-gradient(135deg, rgba(244, 63, 94, 0.1) 0%, transparent 60%);
+}
+
+/* Skeleton Loader Animation */
+.skeleton {
+    background: linear-gradient(90deg,
+            rgba(255, 255, 255, 0.05) 0%,
+            rgba(255, 255, 255, 0.1) 50%,
+            rgba(255, 255, 255, 0.05) 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 4px;
+}
+
+@keyframes shimmer {
+    0% {
+        background-position: 200% 0;
+    }
+
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+/* Glow Effects */
+.glow-blue {
+    box-shadow: 0 0 20px rgba(14, 165, 233, 0.3);
+}
+
+.glow-emerald {
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+}
+
+.glow-amber {
+    box-shadow: 0 0 20px rgba(245, 158, 11, 0.3);
+}
+
+/* Pulse Animation for Live Indicators */
+@keyframes pulse-dot {
+
+    0%,
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    50% {
+        opacity: 0.5;
+        transform: scale(1.2);
+    }
+}
+
+.pulse-dot {
+    animation: pulse-dot 2s ease-in-out infinite;
+}
+
+/* Progress Bar */
+.progress-bar {
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--brand-blue), var(--brand-emerald));
+    border-radius: 2px;
+    transition: width 0.3s ease;
+}
+
+/* Hover Transitions */
+.hover-lift {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* Table Row Highlight */
+tr.row-highlight {
+    background: rgba(14, 165, 233, 0.05);
+}
+
+/* Status Dot */
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.status-dot-online {
+    background: var(--brand-emerald);
+    box-shadow: 0 0 8px var(--brand-emerald);
+}
+
+.status-dot-warning {
+    background: var(--brand-amber);
+    box-shadow: 0 0 8px var(--brand-amber);
+}
+
+.status-dot-offline {
+    background: var(--brand-rose);
+    box-shadow: 0 0 8px var(--brand-rose);
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
+}

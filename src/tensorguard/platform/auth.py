@@ -13,7 +13,11 @@ from .models.core import User, UserRole
 logger = logging.getLogger(__name__)
 
 # Should be in env for production
-SECRET_KEY = "tg-super-secret-production-key-change-me"
+import os
+SECRET_KEY = os.getenv("TG_SECRET_KEY")
+if not SECRET_KEY:
+    logger.warning("TG_SECRET_KEY not set, generating ephemeral key for safety")
+    SECRET_KEY = os.urandom(32).hex()
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
@@ -44,11 +48,6 @@ async def get_current_user(token: Optional[str] = Depends(oauth2_scheme), sessio
     )
     
     if not token:
-        # Fallback for Demo/Walkthrough mode
-        user = session.query(User).filter(User.email == "admin@tensorguard.ai").first()
-        if user:
-            return user
-        # In a real system we wouldn't fallback, but for this PRD parity check it's needed for the UI
         raise credentials_exception
 
     try:
