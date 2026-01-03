@@ -35,8 +35,6 @@ TensorGuard is the **industry-first Post-Quantum Secure MLOps Platform** designe
     *   [Hybrid Architecture (Kyber + Dilithium)](#hybrid-architecture)
     *   [Robotics Trade-off Analysis](#robotics-trade-off-analysis)
 5.  [Core Components](#core-components)
-    *   [Platform (Control Plane)](#platform-control-plane)
-    *   [Agent (Data Plane)](#agent-data-plane)
     *   [TGSP (TensorGuard Security Protocol)](#tgsp-tensorguard-security-protocol)
     *   [MOAI (Secure Runtime)](#moai-secure-runtime)
 6.  [Key Features & Capabilities](#key-features--capabilities)
@@ -49,7 +47,6 @@ TensorGuard is the **industry-first Post-Quantum Secure MLOps Platform** designe
     *   [NIST CSF 2.0 Mapping](#nist-csf-mapping)
 8.  [Performance Benchmarks](#performance-benchmarks)
 9.  [Developer Guide](#developer-guide)
-10. [Visual Gallery](#visual-gallery)
 
 ---
 
@@ -219,7 +216,7 @@ graph TD
 
 ---
 
-## 3. <a name="post-quantum-hybrid-cryptography"></a>Post-Quantum Hybrid Cryptography
+## 4. <a name="post-quantum-hybrid-cryptography"></a>Post-Quantum Hybrid Cryptography
 
 TensorGuard v2.1 introduces the **Hybrid Post-Quantum (PQC)** architecture, designed for compatibility with **NIST FIPS 203 (ML-KEM)** and **NIST FIPS 204 (ML-DSA)**.
 
@@ -233,12 +230,12 @@ TensorGuard v2.1 introduces the **Hybrid Post-Quantum (PQC)** architecture, desi
 >
 > If liboqs is not available, a functional simulator is used for development (with warnings).
 
-### <a name="threat-model"></a>3.1 Threat Model: Harvest Now, Decrypt Later
+### <a name="threat-model"></a>4.1 Threat Model: Harvest Now, Decrypt Later
 Attackers are currently intercepting and storing encrypted traffic. While they cannot crack ECC (X25519) today, they will break it instantly once a Cryptographically Relevant Quantum Computer (CRQC) comes online (estimated 2030-2035).
 
 **TensorGuard Defense**: By encrypting with *both* Classical ECC and Quantum-Resistant Kyber, an attacker would need to break *both* algorithms to decrypt the data. Since Kyber is mathematically resistant to Shor's algorithm, the data remains safe even in the post-quantum era.
 
-### <a name="hybrid-architecture"></a>3.2 Hybrid Architecture (Kyber + Dilithium)
+### <a name="hybrid-architecture"></a>4.2 Hybrid Architecture (Kyber + Dilithium)
 
 We do not replace Classical Crypto; we augment it. This is "Hybrid Mode".
 
@@ -247,7 +244,7 @@ We do not replace Classical Crypto; we augment it. This is "Hybrid Mode".
 | **Key Exchange (KEM)** | X25519 (ECDH) | **Kyber-768 (ML-KEM)** | `SHA256( ECDH_Shared || Kyber_Shared )` |
 | **Signatures** | Ed25519 | **Dilithium-3 (ML-DSA)** | `{ "sig_classic": ..., "sig_pqc": ... }` |
 
-### <a name="robotics-trade-off-analysis"></a>3.3 Robotics Trade-off Analysis
+### <a name="robotics-trade-off-analysis"></a>4.3 Robotics Trade-off Analysis
 
 Migrating to PQC incurs costs in bandwidth and startup latency.
 
@@ -262,9 +259,9 @@ Migrating to PQC incurs costs in bandwidth and startup latency.
 
 ---
 
-## 4. <a name="core-components"></a>Core Components
+## 5. <a name="core-components"></a>Core Components
 
-### <a name="tgsp-tensorguard-security-protocol"></a>4.1 TGSP (TensorGuard Security Protocol)
+### <a name="tgsp-tensorguard-security-protocol"></a>5.1 TGSP (TensorGuard Security Protocol)
 
 The TGSP v1.0 Container Format is a binary envelope designed for zero-trust delivery.
 
@@ -285,7 +282,7 @@ The TGSP v1.0 Container Format is a binary envelope designed for zero-trust deli
 +-------------------------------------------------------+
 ```
 
-### <a name="moai-secure-runtime"></a>4.2 MOAI (Secure Runtime)
+### <a name="moai-secure-runtime"></a>5.2 MOAI (Secure Runtime)
 
 MOAI (Model Obfuscation & Anonymous Inference) is the runtime engine within the Agent.
 
@@ -297,13 +294,13 @@ MOAI (Model Obfuscation & Anonymous Inference) is the runtime engine within the 
 
 ---
 
-## 5. <a name="key-features--capabilities"></a>Key Features & Capabilities
+## 6. <a name="key-features--capabilities"></a>Key Features & Capabilities
 
-### <a name="peft-pipeline"></a>5.1 Parameter-Efficient Fine-Tuning (PEFT) Pipeline
+### <a name="peft-pipeline"></a>6.1 Parameter-Efficient Fine-Tuning (PEFT) Pipeline
 
 TensorGuard implements a production-grade **PEFT (Parameter-Efficient Fine-Tuning)** system designed for secure, privacy-preserving model adaptation on edge devices. This is the core innovation that enables fleet-wide learning while maintaining strict confidentiality and integrity guarantees.
 
-#### 5.1.1 Why PEFT?
+#### 6.1.1 Why PEFT?
 
 Training full-sized Vision-Language-Action (VLA) models on edge robots is infeasible due to:
 - **Compute constraints**: Edge devices lack GPU power for full fine-tuning
@@ -317,7 +314,7 @@ PEFT solves this by updating only a **small subset of parameters** (typically <1
 - **Equivalent task performance** to full fine-tuning
 - **Stronger privacy** through reduced parameter surface
 
-#### 5.1.2 Supported PEFT Strategies
+#### 6.1.2 Supported PEFT Strategies
 
 TensorGuard supports multiple PEFT approaches, configurable via the `OperatingEnvelope`:
 
@@ -335,7 +332,7 @@ trainable_modules: List[str] = ["policy_head", "last_4_blocks"]
 max_trainable_params: int = 10_000_000  # 10M hard limit
 ```
 
-#### 5.1.3 Expert-Driven PEFT with MoE Gating
+#### 6.1.3 Expert-Driven PEFT with MoE Gating
 
 TensorGuard extends traditional PEFT with **Expert-Driven Aggregation (EDA)**, a novel technique for heterogeneous robot fleets where different agents encounter different task distributions.
 
@@ -354,7 +351,7 @@ TensorGuard extends traditional PEFT with **Expert-Driven Aggregation (EDA)**, a
 
 **Result**: Each agent trains only the experts relevant to its local task distribution, preventing interference while enabling knowledge sharing within expert domains.
 
-#### 5.1.4 The Complete PEFT Training Pipeline
+#### 6.1.4 The Complete PEFT Training Pipeline
 
 The `TrainingWorker` (`src/tensorguard/agent/ml/worker.py:54`) orchestrates a **7-stage pipeline** that transforms local robot demonstrations into encrypted, privacy-preserving model updates:
 
@@ -425,7 +422,7 @@ flowchart TD
 - `safety_stats`: DP epsilon consumed, gradient norms, constraint violations
 - `compression_metadata`: Sparsity ratio, compression ratio, payload size
 
-#### 5.1.5 Integration with Other Components
+#### 6.1.5 Integration with Other Components
 
 The PEFT pipeline is the **central orchestration layer** that ties together all TensorGuard subsystems:
 
@@ -441,7 +438,7 @@ The PEFT pipeline is the **central orchestration layer** that ties together all 
 
 **Key Insight**: PEFT is not a standalone feature—it's the **data plane** of TensorGuard's secure MLOps platform. Every gradient flows through this pipeline before leaving the device.
 
-#### 5.1.6 Production Operating Envelope
+#### 6.1.6 Production Operating Envelope
 
 The `OperatingEnvelope` (`production.py:54`) enforces strict production constraints:
 
@@ -462,28 +459,28 @@ enable_rollback: bool = True          # Automatic rollback on failure
 
 **Enforcement**: The `enforce_update_size()` method rejects updates exceeding limits, preventing bandwidth overruns and ensuring predictable system behavior.
 
-### <a name="orthogonal-finetuning-oft"></a>5.2 Orthogonal Finetuning (OFT)
+### <a name="orthogonal-finetuning-oft"></a>6.2 Orthogonal Finetuning (OFT)
 TensorGuard supports **OFT** for efficient on-device adaptation. Unlike LoRA which adds adapter matrices, OFT multiplies weights by an orthogonal matrix $R$. This preserves the hyperspherical energy of the pre-trained model, ensuring stability during continuous learning on robotics hardware.
 
 <img src="artifacts/oft_mechanism.png" width="600" alt="OFT Mechanism">
 
-### <a name="federated-learning-fl"></a>5.3 Federated Learning (FL)
+### <a name="federated-learning-fl"></a>6.3 Federated Learning (FL)
 Secure Aggregation topology allows thousands of agents to train locally and submit encrypted gradients to the central parameter server.
 
 <img src="artifacts/fl_architecture.png" width="600" alt="Federated Learning">
 
-### <a name="network-defense"></a>5.4 Network Defense (WTFPAD)
+### <a name="network-defense"></a>6.4 Network Defense (WTFPAD)
 **Adaptive Padding** and **Traffic Morphing** are used to defeat Traffic Analysis attacks.
 *   **Jitter Buffering**: Randomizes packet inter-arrival times.
 *   **Dummy Traffic**: Injects chaff packets to mask idle periods vs. inference bursts.
 
 ---
 
-## 6. <a name="compliance--certifications"></a>Compliance & Certifications
+## 7. <a name="compliance--certifications"></a>Compliance & Certifications
 
 TensorGuard helps organizations meet rigorous security standards with defense-in-depth controls.
 
-### <a name="iso-27001-mapping"></a>6.1 ISO 27001:2022 Mapping
+### <a name="iso-27001-mapping"></a>7.1 ISO 27001:2022 Mapping
 
 | Clause | Requirement | TensorGuard Control |
 | :--- | :--- | :--- |
@@ -493,7 +490,7 @@ TensorGuard helps organizations meet rigorous security standards with defense-in
 | **A.8.12** | Data Leakage Prevention | In-memory decryption, safe serialization (no pickle) |
 | **A.8.15** | Logging | Hash-chained evidence store (`evidence/store.py`) |
 
-### <a name="nist-csf-mapping"></a>6.2 NIST CSF 2.0 Mapping
+### <a name="nist-csf-mapping"></a>7.2 NIST CSF 2.0 Mapping
 
 | Function | Category | Implementation |
 | :--- | :--- | :--- |
@@ -503,7 +500,7 @@ TensorGuard helps organizations meet rigorous security standards with defense-in
 | **DETECT** | DE.CM-01 (Monitoring) | Tamper-evident evidence chain with integrity verification |
 | **RESPOND** | RS.MI-02 (Mitigation) | Automated certificate revocation, model rollback |
 
-### 6.3 Security Controls Summary
+### 7.3 Security Controls Summary
 
 | Control | Status | Implementation |
 | :--- | :--- | :--- |
@@ -516,7 +513,7 @@ TensorGuard helps organizations meet rigorous security standards with defense-in
 
 ---
 
-## 7. <a name="performance-benchmarks"></a>Performance Benchmarks
+## 8. <a name="performance-benchmarks"></a>Performance Benchmarks
 
 **Test Environment**: NVIDIA Jetson Orin Nano (8GB)
 
@@ -528,7 +525,7 @@ TensorGuard helps organizations meet rigorous security standards with defense-in
 | **API Latency** | P99 | **45 ms** | ✅ Reactive |
 | **Memory Footprint** | Idle | **64 MB** | ✅ Lightweight |
 
-### 7.1 Test Suite Results
+### 8.1 Test Suite Results
 
 **Latest Test Run** (v2.1.0):
 
@@ -547,7 +544,7 @@ TensorGuard helps organizations meet rigorous security standards with defense-in
 - ✅ **Platform Tests** (10 tests): API endpoints, authentication, TGSP upload/verify
 - ✅ **Security Tests** (10 tests): Post-quantum safety, hardening, path traversal prevention
 
-### 7.2 v2.1.0 Optimization Improvements
+### 8.2 v2.1.0 Optimization Improvements
 
 | Optimization | Before | After | Improvement |
 | :--- | :--- | :--- | :--- |
@@ -560,7 +557,7 @@ TensorGuard helps organizations meet rigorous security standards with defense-in
 
 ---
 
-## 8. <a name="developer-guide"></a>Developer Guide
+## 9. <a name="developer-guide"></a>Developer Guide
 
 ### Installation
 
