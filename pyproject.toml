@@ -58,6 +58,12 @@ acme = [
     "josepy>=1.14.0,<2.0.0",
 ]
 
+# Post-Quantum Cryptography (requires liboqs native library)
+# Install liboqs first: https://github.com/open-quantum-safe/liboqs
+pqc = [
+    "liboqs-python>=0.10.0",
+]
+
 # Development dependencies
 dev = [
     "pytest>=7.4.0,<8.0.0",
@@ -69,7 +75,7 @@ dev = [
 
 # All optional dependencies
 all = [
-    "tensorguard[bench,fl,acme,dev]",
+    "tensorguard[bench,fl,acme,pqc,dev]",
 ]
 
 [project.urls]

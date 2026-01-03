@@ -1,56 +1,178 @@
 # TensorGuard™: The Intelligent Privacy & Security Platform for AI Fleets
 
-![TensorGuard Banner](https://img.shields.io/badge/TensorGuard-v2.1.0-0ea5e9?style=for-the-badge) 
+![TensorGuard Banner](https://img.shields.io/badge/TensorGuard-v2.1.0-0ea5e9?style=for-the-badge)
 ![Status](https://img.shields.io/badge/Status-Production_Ready-success?style=for-the-badge)
-![Security](https://img.shields.io/badge/Security-Post_Quantum_Hybrid-purple?style=for-the-badge)
+![Security](https://img.shields.io/badge/PQC-liboqs_Powered-purple?style=for-the-badge)
 ![Compliance](https://img.shields.io/badge/Compliance-ISO_27001_Ready-blue?style=for-the-badge)
 
 > **"Secure the Pulse of Artificial Intelligence."**
 
-TensorGuard is the industry-first **Post-Quantum Secure MLOps Platform** designed for high-stakes edge computing environments. It orchestrates the secure lifecycle of AI models on robotic fleets, medical devices, and critical infrastructure, ensuring that proprietary intelligence remains confidential (Model Privacy) and tamper-proof (Integrity) even in hostile environments.
+TensorGuard is the **industry-first Post-Quantum Secure MLOps Platform** designed for high-stakes edge computing environments. It orchestrates the secure lifecycle of AI models on robotic fleets, medical devices, and critical infrastructure, ensuring that proprietary intelligence remains confidential and tamper-proof.
+
+> ✅ **Production Ready with liboqs**
+>
+> TensorGuard v2.1 provides **production-grade post-quantum cryptography** via [liboqs](https://github.com/open-quantum-safe/liboqs):
+> - **ML-KEM-768 (Kyber)** - NIST FIPS 203 key encapsulation
+> - **ML-DSA-65 (Dilithium)** - NIST FIPS 204 digital signatures
+>
+> Install with PQC support: `pip install tensorguard[pqc]`
+>
+> **Note**: N2HE homomorphic encryption remains a research prototype. See [SECURITY.md](SECURITY.md) for details.
 
 ---
 
 ## 📑 Table of Contents
 
 1.  [Executive Summary](#executive-summary)
-2.  [System Architecture](#system-architecture)
-3.  [Post-Quantum Hybrid Cryptography](#post-quantum-hybrid-cryptography)
+2.  [Security Architecture](#security-architecture)
+    *   [Enterprise Authentication](#enterprise-authentication)
+    *   [Tamper-Evident Audit Trail](#tamper-evident-audit-trail)
+    *   [Safe Serialization](#safe-serialization)
+    *   [Deterministic Packaging](#deterministic-packaging)
+3.  [System Architecture](#system-architecture)
+4.  [Post-Quantum Hybrid Cryptography](#post-quantum-hybrid-cryptography)
     *   [Threat Model: Harvest Now, Decrypt Later](#threat-model)
     *   [Hybrid Architecture (Kyber + Dilithium)](#hybrid-architecture)
     *   [Robotics Trade-off Analysis](#robotics-trade-off-analysis)
-4.  [Core Components](#core-components)
-    *   [Platform (Control Plane)](#platform-control-plane)
-    *   [Agent (Data Plane)](#agent-data-plane)
+5.  [Core Components](#core-components)
     *   [TGSP (TensorGuard Security Protocol)](#tgsp-tensorguard-security-protocol)
     *   [MOAI (Secure Runtime)](#moai-secure-runtime)
-5.  [Key Features & Capabilities](#key-features--capabilities)
+6.  [Key Features & Capabilities](#key-features--capabilities)
     *   [PEFT Pipeline](#peft-pipeline)
     *   [Orthogonal Finetuning (OFT)](#orthogonal-finetuning-oft)
     *   [Federated Learning (FL)](#federated-learning-fl)
     *   [Network Defense (WTFPAD)](#network-defense)
-6.  [Compliance & Certifications](#compliance--certifications)
+7.  [Compliance & Certifications](#compliance--certifications)
     *   [ISO 27001:2022 Mapping](#iso-27001-mapping)
     *   [NIST CSF 2.0 Mapping](#nist-csf-mapping)
-7.  [Performance Benchmarks](#performance-benchmarks)
-8.  [Developer Guide](#developer-guide)
-9.  [Visual Gallery](#visual-gallery)
+8.  [Performance Benchmarks](#performance-benchmarks)
+9.  [Developer Guide](#developer-guide)
 
 ---
 
 ## 1. <a name="executive-summary"></a>Executive Summary
 
-In the age of ubiquitous AI, the model *is* the IP. deploying advanced neural networks to thousands of edge devices creates a massive attack surface. Traditional TLS and disk encryption are insufficient against physical tampering, side-channel attacks, and the looming threat of Quantum Computing.
+In the age of ubiquitous AI, the model *is* the IP. Deploying advanced neural networks to thousands of edge devices creates a massive attack surface. Traditional TLS and disk encryption are insufficient against physical tampering, side-channel attacks, and the looming threat of Quantum Computing.
 
-TensorGuard solves this by wrapping models in **TGSP v1.0**, a cryptographic envelope that creates a "Secure Enclave" logic without requiring specialized hardware. It combines **Privacy-Preserving Machine Learning (PPML)** with **Post-Quantum Cryptography (PQC)** to guarantee:
+TensorGuard addresses this by wrapping models in **TGSP v1.0**, a cryptographic envelope designed for zero-trust delivery. The architecture combines **Privacy-Preserving Machine Learning (PPML)** with **Post-Quantum Cryptography (PQC)** interfaces to provide:
 
-*   **Confidentiality**: Weights are decrypted only in volatile memory at the nanosecond of inference.
-*   **Integrity**: Every byte of the model is signed by a Quantum-Resistant Digital Signature.
-*   **Provenance**: Full custodial chain of custody from training cluster to edge robot.
+*   **Confidentiality**: Weights are decrypted only in volatile memory at the moment of inference.
+*   **Integrity**: Models are signed with hybrid classical+PQC signatures (requires production crypto integration).
+*   **Provenance**: Tamper-evident hash chain tracks full custody from training cluster to edge robot.
+
+### 1.1 What Works Today
+
+| Component | Status | Notes |
+| :--- | :--- | :--- |
+| TGSP Container Format | ✅ Production | Deterministic packaging, manifest validation |
+| Safe Serialization | ✅ Production | msgpack-based, no pickle RCE |
+| Evidence Chain | ✅ Production | Tamper-evident audit logging |
+| Enterprise Auth | ✅ Production | Argon2id, JWT with claims validation |
+| Classical Crypto (X25519, ChaCha20) | ✅ Production | Via `cryptography` library |
+| PQC (Kyber, Dilithium) | ✅ Production | Via `liboqs` - NIST FIPS 203/204 |
+| N2HE Homomorphic | ⚠️ Research | Requires audit before production |
 
 ---
 
-## 2. <a name="system-architecture"></a>System Architecture
+## 2. <a name="security-architecture"></a>Security Architecture
+
+TensorGuard v2.1 implements defense-in-depth security controls designed for enterprise deployment and regulatory compliance.
+
+### <a name="enterprise-authentication"></a>2.1 Enterprise Authentication
+
+The platform authentication module (`platform/auth.py`) provides enterprise-grade security:
+
+| Feature | Implementation | Configuration |
+| :--- | :--- | :--- |
+| **Password Hashing** | Argon2id (OWASP parameters: 64MB, 3 iterations, 4 threads) | Hardware-resistant |
+| **Password Policy** | Minimum 12 characters, complexity requirements | `TG_MIN_PASSWORD_LENGTH` |
+| **JWT Security** | Issuer/audience validation, token type enforcement | `TG_TOKEN_ISSUER` |
+| **Token Expiration** | 30-minute access tokens, 7-day refresh tokens | `TG_TOKEN_EXPIRE_MINUTES` |
+| **Role-Based Access** | ORG_ADMIN → SITE_ADMIN → OPERATOR hierarchy | Pre-configured checkers |
+
+**Security Configuration** (Environment Variables):
+```bash
+TG_SECRET_KEY=<256-bit-secret>           # REQUIRED for production
+TG_JWT_ALGORITHM=HS256                    # Signing algorithm
+TG_TOKEN_EXPIRE_MINUTES=30                # Access token TTL
+TG_REQUIRE_PASSWORD_COMPLEXITY=true       # Enforce strong passwords
+TG_MAX_LOGIN_ATTEMPTS=5                   # Rate limiting (with Redis)
+```
+
+### <a name="tamper-evident-audit-trail"></a>2.2 Tamper-Evident Audit Trail
+
+The evidence store (`evidence/store.py`) implements a **blockchain-like hash chain** for tamper-evident compliance logging:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    EVIDENCE CHAIN STRUCTURE                      │
+├─────────────────────────────────────────────────────────────────┤
+│  Genesis (0x000...)  ──┬──> Event₁ ──┬──> Event₂ ──┬──> Event₃  │
+│                        │             │             │            │
+│                   prev_hash     prev_hash     prev_hash         │
+│                   event_hash    event_hash    event_hash        │
+│                   chain_hash    chain_hash    chain_hash        │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Integrity Guarantees**:
+- Events **cannot be modified** without detection (hash mismatch)
+- Events **cannot be deleted** without breaking the chain
+- Events **cannot be reordered** without detection
+- Full audit trail is **cryptographically verifiable**
+
+**Usage**:
+```python
+from tensorguard.evidence.store import get_store
+
+store = get_store()
+store.save_event({"event_type": "MODEL_DEPLOYED", ...})  # Auto-chained
+
+# Verify entire audit trail
+is_valid, errors = store.verify_chain()
+```
+
+### <a name="safe-serialization"></a>2.3 Safe Serialization
+
+TensorGuard eliminates **pickle-based RCE vulnerabilities** by using safe serialization throughout:
+
+| Component | Before | After | Security Benefit |
+| :--- | :--- | :--- | :--- |
+| ModelPack | `pickle.dumps()` | `msgpack` + numpy handlers | No arbitrary code execution |
+| Gateway API | `pickle.loads(file)` | `ModelPack.deserialize()` | Input validation |
+| Backend Weights | `pickle.loads()` | `safe_loads()` | Type-safe deserialization |
+| Orchestrator | `pickle.load(f)` | JSON/msgpack | Auditable format |
+
+**Safe Serialization Module** (`utils/serialization.py`):
+```python
+from tensorguard.utils.serialization import safe_dumps, safe_loads
+
+# Safely serialize (numpy-aware, no pickle)
+data = safe_dumps({"weights": np.array([...])})
+
+# Safely deserialize (type-validated)
+obj = safe_loads(data)
+```
+
+### <a name="deterministic-packaging"></a>2.4 Deterministic Packaging
+
+TGSP packages are built with **deterministic metadata** for reproducible hashes:
+
+| Property | Value | Purpose |
+| :--- | :--- | :--- |
+| Timestamps | `2020-01-01 00:00:00` | Reproducible builds |
+| File permissions | `0644` | Consistent across systems |
+| File ordering | Sorted alphabetically | Deterministic iteration |
+| Compression | `ZIP_STORED` / `gzip` | Predictable output |
+
+**Result**: The same model inputs always produce the **same package hash**, enabling:
+- Supply chain integrity verification
+- Reproducible audit trails
+- Secure artifact signing
+
+---
+
+## 3. <a name="system-architecture"></a>System Architecture
 
 The TensorGuard ecosystem consists of a centralized **Control Plane (Platform)** and distributed **Edge Agents**.
 
@@ -84,7 +206,7 @@ graph TD
     end
 ```
 
-### 2.1 Component Interaction Flow
+### 3.1 Component Interaction Flow
 1.  **Build**: Data Scientist uses `tensorguard tgsp build` to package a PyTorch/TensorFlow model. The CLI generates a `manifest.json`, encapsulates the weights using **Hybrid-Kyber**, and signs the bundle with **Hybrid-Dilithium**.
 2.  **Publish**: The `TGSP` file is uploaded to the Platform via the secure API.
 3.  **Deploy**: The Platform assigns the package to a specific `Fleet` or `Device ID`.
@@ -94,16 +216,26 @@ graph TD
 
 ---
 
-## 3. <a name="post-quantum-hybrid-cryptography"></a>Post-Quantum Hybrid Cryptography
+## 4. <a name="post-quantum-hybrid-cryptography"></a>Post-Quantum Hybrid Cryptography
 
-TensorGuard v2.1 introduces the **Hybrid Post-Quantum (PQC)** architecture, compliant with **NIST FIPS 203 (ML-KEM)** and **NIST FIPS 204 (ML-DSA)**.
+TensorGuard v2.1 introduces the **Hybrid Post-Quantum (PQC)** architecture, designed for compatibility with **NIST FIPS 203 (ML-KEM)** and **NIST FIPS 204 (ML-DSA)**.
 
-### <a name="threat-model"></a>3.1 Threat Model: Harvest Now, Decrypt Later
+> ✅ **Production PQC with liboqs**
+>
+> TensorGuard uses [liboqs](https://github.com/open-quantum-safe/liboqs) (Open Quantum Safe) for production-grade PQC:
+> - **ML-KEM-768** (Kyber) - NIST FIPS 203 standardized
+> - **ML-DSA-65** (Dilithium) - NIST FIPS 204 standardized
+>
+> Install with: `pip install tensorguard[pqc]`
+>
+> If liboqs is not available, a functional simulator is used for development (with warnings).
+
+### <a name="threat-model"></a>4.1 Threat Model: Harvest Now, Decrypt Later
 Attackers are currently intercepting and storing encrypted traffic. While they cannot crack ECC (X25519) today, they will break it instantly once a Cryptographically Relevant Quantum Computer (CRQC) comes online (estimated 2030-2035).
 
 **TensorGuard Defense**: By encrypting with *both* Classical ECC and Quantum-Resistant Kyber, an attacker would need to break *both* algorithms to decrypt the data. Since Kyber is mathematically resistant to Shor's algorithm, the data remains safe even in the post-quantum era.
 
-### <a name="hybrid-architecture"></a>3.2 Hybrid Architecture (Kyber + Dilithium)
+### <a name="hybrid-architecture"></a>4.2 Hybrid Architecture (Kyber + Dilithium)
 
 We do not replace Classical Crypto; we augment it. This is "Hybrid Mode".
 
@@ -112,7 +244,7 @@ We do not replace Classical Crypto; we augment it. This is "Hybrid Mode".
 | **Key Exchange (KEM)** | X25519 (ECDH) | **Kyber-768 (ML-KEM)** | `SHA256( ECDH_Shared || Kyber_Shared )` |
 | **Signatures** | Ed25519 | **Dilithium-3 (ML-DSA)** | `{ "sig_classic": ..., "sig_pqc": ... }` |
 
-### <a name="robotics-trade-off-analysis"></a>3.3 Robotics Trade-off Analysis
+### <a name="robotics-trade-off-analysis"></a>4.3 Robotics Trade-off Analysis
 
 Migrating to PQC incurs costs in bandwidth and startup latency.
 
@@ -127,9 +259,9 @@ Migrating to PQC incurs costs in bandwidth and startup latency.
 
 ---
 
-## 4. <a name="core-components"></a>Core Components
+## 5. <a name="core-components"></a>Core Components
 
-### <a name="tgsp-tensorguard-security-protocol"></a>4.1 TGSP (TensorGuard Security Protocol)
+### <a name="tgsp-tensorguard-security-protocol"></a>5.1 TGSP (TensorGuard Security Protocol)
 
 The TGSP v1.0 Container Format is a binary envelope designed for zero-trust delivery.
 
@@ -150,22 +282,25 @@ The TGSP v1.0 Container Format is a binary envelope designed for zero-trust deli
 +-------------------------------------------------------+
 ```
 
-### <a name="moai-secure-runtime"></a>4.2 MOAI (Secure Runtime)
+### <a name="moai-secure-runtime"></a>5.2 MOAI (Secure Runtime)
 
 MOAI (Model Obfuscation & Anonymous Inference) is the runtime engine within the Agent.
 
-*   **SecureMemoryLoader**: A specialized loader that decrypts chunks of the TGSP stream and reassembles the Python object graph (Pickle/SafeTensors) in a protected memory region.
+*   **SecureMemoryLoader**: A specialized loader that decrypts TGSP streams and deserializes model weights using **safe msgpack-based serialization** (no pickle RCE vulnerabilities). Weights are reassembled directly in protected memory.
+*   **ModelPack Format**: Type-safe serialization with numpy array support, ensuring auditable and secure model transport.
 *   **TenSEAL Backend**: Supports homomorphic operations for privacy-preserving aggregation (if enabled).
+
+> ⚠️ **N2HE Crypto Notice**: The N2HE (NIST-compliant Homomorphic Encryption) implementation in `core/crypto.py` is a **research prototype**. It requires cryptographic audit before production deployment. See [SECURITY.md](SECURITY.md) for recommended alternatives.
 
 ---
 
-## 5. <a name="key-features--capabilities"></a>Key Features & Capabilities
+## 6. <a name="key-features--capabilities"></a>Key Features & Capabilities
 
-### <a name="peft-pipeline"></a>5.1 Parameter-Efficient Fine-Tuning (PEFT) Pipeline
+### <a name="peft-pipeline"></a>6.1 Parameter-Efficient Fine-Tuning (PEFT) Pipeline
 
 TensorGuard implements a production-grade **PEFT (Parameter-Efficient Fine-Tuning)** system designed for secure, privacy-preserving model adaptation on edge devices. This is the core innovation that enables fleet-wide learning while maintaining strict confidentiality and integrity guarantees.
 
-#### 5.1.1 Why PEFT?
+#### 6.1.1 Why PEFT?
 
 Training full-sized Vision-Language-Action (VLA) models on edge robots is infeasible due to:
 - **Compute constraints**: Edge devices lack GPU power for full fine-tuning
@@ -179,7 +314,7 @@ PEFT solves this by updating only a **small subset of parameters** (typically <1
 - **Equivalent task performance** to full fine-tuning
 - **Stronger privacy** through reduced parameter surface
 
-#### 5.1.2 Supported PEFT Strategies
+#### 6.1.2 Supported PEFT Strategies
 
 TensorGuard supports multiple PEFT approaches, configurable via the `OperatingEnvelope`:
 
@@ -197,7 +332,7 @@ trainable_modules: List[str] = ["policy_head", "last_4_blocks"]
 max_trainable_params: int = 10_000_000  # 10M hard limit
 ```
 
-#### 5.1.3 Expert-Driven PEFT with MoE Gating
+#### 6.1.3 Expert-Driven PEFT with MoE Gating
 
 TensorGuard extends traditional PEFT with **Expert-Driven Aggregation (EDA)**, a novel technique for heterogeneous robot fleets where different agents encounter different task distributions.
 
@@ -216,7 +351,7 @@ TensorGuard extends traditional PEFT with **Expert-Driven Aggregation (EDA)**, a
 
 **Result**: Each agent trains only the experts relevant to its local task distribution, preventing interference while enabling knowledge sharing within expert domains.
 
-#### 5.1.4 The Complete PEFT Training Pipeline
+#### 6.1.4 The Complete PEFT Training Pipeline
 
 The `TrainingWorker` (`src/tensorguard/agent/ml/worker.py:54`) orchestrates a **7-stage pipeline** that transforms local robot demonstrations into encrypted, privacy-preserving model updates:
 
@@ -287,7 +422,7 @@ flowchart TD
 - `safety_stats`: DP epsilon consumed, gradient norms, constraint violations
 - `compression_metadata`: Sparsity ratio, compression ratio, payload size
 
-#### 5.1.5 Integration with Other Components
+#### 6.1.5 Integration with Other Components
 
 The PEFT pipeline is the **central orchestration layer** that ties together all TensorGuard subsystems:
 
@@ -303,7 +438,7 @@ The PEFT pipeline is the **central orchestration layer** that ties together all 
 
 **Key Insight**: PEFT is not a standalone feature—it's the **data plane** of TensorGuard's secure MLOps platform. Every gradient flows through this pipeline before leaving the device.
 
-#### 5.1.6 Production Operating Envelope
+#### 6.1.6 Production Operating Envelope
 
 The `OperatingEnvelope` (`production.py:54`) enforces strict production constraints:
 
@@ -324,46 +459,61 @@ enable_rollback: bool = True          # Automatic rollback on failure
 
 **Enforcement**: The `enforce_update_size()` method rejects updates exceeding limits, preventing bandwidth overruns and ensuring predictable system behavior.
 
-### <a name="orthogonal-finetuning-oft"></a>5.2 Orthogonal Finetuning (OFT)
+### <a name="orthogonal-finetuning-oft"></a>6.2 Orthogonal Finetuning (OFT)
 TensorGuard supports **OFT** for efficient on-device adaptation. Unlike LoRA which adds adapter matrices, OFT multiplies weights by an orthogonal matrix $R$. This preserves the hyperspherical energy of the pre-trained model, ensuring stability during continuous learning on robotics hardware.
 
 <img src="artifacts/oft_mechanism.png" width="600" alt="OFT Mechanism">
 
-### <a name="federated-learning-fl"></a>5.3 Federated Learning (FL)
+### <a name="federated-learning-fl"></a>6.3 Federated Learning (FL)
 Secure Aggregation topology allows thousands of agents to train locally and submit encrypted gradients to the central parameter server.
 
 <img src="artifacts/fl_architecture.png" width="600" alt="Federated Learning">
 
-### <a name="network-defense"></a>5.4 Network Defense (WTFPAD)
+### <a name="network-defense"></a>6.4 Network Defense (WTFPAD)
 **Adaptive Padding** and **Traffic Morphing** are used to defeat Traffic Analysis attacks.
 *   **Jitter Buffering**: Randomizes packet inter-arrival times.
 *   **Dummy Traffic**: Injects chaff packets to mask idle periods vs. inference bursts.
 
 ---
 
-## 6. <a name="compliance--certifications"></a>Compliance & Certifications
+## 7. <a name="compliance--certifications"></a>Compliance & Certifications
 
-TensorGuard helps organizations meet rigorous security standards.
+TensorGuard helps organizations meet rigorous security standards with defense-in-depth controls.
 
-### <a name="iso-27001-mapping"></a>6.1 ISO 27001:2022 Mapping
+### <a name="iso-27001-mapping"></a>7.1 ISO 27001:2022 Mapping
 
 | Clause | Requirement | TensorGuard Control |
 | :--- | :--- | :--- |
-| **A.5.15** | Access Control | RBAC enforced in `platform/auth.py` |
-| **A.8.24** | Use of Cryptography | TGSP v1.0 enforced in `moai/orchestrator.py` |
-| **A.8.12** | Data Leakage Prevention | In-memory decryption prevents disk leaks |
+| **A.5.15** | Access Control | RBAC with role hierarchy (`platform/auth.py`) |
+| **A.5.17** | Authentication | Argon2id passwords, JWT with issuer/audience validation |
+| **A.8.24** | Use of Cryptography | Hybrid PQC (Kyber + X25519), deterministic packaging |
+| **A.8.12** | Data Leakage Prevention | In-memory decryption, safe serialization (no pickle) |
+| **A.8.15** | Logging | Hash-chained evidence store (`evidence/store.py`) |
 
-### <a name="nist-csf-mapping"></a>6.2 NIST CSF 2.0 Mapping
+### <a name="nist-csf-mapping"></a>7.2 NIST CSF 2.0 Mapping
 
 | Function | Category | Implementation |
 | :--- | :--- | :--- |
-| **PROTECT** | PR.DS-01 (Data at Rest) | ChaCha20-Poly1305 Encrypted Storage |
-| **DETECT** | DE.CM-01 (Monitoring) | `IdentityAuditLog` tamper-proof trails |
-| **RESPOND** | RS.MI-02 (Mitigation) | Automated certificate revocation |
+| **IDENTIFY** | ID.AM-01 (Asset Inventory) | TGSP manifest with model metadata and hashes |
+| **PROTECT** | PR.DS-01 (Data at Rest) | ChaCha20-Poly1305 encrypted storage |
+| **PROTECT** | PR.AA-01 (Identity Management) | Enterprise auth with password policies |
+| **DETECT** | DE.CM-01 (Monitoring) | Tamper-evident evidence chain with integrity verification |
+| **RESPOND** | RS.MI-02 (Mitigation) | Automated certificate revocation, model rollback |
+
+### 7.3 Security Controls Summary
+
+| Control | Status | Implementation |
+| :--- | :--- | :--- |
+| **Secrets in Code** | ✅ Remediated | Keys excluded via `.gitignore`, runtime-generated |
+| **Serialization RCE** | ✅ Remediated | All pickle replaced with msgpack/JSON |
+| **Audit Trail Integrity** | ✅ Implemented | Blockchain-like hash chain for evidence |
+| **Password Security** | ✅ Implemented | Argon2id + complexity requirements |
+| **Token Security** | ✅ Implemented | Short-lived JWTs with claims validation |
+| **Build Reproducibility** | ✅ Implemented | Deterministic ZIP/TAR packaging |
 
 ---
 
-## 7. <a name="performance-benchmarks"></a>Performance Benchmarks
+## 8. <a name="performance-benchmarks"></a>Performance Benchmarks
 
 **Test Environment**: NVIDIA Jetson Orin Nano (8GB)
 
@@ -375,7 +525,7 @@ TensorGuard helps organizations meet rigorous security standards.
 | **API Latency** | P99 | **45 ms** | ✅ Reactive |
 | **Memory Footprint** | Idle | **64 MB** | ✅ Lightweight |
 
-### 7.1 Test Suite Results
+### 8.1 Test Suite Results
 
 **Latest Test Run** (v2.1.0):
 
@@ -394,7 +544,7 @@ TensorGuard helps organizations meet rigorous security standards.
 - ✅ **Platform Tests** (10 tests): API endpoints, authentication, TGSP upload/verify
 - ✅ **Security Tests** (10 tests): Post-quantum safety, hardening, path traversal prevention
 
-### 7.2 v2.1.0 Optimization Improvements
+### 8.2 v2.1.0 Optimization Improvements
 
 | Optimization | Before | After | Improvement |
 | :--- | :--- | :--- | :--- |
@@ -407,19 +557,31 @@ TensorGuard helps organizations meet rigorous security standards.
 
 ---
 
-## 8. <a name="developer-guide"></a>Developer Guide
+## 9. <a name="developer-guide"></a>Developer Guide
 
 ### Installation
 
 ```bash
-# Install with all dependencies
+# Install with all dependencies (including PQC)
 pip install -e ".[all]"
 
 # Or install specific extras
+pip install -e ".[pqc]"      # Post-Quantum Crypto (liboqs) - RECOMMENDED
 pip install -e ".[dev]"      # Development tools
 pip install -e ".[bench]"    # Benchmarking (xgboost, scikit-learn)
 pip install -e ".[fl]"       # Federated learning (flwr, tenseal)
 pip install -e ".[acme]"     # Certificate management (josepy)
+```
+
+**Note**: The `pqc` extra requires the liboqs native library. Install it first:
+```bash
+# Ubuntu/Debian
+sudo apt install liboqs-dev
+
+# macOS
+brew install liboqs
+
+# Or build from source: https://github.com/open-quantum-safe/liboqs
 ```
 
 ### Running Tests
