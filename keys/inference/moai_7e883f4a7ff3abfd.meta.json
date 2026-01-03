@@ -1,9 +1,0 @@
-{
-  "key_id": "inference_moai_7e883f4a7ff3abfd",
-  "scope": "inference",
-  "algorithm": "CKKS-TenSEAL",
-  "created_at": "2026-01-01T15:22:33.128193+00:00",
-  "owner_id": "agent-local",
-  "version": "2.0.0",
-  "params": {}
-}
