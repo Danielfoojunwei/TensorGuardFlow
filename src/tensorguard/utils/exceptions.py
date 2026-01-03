@@ -95,6 +95,18 @@ class CertificateError(IdentityError):
     pass
 
 
+# === Evidence Errors ===
+
+class EvidenceError(TensorGuardError):
+    """Base class for evidence storage errors."""
+    pass
+
+
+class EvidenceIntegrityError(EvidenceError):
+    """Raised when evidence tampering is detected."""
+    pass
+
+
 # === Warnings ===
 
 class QualityWarning(UserWarning):
