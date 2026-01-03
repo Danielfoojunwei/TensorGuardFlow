@@ -1,13 +1,22 @@
 # TensorGuard™: The Intelligent Privacy & Security Platform for AI Fleets
 
 ![TensorGuard Banner](https://img.shields.io/badge/TensorGuard-v2.1.0-0ea5e9?style=for-the-badge)
-![Status](https://img.shields.io/badge/Status-Production_Ready-success?style=for-the-badge)
-![Security](https://img.shields.io/badge/Security-Post_Quantum_Hybrid-purple?style=for-the-badge)
-![Compliance](https://img.shields.io/badge/Compliance-ISO_27001_Ready-blue?style=for-the-badge)
+![Status](https://img.shields.io/badge/Status-Development_Preview-yellow?style=for-the-badge)
+![Security](https://img.shields.io/badge/PQC-Simulator_Only-orange?style=for-the-badge)
+![Compliance](https://img.shields.io/badge/Compliance-Framework_Ready-blue?style=for-the-badge)
 
 > **"Secure the Pulse of Artificial Intelligence."**
 
-TensorGuard is the industry-first **Post-Quantum Secure MLOps Platform** designed for high-stakes edge computing environments. It orchestrates the secure lifecycle of AI models on robotic fleets, medical devices, and critical infrastructure, ensuring that proprietary intelligence remains confidential (Model Privacy) and tamper-proof (Integrity) even in hostile environments.
+TensorGuard is a **Post-Quantum Ready MLOps Platform** designed for high-stakes edge computing environments. It provides the architecture and APIs for secure AI model lifecycle management on robotic fleets, medical devices, and critical infrastructure.
+
+> ⚠️ **Development Preview Notice**
+>
+> This is a **development preview** release. Key limitations:
+> - **PQC implementations are simulators** - Kyber/Dilithium provide API compatibility only, not cryptographic security
+> - **N2HE is a research prototype** - requires cryptographic audit before production use
+> - **Integration required** - production deployment requires [liboqs](https://github.com/open-quantum-safe/liboqs) or FIPS-validated libraries
+>
+> See [SECURITY.md](SECURITY.md) for production deployment requirements.
 
 ---
 
@@ -45,13 +54,25 @@ TensorGuard is the industry-first **Post-Quantum Secure MLOps Platform** designe
 
 ## 1. <a name="executive-summary"></a>Executive Summary
 
-In the age of ubiquitous AI, the model *is* the IP. deploying advanced neural networks to thousands of edge devices creates a massive attack surface. Traditional TLS and disk encryption are insufficient against physical tampering, side-channel attacks, and the looming threat of Quantum Computing.
+In the age of ubiquitous AI, the model *is* the IP. Deploying advanced neural networks to thousands of edge devices creates a massive attack surface. Traditional TLS and disk encryption are insufficient against physical tampering, side-channel attacks, and the looming threat of Quantum Computing.
 
-TensorGuard solves this by wrapping models in **TGSP v1.0**, a cryptographic envelope that creates a "Secure Enclave" logic without requiring specialized hardware. It combines **Privacy-Preserving Machine Learning (PPML)** with **Post-Quantum Cryptography (PQC)** to guarantee:
+TensorGuard addresses this by wrapping models in **TGSP v1.0**, a cryptographic envelope designed for zero-trust delivery. The architecture combines **Privacy-Preserving Machine Learning (PPML)** with **Post-Quantum Cryptography (PQC)** interfaces to provide:
 
-*   **Confidentiality**: Weights are decrypted only in volatile memory at the nanosecond of inference.
-*   **Integrity**: Every byte of the model is signed by a Quantum-Resistant Digital Signature.
-*   **Provenance**: Full custodial chain of custody from training cluster to edge robot.
+*   **Confidentiality**: Weights are decrypted only in volatile memory at the moment of inference.
+*   **Integrity**: Models are signed with hybrid classical+PQC signatures (requires production crypto integration).
+*   **Provenance**: Tamper-evident hash chain tracks full custody from training cluster to edge robot.
+
+### 1.1 What Works Today
+
+| Component | Status | Notes |
+| :--- | :--- | :--- |
+| TGSP Container Format | ✅ Production | Deterministic packaging, manifest validation |
+| Safe Serialization | ✅ Production | msgpack-based, no pickle RCE |
+| Evidence Chain | ✅ Production | Tamper-evident audit logging |
+| Enterprise Auth | ✅ Production | Argon2id, JWT with claims validation |
+| Classical Crypto (X25519, ChaCha20) | ✅ Production | Via `cryptography` library |
+| PQC (Kyber, Dilithium) | ⚠️ Simulator | API-compatible stubs, no security |
+| N2HE Homomorphic | ⚠️ Research | Requires audit before production |
 
 ---
 
