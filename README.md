@@ -1,6 +1,6 @@
 # TensorGuard™: The Intelligent Privacy & Security Platform for AI Fleets
 
-![TensorGuard Banner](https://img.shields.io/badge/TensorGuard-v2.1.0-0ea5e9?style=for-the-badge) 
+![TensorGuard Banner](https://img.shields.io/badge/TensorGuard-v2.1.0-0ea5e9?style=for-the-badge)
 ![Status](https://img.shields.io/badge/Status-Production_Ready-success?style=for-the-badge)
 ![Security](https://img.shields.io/badge/Security-Post_Quantum_Hybrid-purple?style=for-the-badge)
 ![Compliance](https://img.shields.io/badge/Compliance-ISO_27001_Ready-blue?style=for-the-badge)
@@ -14,27 +14,32 @@ TensorGuard is the industry-first **Post-Quantum Secure MLOps Platform** designe
 ## 📑 Table of Contents
 
 1.  [Executive Summary](#executive-summary)
-2.  [System Architecture](#system-architecture)
-3.  [Post-Quantum Hybrid Cryptography](#post-quantum-hybrid-cryptography)
+2.  [Security Architecture](#security-architecture)
+    *   [Enterprise Authentication](#enterprise-authentication)
+    *   [Tamper-Evident Audit Trail](#tamper-evident-audit-trail)
+    *   [Safe Serialization](#safe-serialization)
+    *   [Deterministic Packaging](#deterministic-packaging)
+3.  [System Architecture](#system-architecture)
+4.  [Post-Quantum Hybrid Cryptography](#post-quantum-hybrid-cryptography)
     *   [Threat Model: Harvest Now, Decrypt Later](#threat-model)
     *   [Hybrid Architecture (Kyber + Dilithium)](#hybrid-architecture)
     *   [Robotics Trade-off Analysis](#robotics-trade-off-analysis)
-4.  [Core Components](#core-components)
+5.  [Core Components](#core-components)
     *   [Platform (Control Plane)](#platform-control-plane)
     *   [Agent (Data Plane)](#agent-data-plane)
     *   [TGSP (TensorGuard Security Protocol)](#tgsp-tensorguard-security-protocol)
     *   [MOAI (Secure Runtime)](#moai-secure-runtime)
-5.  [Key Features & Capabilities](#key-features--capabilities)
+6.  [Key Features & Capabilities](#key-features--capabilities)
     *   [PEFT Pipeline](#peft-pipeline)
     *   [Orthogonal Finetuning (OFT)](#orthogonal-finetuning-oft)
     *   [Federated Learning (FL)](#federated-learning-fl)
     *   [Network Defense (WTFPAD)](#network-defense)
-6.  [Compliance & Certifications](#compliance--certifications)
+7.  [Compliance & Certifications](#compliance--certifications)
     *   [ISO 27001:2022 Mapping](#iso-27001-mapping)
     *   [NIST CSF 2.0 Mapping](#nist-csf-mapping)
-7.  [Performance Benchmarks](#performance-benchmarks)
-8.  [Developer Guide](#developer-guide)
-9.  [Visual Gallery](#visual-gallery)
+8.  [Performance Benchmarks](#performance-benchmarks)
+9.  [Developer Guide](#developer-guide)
+10. [Visual Gallery](#visual-gallery)
 
 ---
 
@@ -50,7 +55,105 @@ TensorGuard solves this by wrapping models in **TGSP v1.0**, a cryptographic env
 
 ---
 
-## 2. <a name="system-architecture"></a>System Architecture
+## 2. <a name="security-architecture"></a>Security Architecture
+
+TensorGuard v2.1 implements defense-in-depth security controls designed for enterprise deployment and regulatory compliance.
+
+### <a name="enterprise-authentication"></a>2.1 Enterprise Authentication
+
+The platform authentication module (`platform/auth.py`) provides enterprise-grade security:
+
+| Feature | Implementation | Configuration |
+| :--- | :--- | :--- |
+| **Password Hashing** | Argon2id (OWASP parameters: 64MB, 3 iterations, 4 threads) | Hardware-resistant |
+| **Password Policy** | Minimum 12 characters, complexity requirements | `TG_MIN_PASSWORD_LENGTH` |
+| **JWT Security** | Issuer/audience validation, token type enforcement | `TG_TOKEN_ISSUER` |
+| **Token Expiration** | 30-minute access tokens, 7-day refresh tokens | `TG_TOKEN_EXPIRE_MINUTES` |
+| **Role-Based Access** | ORG_ADMIN → SITE_ADMIN → OPERATOR hierarchy | Pre-configured checkers |
+
+**Security Configuration** (Environment Variables):
+```bash
+TG_SECRET_KEY=<256-bit-secret>           # REQUIRED for production
+TG_JWT_ALGORITHM=HS256                    # Signing algorithm
+TG_TOKEN_EXPIRE_MINUTES=30                # Access token TTL
+TG_REQUIRE_PASSWORD_COMPLEXITY=true       # Enforce strong passwords
+TG_MAX_LOGIN_ATTEMPTS=5                   # Rate limiting (with Redis)
+```
+
+### <a name="tamper-evident-audit-trail"></a>2.2 Tamper-Evident Audit Trail
+
+The evidence store (`evidence/store.py`) implements a **blockchain-like hash chain** for tamper-evident compliance logging:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    EVIDENCE CHAIN STRUCTURE                      │
+├─────────────────────────────────────────────────────────────────┤
+│  Genesis (0x000...)  ──┬──> Event₁ ──┬──> Event₂ ──┬──> Event₃  │
+│                        │             │             │            │
+│                   prev_hash     prev_hash     prev_hash         │
+│                   event_hash    event_hash    event_hash        │
+│                   chain_hash    chain_hash    chain_hash        │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Integrity Guarantees**:
+- Events **cannot be modified** without detection (hash mismatch)
+- Events **cannot be deleted** without breaking the chain
+- Events **cannot be reordered** without detection
+- Full audit trail is **cryptographically verifiable**
+
+**Usage**:
+```python
+from tensorguard.evidence.store import get_store
+
+store = get_store()
+store.save_event({"event_type": "MODEL_DEPLOYED", ...})  # Auto-chained
+
+# Verify entire audit trail
+is_valid, errors = store.verify_chain()
+```
+
+### <a name="safe-serialization"></a>2.3 Safe Serialization
+
+TensorGuard eliminates **pickle-based RCE vulnerabilities** by using safe serialization throughout:
+
+| Component | Before | After | Security Benefit |
+| :--- | :--- | :--- | :--- |
+| ModelPack | `pickle.dumps()` | `msgpack` + numpy handlers | No arbitrary code execution |
+| Gateway API | `pickle.loads(file)` | `ModelPack.deserialize()` | Input validation |
+| Backend Weights | `pickle.loads()` | `safe_loads()` | Type-safe deserialization |
+| Orchestrator | `pickle.load(f)` | JSON/msgpack | Auditable format |
+
+**Safe Serialization Module** (`utils/serialization.py`):
+```python
+from tensorguard.utils.serialization import safe_dumps, safe_loads
+
+# Safely serialize (numpy-aware, no pickle)
+data = safe_dumps({"weights": np.array([...])})
+
+# Safely deserialize (type-validated)
+obj = safe_loads(data)
+```
+
+### <a name="deterministic-packaging"></a>2.4 Deterministic Packaging
+
+TGSP packages are built with **deterministic metadata** for reproducible hashes:
+
+| Property | Value | Purpose |
+| :--- | :--- | :--- |
+| Timestamps | `2020-01-01 00:00:00` | Reproducible builds |
+| File permissions | `0644` | Consistent across systems |
+| File ordering | Sorted alphabetically | Deterministic iteration |
+| Compression | `ZIP_STORED` / `gzip` | Predictable output |
+
+**Result**: The same model inputs always produce the **same package hash**, enabling:
+- Supply chain integrity verification
+- Reproducible audit trails
+- Secure artifact signing
+
+---
+
+## 3. <a name="system-architecture"></a>System Architecture
 
 The TensorGuard ecosystem consists of a centralized **Control Plane (Platform)** and distributed **Edge Agents**.
 
@@ -84,7 +187,7 @@ graph TD
     end
 ```
 
-### 2.1 Component Interaction Flow
+### 3.1 Component Interaction Flow
 1.  **Build**: Data Scientist uses `tensorguard tgsp build` to package a PyTorch/TensorFlow model. The CLI generates a `manifest.json`, encapsulates the weights using **Hybrid-Kyber**, and signs the bundle with **Hybrid-Dilithium**.
 2.  **Publish**: The `TGSP` file is uploaded to the Platform via the secure API.
 3.  **Deploy**: The Platform assigns the package to a specific `Fleet` or `Device ID`.
@@ -96,7 +199,16 @@ graph TD
 
 ## 3. <a name="post-quantum-hybrid-cryptography"></a>Post-Quantum Hybrid Cryptography
 
-TensorGuard v2.1 introduces the **Hybrid Post-Quantum (PQC)** architecture, compliant with **NIST FIPS 203 (ML-KEM)** and **NIST FIPS 204 (ML-DSA)**.
+TensorGuard v2.1 introduces the **Hybrid Post-Quantum (PQC)** architecture, designed for compatibility with **NIST FIPS 203 (ML-KEM)** and **NIST FIPS 204 (ML-DSA)**.
+
+> ⚠️ **IMPORTANT: Simulator Notice**
+>
+> The current Kyber-768 and Dilithium-3 implementations in `crypto/pqc/` are **functional simulators** that provide API compatibility but **no cryptographic security**. They are intended for:
+> - Development and testing workflows
+> - Integration testing with realistic data sizes
+> - Architecture validation before production deployment
+>
+> **For production use**, integrate with [liboqs](https://github.com/open-quantum-safe/liboqs) or a FIPS-validated PQC library. See [SECURITY.md](SECURITY.md) for details.
 
 ### <a name="threat-model"></a>3.1 Threat Model: Harvest Now, Decrypt Later
 Attackers are currently intercepting and storing encrypted traffic. While they cannot crack ECC (X25519) today, they will break it instantly once a Cryptographically Relevant Quantum Computer (CRQC) comes online (estimated 2030-2035).
@@ -154,8 +266,11 @@ The TGSP v1.0 Container Format is a binary envelope designed for zero-trust deli
 
 MOAI (Model Obfuscation & Anonymous Inference) is the runtime engine within the Agent.
 
-*   **SecureMemoryLoader**: A specialized loader that decrypts chunks of the TGSP stream and reassembles the Python object graph (Pickle/SafeTensors) in a protected memory region.
+*   **SecureMemoryLoader**: A specialized loader that decrypts TGSP streams and deserializes model weights using **safe msgpack-based serialization** (no pickle RCE vulnerabilities). Weights are reassembled directly in protected memory.
+*   **ModelPack Format**: Type-safe serialization with numpy array support, ensuring auditable and secure model transport.
 *   **TenSEAL Backend**: Supports homomorphic operations for privacy-preserving aggregation (if enabled).
+
+> ⚠️ **N2HE Crypto Notice**: The N2HE (NIST-compliant Homomorphic Encryption) implementation in `core/crypto.py` is a **research prototype**. It requires cryptographic audit before production deployment. See [SECURITY.md](SECURITY.md) for recommended alternatives.
 
 ---
 
@@ -343,23 +458,38 @@ Secure Aggregation topology allows thousands of agents to train locally and subm
 
 ## 6. <a name="compliance--certifications"></a>Compliance & Certifications
 
-TensorGuard helps organizations meet rigorous security standards.
+TensorGuard helps organizations meet rigorous security standards with defense-in-depth controls.
 
 ### <a name="iso-27001-mapping"></a>6.1 ISO 27001:2022 Mapping
 
 | Clause | Requirement | TensorGuard Control |
 | :--- | :--- | :--- |
-| **A.5.15** | Access Control | RBAC enforced in `platform/auth.py` |
-| **A.8.24** | Use of Cryptography | TGSP v1.0 enforced in `moai/orchestrator.py` |
-| **A.8.12** | Data Leakage Prevention | In-memory decryption prevents disk leaks |
+| **A.5.15** | Access Control | RBAC with role hierarchy (`platform/auth.py`) |
+| **A.5.17** | Authentication | Argon2id passwords, JWT with issuer/audience validation |
+| **A.8.24** | Use of Cryptography | Hybrid PQC (Kyber + X25519), deterministic packaging |
+| **A.8.12** | Data Leakage Prevention | In-memory decryption, safe serialization (no pickle) |
+| **A.8.15** | Logging | Hash-chained evidence store (`evidence/store.py`) |
 
 ### <a name="nist-csf-mapping"></a>6.2 NIST CSF 2.0 Mapping
 
 | Function | Category | Implementation |
 | :--- | :--- | :--- |
-| **PROTECT** | PR.DS-01 (Data at Rest) | ChaCha20-Poly1305 Encrypted Storage |
-| **DETECT** | DE.CM-01 (Monitoring) | `IdentityAuditLog` tamper-proof trails |
-| **RESPOND** | RS.MI-02 (Mitigation) | Automated certificate revocation |
+| **IDENTIFY** | ID.AM-01 (Asset Inventory) | TGSP manifest with model metadata and hashes |
+| **PROTECT** | PR.DS-01 (Data at Rest) | ChaCha20-Poly1305 encrypted storage |
+| **PROTECT** | PR.AA-01 (Identity Management) | Enterprise auth with password policies |
+| **DETECT** | DE.CM-01 (Monitoring) | Tamper-evident evidence chain with integrity verification |
+| **RESPOND** | RS.MI-02 (Mitigation) | Automated certificate revocation, model rollback |
+
+### 6.3 Security Controls Summary
+
+| Control | Status | Implementation |
+| :--- | :--- | :--- |
+| **Secrets in Code** | ✅ Remediated | Keys excluded via `.gitignore`, runtime-generated |
+| **Serialization RCE** | ✅ Remediated | All pickle replaced with msgpack/JSON |
+| **Audit Trail Integrity** | ✅ Implemented | Blockchain-like hash chain for evidence |
+| **Password Security** | ✅ Implemented | Argon2id + complexity requirements |
+| **Token Security** | ✅ Implemented | Short-lived JWTs with claims validation |
+| **Build Reproducibility** | ✅ Implemented | Deterministic ZIP/TAR packaging |
 
 ---
 
