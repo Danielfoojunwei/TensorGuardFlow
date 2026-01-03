@@ -71,8 +71,8 @@ def main():
     micro_parser = subparsers.add_parser("micro", help="Run microbenchmarks")
 
     
-    # 2. UpdatePkg (Pipeline) - Todo
-    update_parser = subparsers.add_parser("updatepkg", help="Run client pipeline bench")
+    # 2. UpdatePkg (Pipeline) - MVP stub
+    update_parser = subparsers.add_parser("updatepkg", help="Run client pipeline bench (not yet implemented)")
     
     # 3. Privacy
     privacy_parser = subparsers.add_parser("privacy", help="Run privacy evaluation")

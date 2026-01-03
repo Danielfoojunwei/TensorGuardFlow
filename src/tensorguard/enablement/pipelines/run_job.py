@@ -19,15 +19,10 @@ from ..external_platform.adapters.filesystem import FilesystemAdapter
 from ..robotics.ros2.bag_reader import RosbagReader
 from ..governance.policy import GovernanceEngine, PolicyViolation
 
+# Centralized exception hierarchy
+from ...utils.exceptions import PipelineError, InputError, ContractError, PublishError
+
 logger = logging.getLogger(__name__)
-
-class TxGuardError(Exception):
-    """Base error for TensorGuard jobs."""
-    pass
-
-class InputError(TxGuardError): pass
-class ContractError(TxGuardError): pass
-class PublishError(TxGuardError): pass
 
 def run_pipeline(
     adapter: ExternalPlatformAdapter,
@@ -96,7 +91,7 @@ def run_pipeline(
         adapter.update_status(run_ctx, "SUCCESS", "Job completed successfully")
         logger.info("--- Run Completed ---")
         
-    except TxGuardError as e:
+    except PipelineError as e:
         logger.error(f"Pipeline Error: {e}")
         adapter.update_status(run_ctx, "FAILED", str(e))
         # Keep artifacts local for debugging

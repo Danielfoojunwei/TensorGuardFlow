@@ -1,18 +1,25 @@
 import yaml
 import os
 import json
+from pathlib import Path
 from typing import Dict, Any, List, Tuple
 from .models.evidence_models import PolicyPack, RunPolicyResult
 from .database import engine
 from sqlmodel import Session, select
 
+
+def _get_default_packs_dir() -> str:
+    """Get the default policy packs directory using absolute path resolution."""
+    # Resolve from module location: src/tensorguard/platform -> project root
+    module_dir = Path(__file__).resolve().parent
+    project_root = module_dir.parent.parent.parent
+    return str(project_root / "configs" / "policy_packs")
+
+
 class PolicyEngine:
     def __init__(self, packs_dir: str = None):
         if packs_dir is None:
-            # Try to find root configs dir
-            self.packs_dir = "configs/policy_packs"
-            if not os.path.exists(self.packs_dir):
-                self.packs_dir = "../configs/policy_packs"
+            self.packs_dir = _get_default_packs_dir()
         else:
             self.packs_dir = packs_dir
             

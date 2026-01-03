@@ -1,16 +1,13 @@
 import os
 import requests
 import logging
-from ..tgsp.service import TGSPService
-
-logger = logging.getLogger(__name__)
-
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-class TGSPClientError(Exception):
-    """Base exception for TGSP Client"""
-    pass
+from ..tgsp.service import TGSPService
+from ..utils.exceptions import TGSPClientError
+
+logger = logging.getLogger(__name__)
 
 class TGSPEdgeClient:
     """

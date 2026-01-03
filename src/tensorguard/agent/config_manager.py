@@ -24,10 +24,10 @@ class ConfigManager:
     
     def __init__(
         self,
-        config_path: str = "config/agent_config.json",
+        config_path: str = "configs/agent_config.json",
         fleet_api_key: Optional[str] = None
     ):
-        self.config_path = sanitize_path(config_path, "config" if not os.path.isabs(config_path) else None)
+        self.config_path = sanitize_path(config_path, "configs" if not os.path.isabs(config_path) else None)
         self.fleet_api_key = fleet_api_key or os.environ.get("TG_FLEET_API_KEY")
         self.current_config: Optional[AgentConfig] = None
         self._listeners: list[Callable[[AgentConfig], None]] = []

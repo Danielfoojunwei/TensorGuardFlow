@@ -33,7 +33,7 @@ class AgentDaemon:
     SYNC_INTERVAL_SECONDS = 60
     SYNC_MAX_BACKOFF_SECONDS = 300
 
-    def __init__(self, config_path: str = "./config/agent_config.json"):
+    def __init__(self, config_path: str = "./configs/agent_config.json"):
         self.config_manager = ConfigManager(config_path=config_path)
         self.running = False
         self._stop_event = threading.Event()

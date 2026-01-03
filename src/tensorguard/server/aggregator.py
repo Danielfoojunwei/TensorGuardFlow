@@ -94,9 +94,8 @@ class TensorGuardStrategy(fl.server.strategy.FedAvg):
         for client_proxy, fit_res in results:
             # Deserialize UpdatePackage from first tensor
             try:
-                logger.info(f"DEBUG: Client {client_proxy.cid} FitRes: status={fit_res.status}, metrics={fit_res.metrics}")
-                logger.info(f"DEBUG: Client {client_proxy.cid} Parameters tensors count: {len(fit_res.parameters.tensors)}")
-                logger.info(f"Client {client_proxy.cid} sent Parameters with {len(fit_res.parameters.tensors)} tensors")
+                logger.debug(f"Client {client_proxy.cid} FitRes: status={fit_res.status}, metrics={fit_res.metrics}")
+                logger.debug(f"Client {client_proxy.cid} Parameters tensors count: {len(fit_res.parameters.tensors)}")
                 ndarrays = parameters_to_ndarrays(fit_res.parameters)
                 logger.info(f"Client {client_proxy.cid} sent {len(ndarrays)} ndarrays")
                 if len(ndarrays) == 0:

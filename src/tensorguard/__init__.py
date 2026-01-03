@@ -15,7 +15,7 @@ Production-Grade Features:
 - Resilient aggregation
 """
 
-__version__ = "2.0.0"
+__version__ = "2.1.0"
 __author__ = "Daniel Foo & The TensorGuard Team"
 
 try:
