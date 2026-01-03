@@ -1,22 +1,80 @@
+# Python
 __pycache__/
 *.pyc
-.pytest_cache/
-# artifacts/  <-- I should probably keep this but allow the schema file?
-# Actually, the user wants artifacts/ to be part of the open core for some parts.
-# But the generated artifacts (the actual data) should stay ignored.
-# Let's keep artifacts/ ignored but allow the schema directory.
-!src/tensorguard/artifacts/schema/
-
-tests/keys_tmp/
-keys/moai/
+*.pyo
 *.egg-info/
 dist/
 build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg
 
-# TGSP Security
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ============================================
+# SECURITY: Keys and Secrets (NEVER COMMIT)
+# ============================================
+# All key material directories
+keys/
+secrets/
+credentials/
+
+# Private keys and certificates
+*.key
+*.pem
+*.p12
+*.pfx
 *.priv
-*.pub
+*.secret
+
+# Environment files with secrets
+.env
+.env.*
+!.env.example
+
+# ============================================
+# TGSP Security Artifacts
+# ============================================
 *.tgsp
+*.pub
 recovered_assets/
 storage/
+
+# ============================================
+# Database files
+# ============================================
 *.db
+*.sqlite
+*.sqlite3
+
+# ============================================
+# Build and Test Artifacts
+# ============================================
+artifacts/
+!artifacts/.gitkeep
+tests/keys_tmp/
+htmlcov/
+.coverage
+coverage.xml
+
+# ============================================
+# OS files
+# ============================================
+.DS_Store
+Thumbs.db
+
+# ============================================
+# Logs
+# ============================================
+*.log
+logs/

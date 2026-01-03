@@ -21,7 +21,7 @@ def align_streams(
     
     primary = iterators[primary_topic]
     
-    # Simple iterator wrapper to peek/cache
-    # TODO: Implement robust prioritized merging for production
-    # This is a stub for the architecture
+    # MVP: Simple stub that yields empty bundles.
+    # Production implementation would use a priority queue to merge
+    # streams by timestamp with nearest-neighbor matching.
     yield {}

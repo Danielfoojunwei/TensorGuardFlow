@@ -98,8 +98,6 @@ class MLConfig(BaseModel):
     
     # Resource Limits
     max_cpu_percent: float = 80.0
-    # Resource Limits
-    max_cpu_percent: float = 80.0
     max_memory_gb: int = 4
     
     # Aggregation
