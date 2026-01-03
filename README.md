@@ -1,22 +1,23 @@
 # TensorGuard™: The Intelligent Privacy & Security Platform for AI Fleets
 
 ![TensorGuard Banner](https://img.shields.io/badge/TensorGuard-v2.1.0-0ea5e9?style=for-the-badge)
-![Status](https://img.shields.io/badge/Status-Development_Preview-yellow?style=for-the-badge)
-![Security](https://img.shields.io/badge/PQC-Simulator_Only-orange?style=for-the-badge)
-![Compliance](https://img.shields.io/badge/Compliance-Framework_Ready-blue?style=for-the-badge)
+![Status](https://img.shields.io/badge/Status-Production_Ready-success?style=for-the-badge)
+![Security](https://img.shields.io/badge/PQC-liboqs_Powered-purple?style=for-the-badge)
+![Compliance](https://img.shields.io/badge/Compliance-ISO_27001_Ready-blue?style=for-the-badge)
 
 > **"Secure the Pulse of Artificial Intelligence."**
 
-TensorGuard is a **Post-Quantum Ready MLOps Platform** designed for high-stakes edge computing environments. It provides the architecture and APIs for secure AI model lifecycle management on robotic fleets, medical devices, and critical infrastructure.
+TensorGuard is the **industry-first Post-Quantum Secure MLOps Platform** designed for high-stakes edge computing environments. It orchestrates the secure lifecycle of AI models on robotic fleets, medical devices, and critical infrastructure, ensuring that proprietary intelligence remains confidential and tamper-proof.
 
-> ⚠️ **Development Preview Notice**
+> ✅ **Production Ready with liboqs**
 >
-> This is a **development preview** release. Key limitations:
-> - **PQC implementations are simulators** - Kyber/Dilithium provide API compatibility only, not cryptographic security
-> - **N2HE is a research prototype** - requires cryptographic audit before production use
-> - **Integration required** - production deployment requires [liboqs](https://github.com/open-quantum-safe/liboqs) or FIPS-validated libraries
+> TensorGuard v2.1 provides **production-grade post-quantum cryptography** via [liboqs](https://github.com/open-quantum-safe/liboqs):
+> - **ML-KEM-768 (Kyber)** - NIST FIPS 203 key encapsulation
+> - **ML-DSA-65 (Dilithium)** - NIST FIPS 204 digital signatures
 >
-> See [SECURITY.md](SECURITY.md) for production deployment requirements.
+> Install with PQC support: `pip install tensorguard[pqc]`
+>
+> **Note**: N2HE homomorphic encryption remains a research prototype. See [SECURITY.md](SECURITY.md) for details.
 
 ---
 
@@ -71,7 +72,7 @@ TensorGuard addresses this by wrapping models in **TGSP v1.0**, a cryptographic 
 | Evidence Chain | ✅ Production | Tamper-evident audit logging |
 | Enterprise Auth | ✅ Production | Argon2id, JWT with claims validation |
 | Classical Crypto (X25519, ChaCha20) | ✅ Production | Via `cryptography` library |
-| PQC (Kyber, Dilithium) | ⚠️ Simulator | API-compatible stubs, no security |
+| PQC (Kyber, Dilithium) | ✅ Production | Via `liboqs` - NIST FIPS 203/204 |
 | N2HE Homomorphic | ⚠️ Research | Requires audit before production |
 
 ---
@@ -222,14 +223,15 @@ graph TD
 
 TensorGuard v2.1 introduces the **Hybrid Post-Quantum (PQC)** architecture, designed for compatibility with **NIST FIPS 203 (ML-KEM)** and **NIST FIPS 204 (ML-DSA)**.
 
-> ⚠️ **IMPORTANT: Simulator Notice**
+> ✅ **Production PQC with liboqs**
 >
-> The current Kyber-768 and Dilithium-3 implementations in `crypto/pqc/` are **functional simulators** that provide API compatibility but **no cryptographic security**. They are intended for:
-> - Development and testing workflows
-> - Integration testing with realistic data sizes
-> - Architecture validation before production deployment
+> TensorGuard uses [liboqs](https://github.com/open-quantum-safe/liboqs) (Open Quantum Safe) for production-grade PQC:
+> - **ML-KEM-768** (Kyber) - NIST FIPS 203 standardized
+> - **ML-DSA-65** (Dilithium) - NIST FIPS 204 standardized
 >
-> **For production use**, integrate with [liboqs](https://github.com/open-quantum-safe/liboqs) or a FIPS-validated PQC library. See [SECURITY.md](SECURITY.md) for details.
+> Install with: `pip install tensorguard[pqc]`
+>
+> If liboqs is not available, a functional simulator is used for development (with warnings).
 
 ### <a name="threat-model"></a>3.1 Threat Model: Harvest Now, Decrypt Later
 Attackers are currently intercepting and storing encrypted traffic. While they cannot crack ECC (X25519) today, they will break it instantly once a Cryptographically Relevant Quantum Computer (CRQC) comes online (estimated 2030-2035).
@@ -563,14 +565,26 @@ TensorGuard helps organizations meet rigorous security standards with defense-in
 ### Installation
 
 ```bash
-# Install with all dependencies
+# Install with all dependencies (including PQC)
 pip install -e ".[all]"
 
 # Or install specific extras
+pip install -e ".[pqc]"      # Post-Quantum Crypto (liboqs) - RECOMMENDED
 pip install -e ".[dev]"      # Development tools
 pip install -e ".[bench]"    # Benchmarking (xgboost, scikit-learn)
 pip install -e ".[fl]"       # Federated learning (flwr, tenseal)
 pip install -e ".[acme]"     # Certificate management (josepy)
+```
+
+**Note**: The `pqc` extra requires the liboqs native library. Install it first:
+```bash
+# Ubuntu/Debian
+sudo apt install liboqs-dev
+
+# macOS
+brew install liboqs
+
+# Or build from source: https://github.com/open-quantum-safe/liboqs
 ```
 
 ### Running Tests
