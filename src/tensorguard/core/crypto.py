@@ -1,4 +1,8 @@
 """
+================================================================================
+                    SECURITY NOTICE - RESEARCH PROTOTYPE
+================================================================================
+
 TensorGuard Cryptography Module (N2HE)
 
 Integrated into TensorGuard for privacy-preserving VLA fine-tuning.
@@ -6,13 +10,41 @@ Based on HintSight Technology's N2HE-hexl library.
 Aligned with MOAI (IACR 2025/991) for Secure Transformer Inference.
 Incorporates Skellam noise for formal DP+LWE security (Valovich, 2016).
 
-SECURITY: This module uses secrets-seeded CSPRNG for cryptographic operations.
+================================================================================
+                           SECURITY LIMITATIONS
+================================================================================
+
+This implementation is a RESEARCH PROTOTYPE. Before production use:
+
+1. CRYPTOGRAPHIC AUDIT REQUIRED
+   - This code has NOT been audited by professional cryptographers
+   - Custom cryptosystems require formal security proofs tied to implementation
+   - Side-channel vulnerabilities have NOT been analyzed
+
+2. NOT CONSTANT-TIME
+   - Operations may leak timing information
+   - Table lookups may be cache-timing vulnerable
+   - Branch conditions depend on secret data
+
+3. PARAMETER VALIDATION
+   - Security parameter choices have NOT been formally verified
+   - LWE dimension and modulus may be insufficient for claimed security level
+
+4. RECOMMENDED ALTERNATIVES FOR PRODUCTION
+   - Microsoft SEAL: https://github.com/microsoft/SEAL
+   - OpenFHE: https://github.com/openfheorg/openfhe-development
+   - Concrete ML: https://github.com/zama-ai/concrete-ml
+
+================================================================================
+
+Uses secrets-seeded CSPRNG for cryptographic randomness.
 """
 
 import numpy as np
 import struct
 import logging
 import secrets
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Union
@@ -21,6 +53,14 @@ from ..utils.config import settings
 from ..utils.logging import get_logger
 from ..utils.exceptions import CryptographyError
 from .keys import vault, KeyScope
+
+# Emit security warning on module import
+warnings.warn(
+    "tensorguard.core.crypto: N2HE is a RESEARCH PROTOTYPE. "
+    "NOT AUDITED for production use. See module docstring for details.",
+    category=UserWarning,
+    stacklevel=2
+)
 
 # Performance: Bridge to HintSight's C++ N2HE-HEXL library if available
 try:
