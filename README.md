@@ -39,7 +39,7 @@ TensorGuard is the **industry-first Post-Quantum Secure MLOps Platform** designe
     *   [MOAI (Secure Runtime)](#moai-secure-runtime)
 6.  [Key Features & Capabilities](#key-features--capabilities)
     *   [PEFT Pipeline](#peft-pipeline)
-    *   [Orthogonal Finetuning (OFT)](#orthogonal-finetuning-oft)
+    *   [Securing VLA Fine-Tuning (OpenVLA-OFT Integration)](#orthogonal-finetuning-oft)
     *   [Federated Learning (FL)](#federated-learning-fl)
     *   [Network Defense (WTFPAD)](#network-defense)
 7.  [Compliance & Certifications](#compliance--certifications)
@@ -459,8 +459,81 @@ enable_rollback: bool = True          # Automatic rollback on failure
 
 **Enforcement**: The `enforce_update_size()` method rejects updates exceeding limits, preventing bandwidth overruns and ensuring predictable system behavior.
 
-### <a name="orthogonal-finetuning-oft"></a>6.2 Orthogonal Finetuning (OFT)
-TensorGuard supports **OFT** for efficient on-device adaptation. Unlike LoRA which adds adapter matrices, OFT multiplies weights by an orthogonal matrix $R$. This preserves the hyperspherical energy of the pre-trained model, ensuring stability during continuous learning on robotics hardware.
+### <a name="orthogonal-finetuning-oft"></a>6.2 Securing VLA Fine-Tuning (OpenVLA-OFT Integration)
+
+TensorGuard is designed to **secure** Vision-Language-Action (VLA) fine-tuning pipelines like [OpenVLA-OFT](https://openvla-oft.github.io). It does not replace these frameworks—it wraps them with enterprise-grade security.
+
+#### 6.2.1 Integration Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                     ROBOT FLEET (Edge Devices)                       │
+├─────────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐  │
+│  │  OpenVLA-OFT    │    │  OpenVLA-OFT    │    │  OpenVLA-OFT    │  │
+│  │  (LoRA/L1 Reg)  │    │  (LoRA/L1 Reg)  │    │  (LoRA/L1 Reg)  │  │
+│  └────────┬────────┘    └────────┬────────┘    └────────┬────────┘  │
+│           │ gradients            │                      │           │
+│  ┌────────▼────────────────────────────────────────────▼────────┐  │
+│  │                    TensorGuard Agent                          │  │
+│  │  • Gradient clipping (DP)    • PQC encryption (Kyber)        │  │
+│  │  • Sparsification            • TGSP packaging                │  │
+│  └────────┬─────────────────────────────────────────────────────┘  │
+└───────────┼─────────────────────────────────────────────────────────┘
+            │ encrypted .tgsp
+            ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                    TensorGuard Platform (Cloud)                      │
+│  • Secure Aggregation (FedAvg over ciphertext)                      │
+│  • Tamper-evident audit trail                                        │
+│  • Model versioning & rollback                                       │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+#### 6.2.2 What TensorGuard Secures
+
+| OpenVLA-OFT Component | TensorGuard Protection |
+| :--- | :--- |
+| **LoRA Adapters** | Encrypted in TGSP containers with hybrid PQC (Kyber + X25519) |
+| **Gradient Updates** | Clipped for DP, sparsified, encrypted before transmission |
+| **Action Chunking** | Chunk metadata signed with ML-DSA-65 (Dilithium) |
+| **L1 Regression Loss** | Loss values included in tamper-evident evidence chain |
+| **Model Checkpoints** | Packaged as `.tgsp` with manifest hashes and dual signatures |
+| **Fleet Aggregation** | Secure aggregation—server never sees plaintext gradients |
+
+#### 6.2.3 Supported VLA Frameworks
+
+TensorGuard provides adapter interfaces for popular VLA architectures:
+
+```python
+from tensorguard.core.adapters import VLAAdapter
+
+# Load your fine-tuned OpenVLA model
+adapter = VLAAdapter.from_openvla("./openvla-oft-checkpoint")
+
+# Compute encrypted gradient update
+update = training_worker.create_update_package(adapter, demonstrations)
+
+# Package securely for transmission
+tgsp_bytes = tgsp_builder.build(update, sign=True, encrypt=True)
+```
+
+**Supported Adapters** (via `VLAAdapter.from_*`):
+- `from_openvla()` — OpenVLA / OpenVLA-OFT
+- `from_pi0()` — Physical Intelligence Pi0
+- `from_rt2()` — Google RT-2
+
+#### 6.2.4 Why This Matters
+
+VLA models represent significant IP investment. When fine-tuning across a robot fleet:
+
+| Risk | Without TensorGuard | With TensorGuard |
+| :--- | :--- | :--- |
+| **Model theft** | Weights exposed on device | Decrypted only in RAM |
+| **Gradient leakage** | Updates reveal training data | DP + encryption |
+| **MITM attacks** | TLS vulnerable to CRQC | Hybrid PQC resistant |
+| **Audit gaps** | No provenance trail | Hash-chained evidence |
+| **Rollback attacks** | Stale models deployed | Signed manifests with version enforcement |
 
 <img src="artifacts/oft_mechanism.png" width="600" alt="OFT Mechanism">
 
