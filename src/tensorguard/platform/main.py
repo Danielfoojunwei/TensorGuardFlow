@@ -10,10 +10,70 @@ init_db()
 
 from .api import endpoints
 
+import asyncio
+from contextlib import asynccontextmanager
+from .api.identity_endpoints import get_session
+from ..identity.scheduler import RenewalScheduler
+from .models.identity_models import IdentityRenewalJob, RenewalJobStatus
+from sqlmodel import select
+from datetime import datetime
+
+async def identity_job_runner():
+    """Background task to advance identity renewal jobs."""
+    while True:
+        try:
+            # We need a new session for each iteration
+            from .database import Session, engine
+            with Session(engine) as session:
+                scheduler = RenewalScheduler(session)
+                
+                # Find actionable jobs
+                # 1. Statuses where platform acts immediately
+                # 2. Statuses that need polling (ISSUING)
+                # 3. PENDING with next_retry_at <= now
+                now = datetime.utcnow()
+                statement = select(IdentityRenewalJob).where(
+                    (IdentityRenewalJob.status.in_([
+                        RenewalJobStatus.PENDING,
+                        RenewalJobStatus.CSR_RECEIVED,
+                        RenewalJobStatus.CHALLENGE_COMPLETE,
+                        RenewalJobStatus.ISSUED,
+                        RenewalJobStatus.VALIDATING,
+                        RenewalJobStatus.ISSUING
+                    ])) |
+                    ((IdentityRenewalJob.status == RenewalJobStatus.PENDING) & (IdentityRenewalJob.next_retry_at != None) & (IdentityRenewalJob.next_retry_at <= now))
+                )
+                
+                jobs = session.exec(statement).all()
+                for job in jobs:
+                    try:
+                        # Optimistic concurrency: scheduler.advance_job should handle it
+                        scheduler.advance_job(job.id)
+                    except Exception as e:
+                        print(f"Error advancing job {job.id}: {e}")
+            
+        except Exception as e:
+            print(f"Identity job runner loop error: {e}")
+            
+        await asyncio.sleep(10) # Run every 10 seconds
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Start background tasks
+    task = asyncio.create_task(identity_job_runner())
+    yield
+    # Shutdown: Stop background tasks
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
 app = FastAPI(
     title="TensorGuard Management Platform",
     description="White-label backend for TensorGuard fleets",
-    version="2.1.0"
+    version="2.1.0",
+    lifespan=lifespan
 )
 
 # GZip compression for responses > 1KB (60-70% bandwidth savings)

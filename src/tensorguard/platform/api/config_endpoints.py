@@ -13,6 +13,8 @@ from ..models.core import Fleet
 from ..auth import get_current_user
 from ...schemas.unified_config import AgentConfig, FleetPolicy
 from ..models.identity_models import IdentityAgent as AgentDB
+from .identity_endpoints import verify_fleet_auth
+from ..services.trust_service import TrustService
 
 router = APIRouter()
 
@@ -57,20 +59,13 @@ async def update_fleet_policy(
 
 # --- Agent Routes ---
 
-async def verify_agent_api_key(
-    x_tg_fleet_api_key: Optional[str] = Header(None)
-) -> str:
-    """Dependency to verify Fleet API Key."""
-    if not x_tg_fleet_api_key:
-        raise HTTPException(status_code=401, detail="Missing API Key")
-    # In real impl, verify against Fleet.api_key_hash
-    return x_tg_fleet_api_key
+# Legacy verify_agent_api_key removed in favor of verify_fleet_auth (HMAC-based)
 
 @router.post("/agent/sync", response_model=AgentConfig)
 async def sync_agent_config(
     agent_info: Dict[str, Any],
     session: Session = Depends(get_session),
-    api_key: str = Depends(verify_agent_api_key)
+    fleet: Fleet = Depends(verify_fleet_auth)
 ):
     """
     Agent heartbeat and config sync.
@@ -84,23 +79,31 @@ async def sync_agent_config(
     agent_name = agent_info.get("name", "unknown")
     fleet_id = agent_info.get("fleet_id")
     
-    # 3. Construct effective config
-    # Merge Fleet Policy + Default Config
+    # 3. Construct effective config using TrustService
+    trust = TrustService(session).calculate_fleet_trust(fleet.id)
+    
+    # Directives based on trust score
+    security_level = "high" if trust["aggregate_score"] > 85 else "medium"
+    if trust["layers"]["transport"]["score"] < 50:
+        # Emergency lockdown if identity is compromised or near expiry
+        security_level = "fail-safe"
     
     return AgentConfig(
         agent_name=agent_name,
-        fleet_id=fleet_id or "unknown",
+        fleet_id=fleet.id,
         control_plane_url="http://localhost:8000",
         identity={
             "enabled": True,
-            "scan_interval_seconds": 3600
+            "scan_interval_seconds": 3600,
+            "trust_score": trust["aggregate_score"]
         },
         network={
             "enabled": True,
-            "defense_mode": "front"
+            "defense_mode": "front" if security_level != "fail-safe" else "isolated"
         },
         ml={
-            "enabled": True,
-            "model_type": "pi0"
+            "enabled": security_level != "fail-safe",
+            "model_type": "pi0",
+            "security_level": security_level
         }
     )

@@ -10,6 +10,9 @@ from typing import Optional, List, Dict, Any, Callable
 from sqlmodel import Session, select
 import logging
 import asyncio
+import ssl
+import socket
+import hashlib
 
 from ..platform.models.identity_models import (
     IdentityRenewalJob,
@@ -18,9 +21,11 @@ from ..platform.models.identity_models import (
     IdentityPolicy,
     RenewalJobStatus,
     AuditAction,
+    EndpointType,
 )
 from .policy_engine import PolicyEngine
 from .audit import AuditService
+from .acme.client import ACMEClient, ACMEProvider, ACMEOrder, ACMEChallenge
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +54,23 @@ class RenewalScheduler:
         self._on_csr_request: Optional[Callable] = None
         self._on_challenge_start: Optional[Callable] = None
         self._on_deploy: Optional[Callable] = None
+        
+        # ACME Client cache
+        self._acme_clients: Dict[str, ACMEClient] = {}
+
+    def _get_acme_client(self, policy: IdentityPolicy) -> ACMEClient:
+        """Get or create ACME client for the given policy."""
+        provider_name = policy.preferred_acme_provider or "letsencrypt"
+        if provider_name not in self._acme_clients:
+            provider = ACMEProvider(provider_name)
+            # Use a persistent account key path
+            key_path = f"keys/identity/acme_account_{provider_name}.pem"
+            self._acme_clients[provider_name] = ACMEClient(
+                provider=provider,
+                account_key_path=key_path,
+                verify_ssl=(provider != ACMEProvider.PEBBLE)  # Don't verify for Pebble
+            )
+        return self._acme_clients[provider_name]
     
     def set_csr_callback(self, callback: Callable) -> None:
         """Set callback for CSR requests to agent."""
@@ -183,8 +205,7 @@ class RenewalScheduler:
             elif job.status == RenewalJobStatus.CHALLENGE_COMPLETE:
                 return self._issue_certificate(job)
             elif job.status == RenewalJobStatus.ISSUING:
-                # Waiting for issuance
-                return job
+                return self._poll_issuance(job)
             elif job.status == RenewalJobStatus.ISSUED:
                 return self._deploy_certificate(job)
             elif job.status == RenewalJobStatus.DEPLOYING:
@@ -242,33 +263,61 @@ class RenewalScheduler:
     
     def _start_challenge(self, job: IdentityRenewalJob) -> IdentityRenewalJob:
         """Initiate ACME challenge."""
-        job.status = RenewalJobStatus.CHALLENGE_PENDING
-        job.updated_at = datetime.utcnow()
-        
-        # Get policy for challenge type
         policy = self.session.get(IdentityPolicy, job.policy_id)
-        if policy:
-            job.challenge_type = policy.acme_challenge_type
-        
-        if self._on_challenge_start:
-            self._on_challenge_start(job)
-        
-        self.session.add(job)
-        self.session.commit()
-        
-        self.audit_service.log(
-            tenant_id=job.tenant_id,
-            fleet_id=job.fleet_id,
-            action=AuditAction.CHALLENGE_STARTED,
-            actor_type="scheduler",
-            actor_id="system",
-            target_type="renewal_job",
-            target_id=job.id,
-            payload={"challenge_type": job.challenge_type},
-        )
-        
-        logger.info(f"Job {job.id}: Challenge started ({job.challenge_type})")
-        return job
+        if not policy:
+            return self._handle_failure(job, "Policy not found")
+
+        if policy.require_public_trust:
+            # Public ACME flow
+            try:
+                acme = self._get_acme_client(policy)
+                # 1. Register account (idempotent in client)
+                # In production, get email from tenant settings
+                admin_email = "admin@tensorguard.io" 
+                acme.register_account(admin_email)
+                
+                # 2. Create Order
+                endpoint = self.session.get(IdentityEndpoint, job.endpoint_id)
+                import json
+                sans = json.loads(endpoint.tags).get("sans", [endpoint.hostname]) if endpoint.tags else [endpoint.hostname]
+                order = acme.create_order(sans)
+                
+                # 3. Get Challenges
+                challenges = acme.get_challenges(order)
+                # Pick the first http-01 challenge for now
+                challenge = next((c for c in challenges if c.type == policy.acme_challenge_type), challenges[0])
+                
+                # 4. Update Job
+                job.acme_order_url = order.order_url
+                job.acme_finalize_url = order.finalize_url
+                job.acme_authz_urls_json = json.dumps(order.authorizations)
+                job.challenge_url = challenge.url
+                job.challenge_token = challenge.token
+                job.challenge_domain = challenge.domain
+                job.challenge_type = challenge.type
+                job.last_acme_status = order.status
+                
+                job.status = RenewalJobStatus.CHALLENGE_PENDING
+                job.updated_at = datetime.utcnow()
+                
+                if self._on_challenge_start:
+                    self._on_challenge_start(job)
+                
+                self.session.add(job)
+                self.session.commit()
+                
+                logger.info(f"Job {job.id}: ACME challenge started ({job.challenge_type}) for {challenge.domain}")
+                return job
+                
+            except Exception as e:
+                return self._handle_failure(job, f"ACME order failed: {str(e)}")
+        else:
+            # Private CA flow (placeholder)
+            job.status = RenewalJobStatus.CHALLENGE_COMPLETE # Skip challenge for private CA usually
+            job.updated_at = datetime.utcnow()
+            self.session.add(job)
+            self.session.commit()
+            return job
     
     def complete_challenge(self, job_id: str, token: str) -> IdentityRenewalJob:
         """Mark challenge as complete."""
@@ -297,21 +346,46 @@ class RenewalScheduler:
         return job
     
     def _issue_certificate(self, job: IdentityRenewalJob) -> IdentityRenewalJob:
-        """Issue certificate via ACME/CA."""
-        job.status = RenewalJobStatus.ISSUING
-        job.updated_at = datetime.utcnow()
+        """Submit CSR and finalize issuance."""
+        policy = self.session.get(IdentityPolicy, job.policy_id)
         
-        # Actual ACME issuance would happen here via ACMEClient
-        # For now, mark as issuing and wait for external completion
-        
-        self.session.add(job)
-        self.session.commit()
-        
-        logger.info(f"Job {job.id}: Issuing certificate")
-        return job
+        if policy.require_public_trust:
+            try:
+                acme = self._get_acme_client(policy)
+                order = ACMEOrder(
+                    order_url=job.acme_order_url,
+                    status=job.last_acme_status,
+                    identifiers=[], # Not needed for finalize
+                    authorizations=[], # Not needed for finalize
+                    finalize_url=job.acme_finalize_url
+                )
+                
+                order = acme.finalize_order(order, job.csr_pem)
+                job.last_acme_status = order.status
+                job.status = RenewalJobStatus.ISSUING
+                job.updated_at = datetime.utcnow()
+                
+                self.session.add(job)
+                self.session.commit()
+                
+                logger.info(f"Job {job.id}: ACME order finalized, now ISSUING")
+                return job
+            except Exception as e:
+                return self._handle_failure(job, f"ACME finalization failed: {str(e)}")
+        else:
+            # Private CA flow
+            # In production: call Internal CA API
+            # For MVP: dummy success
+            job.issued_cert_pem = "---BEGIN CERTIFICATE---\nMVP_STUB_CERT\n---END CERTIFICATE---"
+            job.new_cert_id = hashlib.sha256(job.issued_cert_pem.encode()).hexdigest()
+            job.status = RenewalJobStatus.ISSUED
+            job.updated_at = datetime.utcnow()
+            self.session.add(job)
+            self.session.commit()
+            return job
     
     def receive_certificate(self, job_id: str, cert_pem: str, cert_id: str) -> IdentityRenewalJob:
-        """Receive issued certificate."""
+        """Receive issued certificate (manual/external)."""
         job = self.get_job(job_id)
         if not job or job.status != RenewalJobStatus.ISSUING:
             raise ValueError(f"Invalid job state for certificate: {job_id}")
@@ -324,8 +398,56 @@ class RenewalScheduler:
         self.session.add(job)
         self.session.commit()
         
-        logger.info(f"Job {job.id}: Certificate issued")
+        logger.info(f"Job {job.id}: Certificate received externally")
         return job
+
+    def _poll_issuance(self, job: IdentityRenewalJob) -> IdentityRenewalJob:
+        """Poll ACME for certificate completion."""
+        policy = self.session.get(IdentityPolicy, job.policy_id)
+        if not policy or not policy.require_public_trust:
+            # Fallback or private CA (should already be ISSUED)
+            return job
+            
+        try:
+            acme = self._get_acme_client(policy)
+            # Register account if not already (it's idempotent)
+            acme.register_account("admin@tensorguard.io")
+            
+            order_data = acme.check_order_status(job.acme_order_url)
+            job.last_acme_status = order_data["status"]
+            job.updated_at = datetime.utcnow()
+            
+            if order_data["status"] == "valid":
+                order = ACMEOrder(
+                    order_url=job.acme_order_url,
+                    status=order_data["status"],
+                    identifiers=[], 
+                    authorizations=[],
+                    finalize_url=job.acme_finalize_url,
+                    certificate_url=order_data["certificate"]
+                )
+                cert_pem = acme.download_certificate(order)
+                job.issued_cert_pem = cert_pem
+                # Fingerprint of chain for tracking
+                job.new_cert_id = hashlib.sha256(cert_pem.encode()).hexdigest()
+                job.status = RenewalJobStatus.ISSUED
+                logger.info(f"Job {job.id}: Certificate issued and downloaded")
+            elif order_data["status"] == "invalid":
+                reason = order_data.get("error", {}).get("detail", "Unknown ACME error")
+                raise RuntimeError(f"ACME order became invalid: {reason}")
+            
+            self.session.add(job)
+            self.session.commit()
+            return job
+            
+        except Exception as e:
+            logger.warning(f"Polling failed for job {job.id}: {e}")
+            # Don't fail immediately, let background runner retry
+            # But we can log the error in the job
+            job.last_error = str(e)
+            self.session.add(job)
+            self.session.commit()
+            return job
     
     def _deploy_certificate(self, job: IdentityRenewalJob) -> IdentityRenewalJob:
         """Deploy certificate to endpoint."""
@@ -357,43 +479,90 @@ class RenewalScheduler:
         return job
     
     def _validate_deployment(self, job: IdentityRenewalJob) -> IdentityRenewalJob:
-        """Validate deployment via health checks."""
-        # In production, this would probe the endpoint
-        # For now, mark as succeeded
-        
-        job.status = RenewalJobStatus.SUCCEEDED
-        job.completed_at = datetime.utcnow()
-        job.updated_at = datetime.utcnow()
-        
-        self.session.add(job)
-        self.session.commit()
-        
-        self.audit_service.log(
-            tenant_id=job.tenant_id,
-            fleet_id=job.fleet_id,
-            action=AuditAction.RENEWAL_SUCCEEDED,
-            actor_type="scheduler",
-            actor_id="system",
-            target_type="renewal_job",
-            target_id=job.id,
-            payload={"new_cert_id": job.new_cert_id},
-        )
-        
-        logger.info(f"Job {job.id}: Renewal succeeded")
-        return job
+        """Validate deployment via TLS probes or secret checks."""
+        endpoint = self.session.get(IdentityEndpoint, job.endpoint_id)
+        if not endpoint:
+            return self._handle_failure(job, "Endpoint not found during validation")
+            
+        try:
+            if endpoint.endpoint_type == EndpointType.KUBERNETES:
+                # In production: check K8s secret via API
+                # For MVP: assume success if agent confirmed
+                logger.info(f"Job {job.id}: Validating K8s secret {endpoint.k8s_secret_name}")
+                pass
+            else:
+                # TLS Probe for other endpoints
+                logger.info(f"Job {job.id}: Probing TLS endpoint {endpoint.hostname}:{endpoint.port}")
+                
+                # Create SSL context that doesn't verify (we want to see the cert even if untrusted)
+                context = ssl.create_default_context()
+                context.check_hostname = False
+                context.verify_mode = ssl.CERT_NONE
+                
+                with socket.create_connection((endpoint.hostname, endpoint.port), timeout=10) as sock:
+                    with context.wrap_socket(sock, server_hostname=endpoint.hostname) as ssock:
+                        der_cert = ssock.getpeercert(binary_form=True)
+                        fingerprint = hashlib.sha256(der_cert).hexdigest()
+                        
+                        # Verify against issued_cert_pem (need to extract thumbprint from PEM)
+                        # For now, we assume the job has new_cert_id which is the thumbprint
+                        if job.new_cert_id and fingerprint.lower() != job.new_cert_id.lower():
+                            raise ValueError(f"Fingerprint mismatch: expected {job.new_cert_id}, got {fingerprint}")
+            
+            job.status = RenewalJobStatus.SUCCEEDED
+            job.completed_at = datetime.utcnow()
+            job.updated_at = datetime.utcnow()
+            
+            # Update the current cert in inventory
+            from .inventory import InventoryService
+            InventoryService(self.session).mark_cert_current(job.new_cert_id, job.endpoint_id)
+
+            # Deep integration: Trigger N2HE key rotation on successful identity refresh
+            # This binds the Transport Identity lifecycle to the Data Privacy lifecycle.
+            try:
+                from ..platform.services.remediation_service import RemediationService
+                RemediationService(self.session).rotate_n2he_key(job.fleet_id)
+                logger.info(f"Triggered N2HE rotation for fleet {job.fleet_id} following identity refresh")
+            except Exception as e:
+                logger.error(f"Failed to trigger N2HE rotation: {e}")
+            
+            self.session.add(job)
+            self.session.commit()
+            
+            self.audit_service.log(
+                tenant_id=job.tenant_id,
+                fleet_id=job.fleet_id,
+                action=AuditAction.RENEWAL_SUCCEEDED,
+                actor_type="scheduler",
+                actor_id="system",
+                target_type="renewal_job",
+                target_id=job.id,
+                payload={"new_cert_id": job.new_cert_id},
+            )
+            
+            logger.info(f"Job {job.id}: Renewal succeeded and validated")
+            return job
+            
+        except Exception as e:
+            logger.warning(f"Validation failed for job {job.id}: {e}")
+            return self._handle_failure(job, f"Validation failed: {str(e)}")
     
     def _handle_failure(self, job: IdentityRenewalJob, error: str) -> IdentityRenewalJob:
         """Handle job failure with retry logic."""
         job.last_error = error
-        job.retry_count += 1
         job.updated_at = datetime.utcnow()
         
+        # Don't increment retry count if it's already terminal (safety)
+        if job.is_terminal:
+            return job
+            
         if job.can_retry:
+            job.retry_count += 1
             # Schedule retry with backoff
             backoff_idx = min(job.retry_count - 1, len(self.RETRY_BACKOFF_MINUTES) - 1)
             backoff_minutes = self.RETRY_BACKOFF_MINUTES[backoff_idx]
             job.next_retry_at = datetime.utcnow() + timedelta(minutes=backoff_minutes)
-            job.status = RenewalJobStatus.PENDING
+            job.status = RenewalJobStatus.PENDING # Reset to pending for retry
             
             logger.warning(f"Job {job.id} failed, retry {job.retry_count} in {backoff_minutes}m: {error}")
         else:

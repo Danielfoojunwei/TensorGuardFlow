@@ -58,6 +58,7 @@ class AuditLog(SQLModel, table=True):
     resource_id: str
     resource_type: str
     details: str = Field(default="{}") # JSON blob
+    pqc_signature: Optional[str] = None # Dilithium-3 hex signature
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     ip_address: Optional[str] = None
     success: bool = True

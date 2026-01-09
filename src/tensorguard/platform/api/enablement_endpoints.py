@@ -4,6 +4,8 @@ from typing import List, Dict, Any, Optional
 from ..database import get_session
 from ..models.enablement_models import PolicyProfile, EnablementJob, GovernanceEvent
 from ...core.privacy.ledger import PrivacyLedger
+from ..services.trust_service import TrustService
+from ..auth import get_current_user
 
 router = APIRouter()
 # Simple global ledger instance for the platform
@@ -11,7 +13,10 @@ router = APIRouter()
 platform_ledger = PrivacyLedger(storage_path="./platform_privacy.json")
 
 @router.get("/stats")
-def get_stats(session: Session = Depends(get_session)):
+def get_stats(
+    session: Session = Depends(get_session),
+    current_user = Depends(get_current_user)
+):
     """Get aggregate statistics for enablement dashboard."""
     # Consolidated query: count all job statuses in a single round-trip
     job_stats = session.exec(
@@ -35,6 +40,7 @@ def get_stats(session: Session = Depends(get_session)):
         "total_events": total_events,
         "privacy_consumed_epsilon": platform_ledger.total_epsilon,
         "privacy_budget_total": 10.0,  # Default budget cap
+        "trust_posture": TrustService(session).get_global_posture(current_user.tenant_id)
     }
 
 @router.get("/profiles", response_model=List[PolicyProfile])

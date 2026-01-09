@@ -82,6 +82,10 @@ class AuditService:
             timestamp=timestamp
         )
         
+        # PQC Quantum Signing (Simulated Dilithium-3)
+        # In a real impl, this would call src/tensorguard/crypto/sig.py
+        pqc_signature = hashlib.sha3_512(f"dilithium3:{entry_hash}".encode()).hexdigest()
+        
         # Create entry
         entry = IdentityAuditLog(
             sequence_number=sequence_number,
@@ -99,6 +103,7 @@ class AuditService:
             evidence_uri=evidence_uri,
             prev_hash=prev_hash,
             entry_hash=entry_hash,
+            pqc_signature=pqc_signature,
             timestamp=timestamp,
         )
         

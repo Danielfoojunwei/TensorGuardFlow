@@ -16,6 +16,8 @@ from .scanner import CertificateScanner
 from .csr_generator import CSRGenerator
 from .deployers import DeployerFactory
 from .attestation import TPMSimulator
+from .work_poller import WorkPoller
+from .client import IdentityAgentClient
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +34,19 @@ class IdentityManager:
         self.scanner = CertificateScanner()
         self.csr_generator = CSRGenerator(key_storage_path=self.config.key_storage_path)
         self.tpm = TPMSimulator() # Hardware trust root
+        
+        # Identity client and poller
+        self.client = IdentityAgentClient(
+            base_url=agent_config.control_plane_url,
+            fleet_id=self.fleet_id,
+            api_key=self.api_key
+        )
+        self.poller = WorkPoller(
+            config=agent_config,
+            fleet_id=self.fleet_id,
+            api_key=self.api_key,
+            csr_generator=self.csr_generator
+        )
         
         self.running = False
         self._thread: Optional[threading.Thread] = None
@@ -64,8 +79,8 @@ class IdentityManager:
                 # 1. Periodic Scan
                 self.run_scan()
                 
-                # 2. Check for Renewals
-                self.check_renewals()
+                # 2. Poll for identity work (renewals, etc.)
+                self.poller.poll_and_execute()
                 
                 # 3. Hardware Attestation Heartbeat
                 self.send_heartbeat()
@@ -109,9 +124,12 @@ class IdentityManager:
     def send_heartbeat(self):
         """Send TPM-signed heartbeat."""
         nonce = datetime.utcnow().isoformat()
-        quote = self.tpm.get_quote(nonce)
-        # Would send to control plane here
-        logger.debug(f"Generated TPM quote for heartbeat: {quote['signature_hex'][:20]}...")
+        try:
+            quote = self.tpm.get_quote(nonce)
+            # In production: self.client.signed_request("POST", "/agent/heartbeat", ...)
+            logger.debug(f"Generated TPM quote for heartbeat: {quote['signature_hex'][:20]}...")
+        except Exception as e:
+            logger.error(f"Heartbeat failed: {e}")
 
     def _renew_certificate(self, cert_info: dict):
         """Execute renewal workflow."""
@@ -122,6 +140,31 @@ class IdentityManager:
         pass
 
     def _report_certificates(self, certs: List):
-        """Send certificates to control plane."""
-        # This interaction logic needs to be centralized or passed in
-        pass
+        """Send discovered certificates to control plane."""
+        if not certs:
+            return
+            
+        try:
+            # Map scanner format to API format
+            report_data = []
+            for c in certs:
+                report_data.append({
+                    "fingerprint_sha256": c.get("fingerprint"),
+                    "serial_number": c.get("serial"),
+                    "subject_dn": c.get("subject"),
+                    "issuer_dn": c.get("issuer"),
+                    "sans": c.get("sans", []),
+                    "not_before": c.get("not_before"),
+                    "not_after": c.get("not_after"),
+                    "key_type": c.get("key_type", "RSA"),
+                    "key_size": c.get("key_size", 2048),
+                    "signature_algorithm": c.get("sig_alg", "SHA256WithRSA"),
+                    "eku_server_auth": True, # Guess/Default
+                    "eku_client_auth": False,
+                    "is_public_trust": True,
+                })
+            
+            self.client.signed_request("POST", "/api/v1/identity/agent/report", json_data=report_data)
+            logger.info(f"Reported {len(certs)} certificates to control plane")
+        except Exception as e:
+            logger.error(f"Failed to report certificates: {e}")

@@ -9,6 +9,7 @@ import hashlib
 from ..database import get_session
 from ..models.core import Tenant, User, Fleet, Job
 from ..auth import get_current_user, create_access_token, verify_password, get_password_hash, ACCESS_TOKEN_EXPIRE_MINUTES
+from .identity_endpoints import verify_fleet_auth
 
 router = APIRouter()
 
@@ -128,7 +129,8 @@ class AttestationRequest(BaseModel):
     signature: str
 
 @router.post("/attestation/verify")
-async def verify_attestation(req: AttestationRequest):
+async def verify_attestation(req: AttestationRequest, fleet: Fleet = Depends(verify_fleet_auth)):
+    """Verify device integrity claims. Scoped by HMAC auth."""
     """Verify device integrity claims."""
     # MVP: Log claims and return success
     # In real world: check signature against device public key, validate TPM quotes
@@ -149,7 +151,11 @@ class KeyReleaseRequest(BaseModel):
     device_hpke_pubkey: Optional[str] = None # Hex encoded
 
 @router.post("/tgsp/key-release")
-async def release_key(req: KeyReleaseRequest):
+async def release_key(req: KeyReleaseRequest, fleet: Fleet = Depends(verify_fleet_auth)):
+    """
+    Authorize key release. 
+    Strictly restricted to authenticated agents.
+    """
     """
     Authorize key release. 
     If v0.3 and platform mediated, re-wrap the DEK (simulated).

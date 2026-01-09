@@ -8,6 +8,8 @@ function app() {
         certificates: [],
         endpoints: [],
         auditLogs: [],
+        identityJobs: [],
+        trustPosture: { compliance_health: 0, threat_environment: 'CALIBRATING', at_risk_fleets: 0 },
         currentTime: '',
 
         // Loading & Error States
@@ -17,7 +19,8 @@ function app() {
             tgsp: true,
             runs: true,
             inventory: true,
-            audit: true
+            audit: true,
+            identity: true
         },
         errors: {
             stats: null,
@@ -25,7 +28,8 @@ function app() {
             tgsp: null,
             runs: null,
             inventory: null,
-            audit: null
+            audit: null,
+            identity: null
         },
 
         // Charts
@@ -42,6 +46,7 @@ function app() {
             this.fetchRuns();
             this.fetchInventory();
             this.fetchAudit();
+            this.fetchIdentityJobs();
 
             // Poll every 10s (reduced for performance)
             setInterval(() => {
@@ -51,6 +56,7 @@ function app() {
                 this.fetchRuns();
                 this.fetchInventory();
                 this.fetchAudit();
+                this.fetchIdentityJobs();
             }, 10000);
 
             // Re-run icons when tab changes
@@ -151,7 +157,11 @@ function app() {
             try {
                 const res = await fetch('/api/v1/enablement/stats');
                 if (res.ok) {
-                    this.stats = await res.json();
+                    const data = await res.json();
+                    this.stats = data;
+                    if (data.trust_posture) {
+                        this.trustPosture = data.trust_posture;
+                    }
                 } else {
                     this.errors.stats = `Error ${res.status}`;
                 }
@@ -255,6 +265,42 @@ function app() {
             }
         },
 
+        async fetchIdentityJobs() {
+            this.loading.identity = true;
+            this.errors.identity = null;
+            try {
+                const res = await fetch('/api/v1/identity/renewals');
+                if (res.ok) {
+                    this.identityJobs = await res.json();
+                } else {
+                    this.errors.identity = `Error ${res.status}`;
+                }
+            } catch (e) {
+                console.error("Identity jobs fetch failed", e);
+                this.errors.identity = 'Connection failed';
+            } finally {
+                this.loading.identity = false;
+            }
+        },
+
+        async executeEKUMigration() {
+            if (!confirm("Proceed with EKU Split Migration for all conflicting certificates? This will trigger automated dual-renewal jobs.")) return;
+
+            try {
+                const res = await fetch('/api/v1/identity/migrations/eku-split', { method: 'POST' });
+                const data = await res.json();
+                if (res.ok) {
+                    alert(`Migration started! ${data.jobs_created} jobs created.`);
+                    this.fetchIdentityJobs();
+                    this.fetchInventory();
+                } else {
+                    alert(`Fail: ${data.detail || 'Unknown error'}`);
+                }
+            } catch (e) {
+                alert("Request failed");
+            }
+        },
+
         formatDate(isoStr) {
             if (!isoStr) return '-';
             const d = new Date(isoStr);
@@ -280,7 +326,13 @@ function app() {
                 'running': 'text-amber-400',
                 'failed': 'text-red-400',
                 'pending': 'text-white/40',
-                'registered': 'text-violet-400'
+                'registered': 'text-violet-400',
+                'succeeded': 'text-emerald-400',
+                'issuing': 'text-sky-300 animate-pulse',
+                'deploying': 'text-amber-400',
+                'validating': 'text-indigo-400',
+                'csr_requested': 'text-sky-400',
+                'challenge_pending': 'text-orange-400'
             };
             return colors[status?.toLowerCase()] || 'text-white/40';
         },
@@ -292,7 +344,13 @@ function app() {
                 'running': 'bg-amber-500/20',
                 'failed': 'bg-red-500/20',
                 'pending': 'bg-white/10',
-                'registered': 'bg-violet-500/20'
+                'registered': 'bg-violet-500/20',
+                'succeeded': 'bg-emerald-500/20',
+                'issuing': 'bg-sky-500/20',
+                'deploying': 'bg-amber-500/20',
+                'validating': 'bg-indigo-500/20',
+                'csr_requested': 'bg-sky-500/10',
+                'challenge_pending': 'bg-orange-500/10'
             };
             return colors[status?.toLowerCase()] || 'bg-white/10';
         },

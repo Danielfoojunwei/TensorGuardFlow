@@ -421,3 +421,26 @@ class InventoryService:
             statement = statement.where(IdentityAgent.fleet_id == fleet_id)
         
         return list(self.session.exec(statement).all())
+
+    def mark_cert_current(self, cert_id: str, endpoint_id: str):
+        """Mark a certificate as the active one for an endpoint."""
+        # 1. Unmark others
+        others = self.session.exec(
+            select(IdentityCertificate).where(
+                IdentityCertificate.endpoint_id == endpoint_id,
+                IdentityCertificate.id != cert_id,
+                IdentityCertificate.is_current == True
+            )
+        ).all()
+        for other in others:
+            other.is_current = False
+            self.session.add(other)
+            
+        # 2. Mark this one
+        cert = self.get_certificate(cert_id)
+        if cert:
+            cert.is_current = True
+            self.session.add(cert)
+            
+        self.session.commit()
+        logger.info(f"Marked certificate {cert_id} as current for endpoint {endpoint_id}")

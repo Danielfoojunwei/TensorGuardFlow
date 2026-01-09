@@ -268,10 +268,13 @@ class TestRenewalScheduler:
         job.status = RenewalJobStatus.SUCCEEDED
         assert job.is_terminal
         
-        job.status = RenewalJobStatus.FAILED
+        job.status = RenewalJobStatus.PENDING
         job.retry_count = 0
         job.max_retries = 3
         assert job.can_retry
+        
+        job.status = RenewalJobStatus.FAILED
+        assert not job.can_retry
 
 
 # === CSR Generator Tests ===
