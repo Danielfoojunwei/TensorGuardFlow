@@ -198,6 +198,14 @@ class IdentityCertificate(SQLModel, table=True):
         """Days until certificate expires."""
         delta = self.not_after - datetime.utcnow()
         return max(0, delta.days)
+
+    @property
+    def has_eku_conflict(self) -> bool:
+        """
+        Conflict: public cert (serverAuth) also has clientAuth.
+        Chrome 2026: public certs must be single-use.
+        """
+        return self.is_public_trust and self.eku_server_auth and self.eku_client_auth
     
     @property
     def is_expired(self) -> bool:
@@ -352,6 +360,15 @@ class IdentityRenewalJob(SQLModel, table=True):
     challenge_type: Optional[str] = None
     issued_cert_pem: Optional[str] = None  # Full chain after issuance
     
+    # ACME persistence
+    acme_order_url: Optional[str] = None
+    acme_finalize_url: Optional[str] = None
+    acme_authz_urls_json: Optional[str] = None
+    acme_cert_url: Optional[str] = None
+    challenge_url: Optional[str] = None
+    challenge_domain: Optional[str] = None
+    last_acme_status: Optional[str] = None
+    
     # Retry logic
     retry_count: int = Field(default=0)
     max_retries: int = Field(default=3)
@@ -366,6 +383,7 @@ class IdentityRenewalJob(SQLModel, table=True):
     # Rollback info
     rollback_cert_id: Optional[str] = None  # Cert to restore on rollback
     can_rollback: bool = Field(default=True)
+    deployment_snapshot: Optional[str] = Field(default=None, sa_column=Column(JSON))
     
     # Idempotency
     idempotency_key: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -385,7 +403,8 @@ class IdentityRenewalJob(SQLModel, table=True):
     
     @property
     def can_retry(self) -> bool:
-        return self.status == RenewalJobStatus.FAILED and self.retry_count < self.max_retries
+        """Check if job can be retried."""
+        return self.retry_count < self.max_retries and not self.is_terminal
 
 
 class IdentityAuditLog(SQLModel, table=True):
@@ -425,6 +444,7 @@ class IdentityAuditLog(SQLModel, table=True):
     # Hash chain for tamper-evidence
     prev_hash: str  # Hash of previous entry (or "GENESIS" for first)
     entry_hash: str  # SHA-256(prev_hash + action + payload_hash + timestamp)
+    pqc_signature: Optional[str] = None # Dilithium-3 hex signature
     
     # Timestamp
     timestamp: datetime = Field(default_factory=datetime.utcnow, index=True)

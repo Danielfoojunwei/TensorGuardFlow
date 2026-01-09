@@ -80,10 +80,13 @@ class MoEAdapter(VLAAdapter):
         )
         self.experts = experts or ["visual_primary", "visual_aux", "language_semantic", "manipulation_grasp"]
         self.expert_prototypes = {
-            "visual_primary": ["geometric", "shapes", "objects", "obstacles"],
-            "visual_aux": ["color", "texture", "depth", "lighting", "shadows"],
-            "language_semantic": ["verbs", "instructions", "goal", "intent", "command"],
-            "manipulation_grasp": ["force", "torque", "contact", "friction", "gripper"]
+            "visual_primary": ["geometric", "shapes", "objects", "obstacles", "camera", "color", "depth"],
+            "language_semantic": ["command", "intent", "goal", "instruction", "parse", "meaning"],
+            "manipulation_grasp": ["gripper", "grasp", "pick", "place", "handle", "finger", "force", "torque"],
+            "locomotion_base": ["move", "navigate", "base", "wheels", "collision", "path", "trajectory"],
+            "fluid_pouring": ["pour", "bottle", "liquid", "tilt", "steady", "container", "cup"],
+            "cleaning_wiping": ["wipe", "surface", "clean", "scrub", "pressure", "dust", "table"],
+            "fastening_screwing": ["screw", "unscrew", "cap", "twist", "rotate", "thread", "bolt"]
         }
 
     def _moe_gradient_fn(self, model, demo: Demonstration):
@@ -96,7 +99,7 @@ class MoEAdapter(VLAAdapter):
         # Graceful degradation for missing task IDs
         instr = (task_instruction or "").lower()
         for exp, kws in self.expert_prototypes.items():
-            relevance = sum(1.5 for kw in kws if kw in instr)
+            relevance = sum(2.5 for kw in kws if kw in instr)
             weights[exp] = relevance + np.random.uniform(0.2, 0.5)
         
         # Softmax normalize with stability
@@ -106,7 +109,7 @@ class MoEAdapter(VLAAdapter):
 
     def compute_expert_gradients(self, demo: Demonstration) -> Dict[str, Dict[str, np.ndarray]]:
         """EDA (Expert-Driven Aggregation) gradient extraction."""
-        gate_weights = self.get_expert_gate_weights(demo.task_id)
+        gate_weights = self.get_expert_gate_weights(demo.instruction)
         raw_grads = self.compute_gradients(demo)
         
         expert_grads = {expert: {} for expert in self.experts}

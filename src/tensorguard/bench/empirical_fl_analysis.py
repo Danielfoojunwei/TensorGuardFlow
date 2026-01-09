@@ -86,7 +86,8 @@ class EmpiricalFLAnalyzer:
                 "expert_used": kept,
                 "expert_ignored": removed,
                 "confidence": round(weights['manipulation_grasp'], 4),
-                "data_complexity": round(edge, 4)
+                "data_complexity": round(edge, 4),
+                "all_weights": {k: round(float(v), 4) for k, v in weights.items()}
             })
             
             for exp, w in weights.items():

@@ -166,25 +166,46 @@
                             </div>
                         </div>
 
-                        <!-- Compliance Status Card -->
-                        <div class="plm-card gradient-card-green">
+                        <!-- NEW: Triple-Trust Matrix Card -->
+                        <div class="plm-card gradient-card-green relative group overflow-hidden">
+                            <div
+                                class="absolute -right-4 -top-4 w-24 h-24 bg-white/5 rounded-full blur-2xl group-hover:bg-white/10 transition-all">
+                            </div>
                             <span
-                                class="text-[10px] text-white/60 uppercase font-bold tracking-wider mb-1 block">Compliance
-                                Status</span>
-                            <div class="flex flex-wrap items-center gap-1 mt-2">
-                                <span
-                                    class="badge badge-success text-[9px] hover:scale-105 transition-transform cursor-default">ISO
-                                    27001</span>
-                                <span
-                                    class="badge badge-success text-[9px] hover:scale-105 transition-transform cursor-default">NIST
-                                    CSF</span>
-                                <span
-                                    class="badge badge-success text-[9px] hover:scale-105 transition-transform cursor-default">SOC
-                                    2</span>
-                                <span
-                                    class="badge badge-success text-[9px] hover:scale-105 transition-transform cursor-default">GDPR</span>
-                                <span
-                                    class="badge badge-success text-[9px] hover:scale-105 transition-transform cursor-default">HIPAA</span>
+                                class="text-[10px] text-white/60 uppercase font-bold tracking-wider mb-2 block flex justify-between">
+                                Triple-Trust Readiness
+                                <span class="font-mono text-emerald-400"
+                                    x-text="trustPosture.compliance_health + '%'"></span>
+                            </span>
+
+                            <div class="grid grid-cols-3 gap-2 mt-2">
+                                <div class="bg-black/20 p-2 rounded border border-white/5 text-center">
+                                    <div class="text-[8px] text-white/40 uppercase mb-1">Identity</div>
+                                    <i data-lucide="shield-check"
+                                        :class="trustPosture.layers?.transport.status === 'ok' ? 'text-emerald-400' : 'text-red-400'"
+                                        class="w-4 h-4 mx-auto"></i>
+                                </div>
+                                <div class="bg-black/20 p-2 rounded border border-white/5 text-center">
+                                    <div class="text-[8px] text-white/40 uppercase mb-1">Privacy</div>
+                                    <i data-lucide="lock"
+                                        :class="trustPosture.layers?.privacy.status === 'ok' ? 'text-emerald-400' : 'text-red-400'"
+                                        class="w-4 h-4 mx-auto"></i>
+                                </div>
+                                <div class="bg-black/20 p-2 rounded border border-white/5 text-center">
+                                    <div class="text-[8px] text-white/40 uppercase mb-1">Quantum</div>
+                                    <i data-lucide="cpu"
+                                        :class="trustPosture.layers?.integrity.status === 'ok' ? 'text-sky-400' : 'text-red-400'"
+                                        class="w-4 h-4 mx-auto"></i>
+                                </div>
+                            </div>
+
+                            <div class="mt-3 flex items-center justify-between">
+                                <div class="flex flex-wrap gap-1">
+                                    <span class="badge badge-success text-[7px] py-0 px-1">Dilithium-3</span>
+                                    <span class="badge badge-success text-[7px] py-0 px-1">mTLS-HMAC</span>
+                                </div>
+                                <div class="text-[9px] font-bold text-white/60 uppercase"
+                                    x-text="trustPosture.threat_environment"></div>
                             </div>
                         </div>
                     </div>
@@ -202,25 +223,34 @@
                         </div>
                         <div class="plm-card">
                             <h4 class="text-sm font-semibold mb-4 flex items-center gap-2 text-white/80">
-                                <i data-lucide="shield-check" class="w-4 h-4 text-emerald-400"></i>
-                                Quick Stats
+                                <i data-lucide="activity" class="w-4 h-4 text-emerald-400"></i>
+                                Threat Environment
                             </h4>
                             <div class="space-y-4">
                                 <div class="flex justify-between items-center">
-                                    <span class="text-xs text-white/40">Total Runs</span>
-                                    <span class="font-mono text-sm" x-text="runs.length"></span>
+                                    <span class="text-xs text-white/40">Global Posture</span>
+                                    <span
+                                        :class="trustPosture.threat_environment === 'STABLE' ? 'text-emerald-400' : 'text-amber-400'"
+                                        class="font-mono text-sm font-bold"
+                                        x-text="trustPosture.threat_environment"></span>
                                 </div>
                                 <div class="flex justify-between items-center">
-                                    <span class="text-xs text-white/40">Certificates</span>
-                                    <span class="font-mono text-sm" x-text="certificates.length"></span>
+                                    <span class="text-xs text-white/40">At Risk Fleets</span>
+                                    <span class="font-mono text-sm text-red-400"
+                                        x-text="trustPosture.at_risk_fleets"></span>
                                 </div>
-                                <div class="flex justify-between items-center">
+                                <div class="flex justify-between items-center border-t border-white/5 pt-3">
                                     <span class="text-xs text-white/40">Audit Events</span>
                                     <span class="font-mono text-sm" x-text="auditLogs.length"></span>
                                 </div>
                                 <div class="flex justify-between items-center">
-                                    <span class="text-xs text-white/40">TGSP Packages</span>
-                                    <span class="font-mono text-sm" x-text="tgspPackages.length"></span>
+                                    <span class="text-xs text-white/40">Renewal Jobs</span>
+                                    <span class="font-mono text-sm" x-text="identityJobs.length"></span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-xs text-white/40">PQC Integrity</span>
+                                    <span
+                                        class="text-[10px] text-sky-400 px-1.5 py-0.5 bg-sky-500/10 rounded uppercase font-bold">Verified</span>
                                 </div>
                             </div>
                         </div>
@@ -455,6 +485,90 @@
                                 </span>
                             </div>
                         </div>
+
+                        <!-- NEW: EKU Split Migration Card -->
+                        <div :class="certificates.some(c => c.has_eku_conflict) ? 'border-red-500/30' : 'border-white/10'"
+                            class="plm-card transition-all col-span-2 mt-2">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <h4 class="font-bold flex items-center gap-2 mb-2">
+                                        <i data-lucide="split" class="text-sky-400 w-4 h-4"></i> Chrome 2026 EKU Split
+                                        Readiness
+                                    </h4>
+                                    <p class="text-xs text-white/50 leading-relaxed mb-4">Automated migration to split
+                                        public TLS and mTLS certificates. <a href="#"
+                                            class="text-sky-400 underline">Learn more</a></p>
+                                </div>
+                                <button @click="executeEKUMigration()"
+                                    :disabled="!certificates.some(c => c.has_eku_conflict)"
+                                    class="bg-sky-600 hover:bg-sky-500 disabled:opacity-30 disabled:cursor-not-allowed px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-lg shadow-sky-600/20">
+                                    Trigger Migration
+                                </button>
+                            </div>
+
+                            <template x-if="certificates.some(c => c.has_eku_conflict)">
+                                <div
+                                    class="bg-red-500/10 border border-red-500/20 p-3 rounded-lg flex items-center gap-3">
+                                    <i data-lucide="alert-triangle"
+                                        class="text-red-400 w-5 h-5 flex-shrink-0 animate-bounce"></i>
+                                    <span class="text-xs text-red-200">
+                                        Found <strong
+                                            x-text="certificates.filter(c => c.has_eku_conflict).length"></strong>
+                                        certificates with EKU conflicts.
+                                        Manual action required before June 15, 2026.
+                                    </span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- NEW: Identity Renewal Monitor -->
+                    <h4 class="text-sm font-semibold mb-4 flex items-center gap-2 text-white/80">
+                        <i data-lucide="refresh-cw" class="w-4 h-4 text-sky-400"></i> Active Identity Renewals
+                        <template x-if="loading.identity">
+                            <span class="ml-2 text-xs text-white/30 animate-pulse">Polling...</span>
+                        </template>
+                    </h4>
+
+                    <div class="plm-card mb-10">
+                        <template x-if="identityJobs.length === 0">
+                            <p class="text-center py-6 text-xs text-white/30 italic">No active renewal jobs</p>
+                        </template>
+                        <template x-if="identityJobs.length > 0">
+                            <table class="w-full text-left text-xs">
+                                <thead>
+                                    <tr class="text-white/40 border-b border-white/5 pb-2">
+                                        <th class="py-2">Job ID</th>
+                                        <th class="py-2">Endpoint</th>
+                                        <th class="py-2">Policy</th>
+                                        <th class="py-2">Status</th>
+                                        <th class="py-2">Progress</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-white/5">
+                                    <template x-for="job in identityJobs" :key="job.id">
+                                        <tr class="hover:bg-white/5">
+                                            <td class="py-3 font-mono text-sky-400" x-text="job.id.substring(0,8)"></td>
+                                            <td class="py-3 text-white/70" x-text="job.endpoint_id"></td>
+                                            <td class="py-3 text-white/40" x-text="job.policy_id.substring(0,8)"></td>
+                                            <td class="py-3">
+                                                <span
+                                                    :class="getStatusBg(job.status) + ' ' + getStatusColor(job.status)"
+                                                    class="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-tighter"
+                                                    x-text="job.status"></span>
+                                            </td>
+                                            <td class="py-3">
+                                                <div class="h-1 w-24 bg-white/5 rounded-full overflow-hidden">
+                                                    <div class="h-full bg-sky-500 transition-all duration-1000"
+                                                        :style="'width: ' + (job.status === 'succeeded' ? 100 : (job.status === 'failed' ? 10 : 50)) + '%'">
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </template>
                     </div>
 
                     <h4 class="text-sm font-semibold mb-4 flex items-center gap-2 text-white/80">
@@ -604,6 +718,7 @@
                                     <tr class="text-white/40 border-b border-white/5">
                                         <th class="pb-3 font-medium">Subject DN</th>
                                         <th class="pb-3 font-medium">Issuer</th>
+                                        <th class="pb-3 font-medium">Conf</th>
                                         <th class="pb-3 font-medium">Expires</th>
                                         <th class="pb-3 font-medium">Status</th>
                                     </tr>
@@ -613,6 +728,16 @@
                                         <tr class="hover:bg-white/[0.02] transition-all hover-lift">
                                             <td class="py-4 text-xs font-mono text-white/80" x-text="cert.subject"></td>
                                             <td class="py-4 text-xs text-white/50" x-text="cert.issuer"></td>
+                                            <td class="py-4">
+                                                <template x-if="cert.has_eku_conflict">
+                                                    <div class="w-4 h-4 text-red-400" title="EKU Split Required">
+                                                        <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+                                                    </div>
+                                                </template>
+                                                <template x-if="!cert.has_eku_conflict">
+                                                    <i data-lucide="check" class="text-emerald-400/30 w-4 h-4"></i>
+                                                </template>
+                                            </td>
                                             <td class="py-4 text-xs text-white/50"
                                                 x-text="new Date(cert.not_after).toLocaleDateString()"></td>
                                             <td class="py-4">

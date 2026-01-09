@@ -437,6 +437,17 @@ class ACMEClient:
             raise RuntimeError(f"Certificate download failed: {response.text}")
         
         return response.text
+
+    def check_order_status(self, order_url: str) -> Dict[str, Any]:
+        """Check status of an existing order."""
+        if not self._account_url:
+            raise RuntimeError("Account not registered")
+            
+        response = self._signed_request(order_url, None, kid=self._account_url)
+        if response.status_code != 200:
+            raise RuntimeError(f"Failed to check order status: {response.text}")
+            
+        return response.json()
     
     # === High-Level API ===
     

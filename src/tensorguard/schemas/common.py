@@ -13,6 +13,7 @@ class Demonstration(BaseModel):
     """A collected demonstration (visual/action data)."""
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     task_id: Optional[str] = None
+    instruction: Optional[str] = None
     observations: Optional[List[Any]] = None
     actions: Optional[List[Any]] = None
     data: Any = None

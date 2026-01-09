@@ -153,9 +153,8 @@ async def verify_fleet_auth(
     ).hexdigest()
     
     if not hmac.compare_digest(expected_sig, x_tg_signature):
-        # For demo purposes, also allow raw comparison
-        # (since we don't have the original key stored)
-        logger.warning(f"Signature mismatch for fleet {x_tg_fleet_id}, allowing for demo")
+        logger.warning(f"Signature mismatch for fleet {x_tg_fleet_id}")
+        raise HTTPException(status_code=401, detail="Invalid signature")
     
     return fleet
 
@@ -469,32 +468,76 @@ async def get_renewal(
 # === Migration Routes ===
 
 @router.post("/migrations/eku-split", response_model=Dict[str, Any])
-async def plan_eku_migration(
+async def execute_eku_migration(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
     """
-    Detect EKU conflicts and propose migration plan.
+    Execute EKU split migration for all conflicting certificates.
     
     Chrome Jun 2026: public certs cannot have both serverAuth + clientAuth.
+    This executor:
+    1. Finds violations
+    2. For each, schedules a renewal for public TLS (serverAuth only)
+    3. For each, schedules a renewal for private mTLS (clientAuth only)
     """
     inventory = InventoryService(session)
+    scheduler = RenewalScheduler(session)
     violations = inventory.detect_eku_violations(current_user.tenant_id)
     
-    migration_plan = {
-        "violations_found": len(violations),
-        "chrome_deadline": "2026-06-15",
-        "violations": violations,
-        "recommendation": (
-            "For each violation:\n"
-            "1. Keep public cert for serverAuth (web TLS)\n"
-            "2. Issue private CA cert for clientAuth (mTLS/VPN)\n"
-            "3. Deploy trust anchors to clients\n"
-            "4. Update endpoint configurations"
-        ),
-    }
+    # Get/Create mTLS policy
+    mtls_policy = session.exec(
+        select(IdentityPolicy).where(
+            IdentityPolicy.tenant_id == current_user.tenant_id,
+            IdentityPolicy.preset_name == "mtls"
+        )
+    ).first()
     
-    return migration_plan
+    if not mtls_policy:
+        mtls_policy = IdentityPolicy.create_preset("mtls", current_user.tenant_id)
+        session.add(mtls_policy)
+        session.commit()
+        session.refresh(mtls_policy)
+    
+    jobs_created = 0
+    for v in violations:
+        cert_id = v["certificate_id"]
+        cert = session.get(IdentityCertificate, cert_id)
+        if not cert:
+             continue
+             
+        # 1. Schedule Public Renewal (serverAuth)
+        # Assuming current policy is public
+        scheduler.schedule_renewal(
+            tenant_id=current_user.tenant_id,
+            fleet_id=cert.endpoint.fleet_id,
+            endpoint_id=cert.endpoint_id,
+            policy_id=cert.policy_id
+        )
+        
+        # 2. Schedule Private Renewal (clientAuth)
+        scheduler.schedule_renewal(
+            tenant_id=current_user.tenant_id,
+            fleet_id=cert.endpoint.fleet_id,
+            endpoint_id=cert.endpoint_id,
+            policy_id=mtls_policy.id
+        )
+        jobs_created += 2
+        
+    AuditService(session).log(
+        tenant_id=current_user.tenant_id,
+        action=AuditAction.RENEWAL_STARTED,
+        actor_type="user",
+        actor_id=current_user.id,
+        payload={"migration_type": "eku-split", "jobs_created": jobs_created},
+    )
+    
+    return {
+        "status": "migration_started",
+        "violations_processed": len(violations),
+        "jobs_created": jobs_created,
+        "recommendation": "Update client trust anchors for the new private CA certificates."
+    }
 
 
 # === Risk Analysis ===
@@ -603,12 +646,47 @@ async def register_agent(
     return {"agent_id": agent.id, "name": agent.name}
 
 
+@router.get("/agent/jobs", response_model=List[Dict[str, Any]])
+async def list_agent_jobs(
+    session: Session = Depends(get_session),
+    fleet: Fleet = Depends(verify_fleet_auth),
+):
+    """List pending jobs for a specific agent/fleet."""
+    scheduler = RenewalScheduler(session)
+    # Return jobs that need agent action
+    jobs = scheduler.list_jobs(
+        tenant_id=None, # Filter by fleet_id instead
+        fleet_id=fleet.id,
+        status=None # We'll filter in the list
+    )
+    
+    agent_action_statuses = [
+        RenewalJobStatus.PENDING,
+        RenewalJobStatus.CSR_REQUESTED,
+        RenewalJobStatus.CHALLENGE_PENDING,
+        RenewalJobStatus.ISSUED,
+        RenewalJobStatus.DEPLOYING
+    ]
+    
+    return [
+        {
+            "id": j.id,
+            "status": j.status.value,
+            "endpoint_id": j.endpoint_id,
+            "challenge_type": j.challenge_type,
+            "challenge_token": j.challenge_token,
+            "challenge_url": j.challenge_url,
+            "issued_cert_pem": j.issued_cert_pem if j.status == RenewalJobStatus.ISSUED else None,
+        }
+        for j in jobs if j.status in agent_action_statuses
+    ]
+
+
 @router.post("/agent/csr", response_model=Dict[str, Any])
 async def submit_csr(
     data: AgentCSRSubmit,
     session: Session = Depends(get_session),
-    # In production: fleet: Fleet = Depends(verify_fleet_auth),
-    current_user: User = Depends(get_current_user),
+    fleet: Fleet = Depends(verify_fleet_auth),
 ):
     """Agent submits CSR for a renewal job."""
     scheduler = RenewalScheduler(session)
@@ -618,11 +696,42 @@ async def submit_csr(
     return {"job_id": job.id, "status": job.status.value}
 
 
+@router.post("/agent/report", response_model=Dict[str, Any])
+async def report_certificates(
+    data: List[CertificateReport],
+    session: Session = Depends(get_session),
+    fleet: Fleet = Depends(verify_fleet_auth),
+):
+    """Agent reports discovered certificates."""
+    inventory = InventoryService(session)
+    
+    for cert_data in data:
+        inventory.register_certificate(
+            endpoint_id="auto-discovered",
+            tenant_id=fleet.tenant_id,
+            fingerprint_sha256=cert_data.fingerprint_sha256,
+            serial_number=cert_data.serial_number,
+            subject_dn=cert_data.subject_dn,
+            issuer_dn=cert_data.issuer_dn,
+            sans=cert_data.sans,
+            not_before=cert_data.not_before,
+            not_after=cert_data.not_after,
+            key_type=cert_data.key_type,
+            key_size=cert_data.key_size,
+            signature_algorithm=cert_data.signature_algorithm,
+            eku_server_auth=cert_data.eku_server_auth,
+            eku_client_auth=cert_data.eku_client_auth,
+            is_public_trust=cert_data.is_public_trust,
+        )
+        
+    return {"status": "ok", "reported_count": len(data)}
+
+
 @router.post("/agent/challenge-complete", response_model=Dict[str, Any])
 async def complete_challenge(
     data: AgentChallengeComplete,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    fleet: Fleet = Depends(verify_fleet_auth),
 ):
     """Agent confirms challenge completion."""
     scheduler = RenewalScheduler(session)
@@ -636,7 +745,7 @@ async def complete_challenge(
 async def confirm_deploy(
     data: AgentDeployConfirm,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    fleet: Fleet = Depends(verify_fleet_auth),
 ):
     """Agent confirms certificate deployment."""
     scheduler = RenewalScheduler(session)
@@ -650,7 +759,7 @@ async def confirm_deploy(
 async def agent_heartbeat(
     agent_id: str,
     session: Session = Depends(get_session),
-    # In production: fleet: Fleet = Depends(verify_fleet_auth),
+    fleet: Fleet = Depends(verify_fleet_auth),
 ):
     """Agent heartbeat to report status."""
     inventory = InventoryService(session)
