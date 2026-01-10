@@ -212,6 +212,7 @@ async def get_current_user(
             email="demo@tensorguard.local",
             name="Demo User",
             role=UserRole.ORG_ADMIN,
+            tenant_id="fceac734-e672-4a0c-863b-c7bb8e28b88e", # Default seeded tenant
             hashed_password="N/A"
         )
         return demo_user

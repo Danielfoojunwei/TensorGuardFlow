@@ -119,6 +119,14 @@ app.include_router(community_tgsp.router, prefix="/api/community/tgsp", tags=["c
 from .api import peft_endpoints
 app.include_router(peft_endpoints.router, prefix="/api/v1/peft", tags=["peft"])
 
+# FedMoE Experts & Skills Library
+from .api import fedmoe_endpoints
+app.include_router(fedmoe_endpoints.router, prefix="/api/v1/fedmoe", tags=["fedmoe"])
+
+# System Settings
+from .api import settings_endpoints
+app.include_router(settings_endpoints.router, prefix="/api/v1", tags=["settings"])
+
 # Enterprise Stubs (Proprietary Boundary)
 try:
     from .enterprise import check_entitlement, log_audit_event

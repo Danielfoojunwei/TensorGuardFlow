@@ -13,6 +13,8 @@ from .models.evidence_models import * # noqa: F401
 from .models.peft_models import ( # noqa: F401
     IntegrationConfig, PeftWizardDraft, PeftRun
 )
+from .models.fedmoe_models import FedMoEExpert, SkillEvidence # noqa: F401
+from .models.settings_models import SystemSetting # noqa: F401
 
 # Default to local sqlite for ease of deployment in MVP
 DATABASE_URL = os.getenv("DATABASE_URL")

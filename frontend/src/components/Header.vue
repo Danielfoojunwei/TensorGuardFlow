@@ -1,6 +1,6 @@
 <script setup>
 import { Shield, Printer } from 'lucide-vue-next'
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 
 const security = ref({
   pqc: true,
@@ -9,9 +9,35 @@ const security = ref({
 
 const currentTime = ref(new Date().toISOString().split('T')[0] + ' ' + new Date().toLocaleTimeString())
 
-// Mock functions for now
-const togglePQC = () => { security.value.pqc = !security.value.pqc }
-const toggleDP = () => { security.value.dp = !security.value.dp }
+// Load settings from backend on mount
+onMounted(async () => {
+    try {
+        const res = await fetch('/api/v1/settings')
+        const data = await res.json()
+        if (data.pqc_enabled !== undefined) security.value.pqc = data.pqc_enabled === 'true'
+        if (data.dp_enabled !== undefined) security.value.dp = data.dp_enabled === 'true'
+    } catch (e) { console.warn("Failed to load settings", e) }
+})
+
+// Persist toggle state to backend
+const persistSetting = async (key, value) => {
+    try {
+        await fetch('/api/v1/settings', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key, value: String(value) })
+        })
+    } catch (e) { console.warn("Failed to persist setting", e) }
+}
+
+const togglePQC = () => { 
+    security.value.pqc = !security.value.pqc
+    persistSetting('pqc_enabled', security.value.pqc)
+}
+const toggleDP = () => { 
+    security.value.dp = !security.value.dp
+    persistSetting('dp_enabled', security.value.dp)
+}
 const generateReport = () => { window.print() }
 </script>
 
