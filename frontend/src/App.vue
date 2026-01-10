@@ -11,6 +11,7 @@ import KeyVault from './components/KeyVault.vue'
 import AuditTrail from './components/AuditTrail.vue'
 import FleetsDevices from './components/FleetsDevices.vue'
 import GlobalSettings from './components/GlobalSettings.vue'
+import PolicyGating from './components/PolicyGating.vue'
 
 import EvalArena from './components/EvalArena.vue'
 
@@ -40,6 +41,10 @@ const activeTab = ref('canvas') // Default to Canvas
 
           <div v-else-if="activeTab === 'eval'" class="h-full w-full">
              <EvalArena />
+          </div>
+
+          <div v-else-if="activeTab === 'policy'" class="p-6">
+             <PolicyGating />
           </div>
 
           <div v-else class="p-6">

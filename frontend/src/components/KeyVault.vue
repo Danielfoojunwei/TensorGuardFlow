@@ -1,19 +1,63 @@
 <script setup>
-import { Shield, RefreshCw, Lock, Key as KeyIcon, Clock } from 'lucide-vue-next'
-import { ref } from 'vue'
+import { Shield, RefreshCw, Lock, Key as KeyIcon, Clock, AlertTriangle, CheckCircle } from 'lucide-vue-next'
+import { ref, onMounted, computed } from 'vue'
 
-const keys = ref([
-  { id: 'k1', kid: 'key-us-east-1', region: 'us-east-1', created: '2025-12-01', rotation: '24h', status: 'active' },
-  { id: 'k2', kid: 'key-eu-central', region: 'eu-central-1', created: '2026-01-08', rotation: '6h', status: 'active' },
-])
+const keys = ref([])
+const schedule = ref([])
+const attestationPolicies = ref({ current_level: 4, levels: [] })
+const loading = ref(true)
+const rotating = ref(null)
 
-const rotateKey = (id) => {
-  const k = keys.value.find(x => x.id === id)
-  if (k) {
-    k.status = 'rotating'
-    setTimeout(() => { k.status = 'active'; k.created = new Date().toISOString().split('T')[0] }, 2000)
-  }
+const fetchData = async () => {
+    loading.value = true
+    try {
+        const [keysRes, scheduleRes, policiesRes] = await Promise.all([
+            fetch('/api/v1/kms/keys'),
+            fetch('/api/v1/kms/rotation-schedule'),
+            fetch('/api/v1/kms/attestation-policies')
+        ])
+        const keysData = await keysRes.json()
+        const scheduleData = await scheduleRes.json()
+        const policiesData = await policiesRes.json()
+        
+        keys.value = keysData.keys || []
+        schedule.value = scheduleData.schedule || []
+        attestationPolicies.value = policiesData
+    } catch (e) {
+        console.error("Failed to load KMS data", e)
+    }
+    loading.value = false
 }
+
+const rotateKey = async (kid) => {
+    if (!confirm(`Rotate key "${kid}"? This will create an immutable audit log.`)) return
+    rotating.value = kid
+    try {
+        const res = await fetch('/api/v1/kms/rotate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ kid, reason: 'manual_rotation' })
+        })
+        if (res.ok) {
+            await fetchData()
+        }
+    } catch (e) {
+        console.error("Failed to rotate key", e)
+    }
+    rotating.value = null
+}
+
+const getStatusColor = (days) => {
+    if (days <= 7) return 'text-red-500'
+    if (days <= 30) return 'text-yellow-500'
+    return 'text-green-500'
+}
+
+const currentLevel = computed(() => {
+    return attestationPolicies.value.levels.find(l => l.level === attestationPolicies.value.current_level)
+})
+
+onMounted(fetchData)
 </script>
 
 <template>
@@ -22,79 +66,124 @@ const rotateKey = (id) => {
     <div class="flex items-center justify-between border-b border-[#333] pb-6">
        <div>
          <h2 class="text-2xl font-bold">Enterprise KMS Manager</h2>
-         <span class="text-xs text-gray-500">Key Lifecycle & Fleet Policy</span>
+         <span class="text-xs text-gray-500">Key Lifecycle, Attestation & Fleet Policy</span>
        </div>
        <div class="flex gap-4">
-           <button class="btn btn-secondary text-sm font-bold uppercase tracking-wider">
-              Rotate Master Key
-           </button>
-           <button class="btn btn-primary text-sm font-bold uppercase tracking-wider">
-              Provision New Fleet Key
+           <button @click="fetchData" class="btn btn-secondary text-sm font-bold uppercase tracking-wider flex items-center gap-2">
+              <RefreshCw class="w-4 h-4" /> Refresh
            </button>
        </div>
     </div>
 
-    <!-- KMS Access Policies -->
+    <!-- Key Rotation Schedule -->
     <div>
-        <h3 class="text-xs font-bold text-gray-500 uppercase mb-4">KMS Access Policies</h3>
-        <div class="grid grid-cols-2 gap-6">
-            <div class="bg-[#111] border border-[#333] p-6 rounded flex items-center justify-between group hover:border-primary transition-colors">
-                <div>
-                    <div class="text-xs font-bold text-gray-500 mb-1">Auto-Rotation</div>
-                    <div class="text-3xl font-bold text-white mb-2">30d <span class="text-sm text-gray-500 font-normal">TTL</span></div>
-                    <div class="text-[10px] text-gray-500">PQC leaf keys are rotated every 30 days automatically.</div>
+        <h3 class="text-xs font-bold text-gray-500 uppercase mb-4">Key Rotation Schedule</h3>
+        <div class="bg-[#111] border border-[#333] rounded-lg overflow-hidden">
+            <table class="w-full">
+                <thead class="bg-[#0a0a0a] border-b border-[#333]">
+                    <tr>
+                        <th class="text-left text-xs font-bold text-gray-500 uppercase px-6 py-3">Key ID</th>
+                        <th class="text-left text-xs font-bold text-gray-500 uppercase px-6 py-3">Algorithm</th>
+                        <th class="text-left text-xs font-bold text-gray-500 uppercase px-6 py-3">Next Rotation</th>
+                        <th class="text-left text-xs font-bold text-gray-500 uppercase px-6 py-3">Days Remaining</th>
+                        <th class="text-left text-xs font-bold text-gray-500 uppercase px-6 py-3">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="key in schedule" :key="key.kid" class="border-b border-[#222] hover:bg-[#161616]">
+                        <td class="px-6 py-4 font-mono text-sm text-white">{{ key.kid }}</td>
+                        <td class="px-6 py-4 text-sm text-gray-400">{{ key.algorithm }}</td>
+                        <td class="px-6 py-4 text-sm text-gray-400">{{ key.next_rotation?.split('T')[0] }}</td>
+                        <td class="px-6 py-4">
+                            <span :class="['font-bold text-sm', getStatusColor(key.days_remaining)]">
+                                {{ key.days_remaining }} days
+                            </span>
+                        </td>
+                        <td class="px-6 py-4">
+                            <button 
+                                @click="rotateKey(key.kid)" 
+                                :disabled="rotating === key.kid"
+                                class="btn btn-sm btn-primary flex items-center gap-2"
+                            >
+                                <RefreshCw v-if="rotating !== key.kid" class="w-3 h-3" />
+                                <div v-else class="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                Rotate Now
+                            </button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Attestation Policy -->
+    <div>
+        <h3 class="text-xs font-bold text-gray-500 uppercase mb-4">TEE Attestation Policy</h3>
+        <div class="grid grid-cols-4 gap-4">
+            <div 
+                v-for="level in attestationPolicies.levels" 
+                :key="level.level"
+                :class="[
+                    'bg-[#111] border rounded-lg p-6 transition-all cursor-pointer',
+                    level.level === attestationPolicies.current_level 
+                        ? 'border-primary bg-primary/5' 
+                        : 'border-[#333] hover:border-[#444]'
+                ]"
+            >
+                <div class="flex items-center gap-2 mb-2">
+                    <div :class="[
+                        'w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold',
+                        level.level === attestationPolicies.current_level 
+                            ? 'bg-primary text-white' 
+                            : 'bg-[#222] text-gray-400'
+                    ]">
+                        {{ level.level }}
+                    </div>
+                    <span class="font-bold text-white text-sm">{{ level.name }}</span>
                 </div>
-                <div class="text-green-500 font-bold text-xs uppercase bg-green-900/20 px-2 py-1 rounded">Active</div>
-            </div>
-            <div class="bg-[#111] border border-[#333] p-6 rounded flex items-center justify-between group hover:border-primary transition-colors">
-                <div>
-                    <div class="text-xs font-bold text-gray-500 mb-1">TEE Attestation</div>
-                    <div class="text-3xl font-bold text-white mb-2">Lv. 4 <span class="text-sm text-gray-500 font-normal">HARD</span></div>
-                    <div class="text-[10px] text-gray-500">Hardware-backed evidence fabric required for all unwrap calls.</div>
+                <p class="text-[10px] text-gray-500">{{ level.description }}</p>
+                <div v-if="level.level === attestationPolicies.current_level" class="mt-3">
+                    <span class="text-[10px] text-primary font-bold uppercase bg-primary/10 px-2 py-1 rounded">Active</span>
                 </div>
-                <div class="text-primary font-bold text-xs uppercase bg-primary/20 px-2 py-1 rounded">Enforced</div>
             </div>
         </div>
     </div>
 
-    <!-- Cryptographic Health -->
+    <!-- Key Inventory -->
     <div>
-        <h3 class="text-xs font-bold text-gray-500 uppercase mb-4">Cryptographic Health</h3>
-        <div class="bg-[#111] border border-[#333] p-8 rounded flex flex-col items-center justify-center">
-            
-            <!-- CSS Gauge -->
-            <div class="relative w-32 h-32 flex items-center justify-center mb-4">
-                <svg class="w-full h-full transform -rotate-90">
-                    <circle cx="64" cy="64" r="56" stroke="#333" stroke-width="8" fill="transparent" />
-                    <circle cx="64" cy="64" r="56" stroke="#00C853" stroke-width="8" fill="transparent" stroke-dasharray="351" stroke-dashoffset="35" class="transition-all duration-1000" />
-                </svg>
-                <span class="absolute text-2xl font-bold text-white">90%</span>
-            </div>
-
-            <div class="text-center">
-                <div class="font-bold text-white mb-1">Quantum-Secure Readiness</div>
-                <div class="text-xs text-gray-500">9 of 10 active certificates are currently utilizing Post-Quantum algorithms (Dilithium/Kyber).</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Recent Audit Proofs -->
-    <div>
-        <h3 class="text-xs font-bold text-gray-500 uppercase mb-4">Recent Audit Proofs</h3>
-        <div class="space-y-2">
-            <div class="flex items-center justify-between py-2 border-b border-[#333]">
-                <div class="flex items-center gap-2">
-                    <div class="w-2 h-2 rounded-full bg-green-500"></div>
-                    <span class="text-sm font-mono text-gray-300">K7-FLEET: Rotation Signature</span>
+        <h3 class="text-xs font-bold text-gray-500 uppercase mb-4">Key Inventory</h3>
+        <div class="grid grid-cols-3 gap-6">
+            <div v-for="key in keys" :key="key.kid" class="bg-[#111] border border-[#333] rounded-lg p-6 hover:border-primary/50 transition-colors">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-2">
+                        <KeyIcon class="w-5 h-5 text-primary" />
+                        <span class="font-mono font-bold text-white">{{ key.kid }}</span>
+                    </div>
+                    <span :class="[
+                        'text-[10px] font-bold uppercase px-2 py-1 rounded',
+                        key.status === 'active' ? 'bg-green-500/10 text-green-500' : 'bg-yellow-500/10 text-yellow-500'
+                    ]">
+                        {{ key.status }}
+                    </span>
                 </div>
-                <span class="text-xs text-gray-500">2h ago</span>
-            </div>
-            <div class="flex items-center justify-between py-2 border-b border-[#333]">
-                <div class="flex items-center gap-2">
-                    <div class="w-2 h-2 rounded-full bg-green-500"></div>
-                    <span class="text-sm font-mono text-gray-300">N2-SIG: HSM Policy Sync</span>
+                <div class="space-y-2 text-sm">
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Region</span>
+                        <span class="text-white">{{ key.region }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Algorithm</span>
+                        <span class="text-white font-mono text-xs">{{ key.algorithm }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Created</span>
+                        <span class="text-white">{{ key.created_at?.split('T')[0] }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Expires</span>
+                        <span :class="getStatusColor(key.days_remaining)">{{ key.days_remaining }} days</span>
+                    </div>
                 </div>
-                <span class="text-xs text-gray-500">5h ago</span>
             </div>
         </div>
     </div>

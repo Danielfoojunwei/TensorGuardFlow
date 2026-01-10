@@ -127,6 +127,14 @@ app.include_router(fedmoe_endpoints.router, prefix="/api/v1/fedmoe", tags=["fedm
 from .api import settings_endpoints
 app.include_router(settings_endpoints.router, prefix="/api/v1", tags=["settings"])
 
+# Pipeline Configuration
+from .api import pipeline_config_endpoints
+app.include_router(pipeline_config_endpoints.router, prefix="/api/v1", tags=["pipeline-config"])
+
+# KMS (Key Management Service)
+from .api import kms_endpoints
+app.include_router(kms_endpoints.router, prefix="/api/v1", tags=["kms"])
+
 # Enterprise Stubs (Proprietary Boundary)
 try:
     from .enterprise import check_entitlement, log_audit_event
