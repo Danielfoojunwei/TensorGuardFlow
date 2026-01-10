@@ -9,8 +9,7 @@
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@300;400;600;700&display=swap"
         rel="stylesheet">
 
     <!-- Icons -->
@@ -30,8 +29,8 @@
             theme: {
                 extend: {
                     fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                        mono: ['JetBrains Mono', 'monospace'],
+                        sans: ['"Titillium Web"', 'sans-serif'],
+                        mono: ['"Titillium Web"', 'monospace'],
                     },
                 }
             }
@@ -44,820 +43,1041 @@
 
     <div class="main-grid">
         <!-- Sidebar -->
-        <aside class="bg-[#0f0f17] border-r border-white/5 flex flex-col p-6 fixed h-full w-[260px]">
-            <div class="flex items-center gap-3 mb-10 overflow-hidden">
-                <div
-                    class="w-8 h-8 rounded-lg bg-sky-500 flex-shrink-0 flex items-center justify-center text-white font-bold">
-                    T</div>
+        <aside class="sidebar">
+            <div class="flex items-center gap-3 mb-8 px-4">
+                <div class="w-8 h-8 rounded bg-[#58a6ff] flex items-center justify-center text-white font-bold">T</div>
                 <div class="flex flex-col">
-                    <span class="font-bold text-sm tracking-tight">TensorGuard</span>
-                    <span class="text-[10px] text-white/40 uppercase tracking-widest font-semibold">Enterprise
-                        PLM</span>
+                    <span class="font-bold text-sm">TensorGuard</span>
+                    <span class="text-[10px] text-white/40 uppercase font-semibold">Enterprise PLM</span>
                 </div>
             </div>
 
-            <nav class="space-y-1 flex-1">
-                <div @click="activeTab = 'dashboard'" class="sidebar-link"
-                    :class="{'active': activeTab === 'dashboard'}">
-                    <i data-lucide="layout-dashboard"></i> <span>Dashboard</span>
+            <nav class="px-2">
+                <div @click="activeTab = 'dashboard'" class="nav-link" :class="{'active': activeTab === 'dashboard'}">
+                    <i data-lucide="layout-dashboard" class="w-4 h-4"></i> <span>Dashboard</span>
                 </div>
-                <div @click="activeTab = 'lineage'" class="sidebar-link" :class="{'active': activeTab === 'lineage'}">
-                    <i data-lucide="git-branch"></i> <span>Model Lineage</span>
+                <!-- New PEFT Studio Tab -->
+                <div @click="activeTab = 'peft-studio'" class="nav-link"
+                    :class="{'active': activeTab === 'peft-studio'}">
+                    <i data-lucide="zap" class="w-4 h-4 text-amber-400"></i> <span>PEFT Studio</span>
                 </div>
-                <div @click="activeTab = 'compliance'" class="sidebar-link"
-                    :class="{'active': activeTab === 'compliance'}">
-                    <i data-lucide="shield-check"></i> <span>Compliance Registry</span>
+                <div @click="activeTab = 'lineage'" class="nav-link" :class="{'active': activeTab === 'lineage'}">
+                    <i data-lucide="git-branch" class="w-4 h-4"></i> <span>Model Lineage</span>
                 </div>
-                <div @click="activeTab = 'vault'" class="sidebar-link" :class="{'active': activeTab === 'vault'}">
-                    <i data-lucide="key"></i> <span>Key Vault</span>
+                <div @click="activeTab = 'compliance'" class="nav-link" :class="{'active': activeTab === 'compliance'}">
+                    <i data-lucide="shield-check" class="w-4 h-4"></i> <span>Compliance Registry</span>
                 </div>
-                <div @click="activeTab = 'audit'" class="sidebar-link" :class="{'active': activeTab === 'audit'}">
-                    <i data-lucide="clipboard-list"></i> <span>Audit Trail</span>
+                <div @click="activeTab = 'vault'" class="nav-link" :class="{'active': activeTab === 'vault'}">
+                    <i data-lucide="key" class="w-4 h-4"></i> <span>Key Vault</span>
+                </div>
+                <div @click="activeTab = 'audit'" class="nav-link" :class="{'active': activeTab === 'audit'}">
+                    <i data-lucide="clipboard-list" class="w-4 h-4"></i> <span>Audit Trail</span>
+                </div>
+                <!-- Phase 6: Unification -->
+                <div @click="activeTab = 'fleets'" class="nav-link" :class="{'active': activeTab === 'fleets'}">
+                    <i data-lucide="server-cog" class="w-4 h-4"></i> <span>Fleets & Devices</span>
+                </div>
+                <div @click="activeTab = 'settings'" class="nav-link" :class="{'active': activeTab === 'settings'}">
+                    <i data-lucide="settings" class="w-4 h-4"></i> <span>Global Settings</span>
                 </div>
             </nav>
 
-            <div class="border-t border-white/5 pt-6 mt-6">
-                <div class="flex items-center gap-3 px-2">
+            <div class="mt-auto border-t border-[#30363d] pt-4 px-4">
+                <div class="flex items-center gap-3">
                     <div
                         class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-xs font-bold text-sky-400">
                         DF</div>
                     <div class="flex flex-col">
                         <span class="text-xs font-semibold">Daniel Foo</span>
-                        <span class="text-[10px] text-white/30 truncate max-w-[140px]">ORG_ADMIN</span>
+                        <span class="text-[10px] text-white/30">ORG_ADMIN</span>
                     </div>
                 </div>
             </div>
         </aside>
 
-        <!-- Main Content (Spacer for fixed sidebar) -->
-        <div class="col-start-2">
+        <!-- Main Content (Spacer for fixed sidebar deleted, using grid) -->
+        <div class="flex flex-col min-w-0">
             <header
-                class="h-16 border-b border-white/5 flex items-center px-10 sticky top-0 bg-[#0a0a0f]/80 backdrop-blur z-40 justify-between">
-                <div class="flex items-center gap-2 text-xs text-white/40 font-mono">
-                    <span>SYSTEM_TIME</span>
-                    <span class="text-white/60" x-text="currentTime"></span>
-                    <span class="mx-2">|</span>
-                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-                    <span class="text-emerald-500">PRODUCTION READY</span>
-                </div>
+                class="h-16 border-b border-[#30363d] flex items-center px-8 bg-[#0d1117] sticky top-0 z-40 justify-between">
                 <div class="flex items-center gap-4">
-                    <button
-                        class="bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-md text-xs font-medium border border-white/10 transition-colors">Export
-                        Report</button>
-                    <button
-                        class="bg-sky-600 hover:bg-sky-500 px-3 py-1.5 rounded-md text-xs font-medium transition-colors shadow-lg shadow-sky-600/20">New
-                        Enablement Run</button>
+                    <div class="flex items-center gap-2 text-[11px] text-[#8b949e] font-mono">
+                        <span class="w-2 h-2 rounded-full bg-[#238636]"></span>
+                        <span>ROBUST_MODE_ACTIVE</span>
+                        <span class="mx-2">/</span>
+                        <span x-text="currentTime"></span>
+                    </div>
+                </div>
+
+                <!-- Security Controls & Report -->
+                <div class="flex items-center gap-6">
+                    <div class="flex items-center gap-3 bg-[#161b22] px-3 py-1.5 rounded-full border border-[#30363d]">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="shield" class="w-4 h-4 text-orange-500"></i>
+                            <span class="text-xs font-bold text-orange-500">SHIELD</span>
+                        </div>
+                        <div class="h-4 w-[1px] bg-[#30363d]"></div>
+                        <!-- PQC Toggle -->
+                        <div class="flex items-center gap-2 cursor-pointer" @click="togglePQC()"
+                            title="Quantum-Resistant Encryption">
+                            <div class="w-8 h-4 rounded-full relative transition-colors"
+                                :class="security.pqc ? 'bg-orange-500' : 'bg-[#30363d]'">
+                                <div class="w-3 h-3 bg-white rounded-full absolute top-0.5 transition-all"
+                                    :style="security.pqc ? 'left: 18px' : 'left: 2px'"></div>
+                            </div>
+                            <span class="text-[10px] font-mono"
+                                :class="security.pqc ? 'text-white' : 'text-[#8b949e]'">PQC</span>
+                        </div>
+                        <!-- DP Toggle -->
+                        <div class="flex items-center gap-2 cursor-pointer" @click="toggleDP()"
+                            title="Differential Privacy">
+                            <div class="w-8 h-4 rounded-full relative transition-colors"
+                                :class="security.dp ? 'bg-orange-500' : 'bg-[#30363d]'">
+                                <div class="w-3 h-3 bg-white rounded-full absolute top-0.5 transition-all"
+                                    :style="security.dp ? 'left: 18px' : 'left: 2px'"></div>
+                            </div>
+                            <span class="text-[10px] font-mono"
+                                :class="security.dp ? 'text-white' : 'text-[#8b949e]'">DP</span>
+                        </div>
+                    </div>
+                    <button class="btn btn-sm border-orange-500 text-orange-500 hover:bg-orange-500 hover:text-white"
+                        @click="generateReport()">
+                        <i data-lucide="printer" class="w-4 h-4"></i> Report
+                    </button>
+                    <div class="flex items-center gap-2">
+                        <div
+                            class="w-8 h-8 rounded-full bg-orange-600 flex items-center justify-center text-white text-xs font-bold">
+                            DF</div>
+                    </div>
                 </div>
             </header>
 
             <main class="content-area">
                 <!-- Dashboard Tab -->
                 <div x-show="activeTab === 'dashboard'" x-transition x-cloak>
-                    <div class="grid grid-cols-4 gap-6 mb-10">
-                        <!-- Active Identifiers Card -->
-                        <div class="plm-card gradient-card-blue">
-                            <span class="text-[10px] text-white/60 uppercase font-bold tracking-wider mb-1 block">Active
+                    <div class="gh-header">
+                        <h2 class="text-xl font-semibold">System Dashboard</h2>
+                        <span class="text-xs text-[#8b949e]">Enterprise Fleet Overview</span>
+                    </div>
+
+                    <!-- Pipeline Braid -->
+                    <div class="gh-card mb-6 overflow-hidden relative">
+                        <div
+                            class="absolute inset-0 bg-gradient-to-r from-[#58a6ff]/5 via-transparent to-[#238636]/5 pointer-events-none">
+                        </div>
+                        <h3
+                            class="text-[10px] font-bold uppercase tracking-widest text-[#8b949e] mb-2 flex justify-between">
+                            <span>Unified 7-Stage Pipeline Braid</span>
+                            <span class="text-[#58a6ff] font-mono">LATEST_TRACE: #<span
+                                    x-text="currentTime.substring(17,19)"></span></span>
+                        </h3>
+                        <!-- n8n Style Visualizer -->
+                        <div class="gh-card p-0 overflow-hidden relative"
+                            style="height: 480px; border-top: 3px solid var(--accent-orange);">
+                            <div
+                                class="node-header pl-4 py-2 bg-[#111] border-b border-[#333] flex justify-between items-center">
+                                <span class="uppercase tracking-widest text-[10px] font-bold text-[#666]">System
+                                    Topology</span>
+                                <div class="flex gap-2 mr-2">
+                                    <span class="badge badge-info"><i data-lucide="activity"
+                                            class="w-3 h-3 inline mr-1"></i> Live Telemetry</span>
+                                </div>
+                            </div>
+                            <div id="n8n-canvas">
+                                <!-- SVG Layer -->
+                                <svg class="connector-layer">
+                                    <!-- Paths injected by JS -->
+                                </svg>
+                                <!-- HTML Nodes injected by JS -->
+                            </div>
+                        </div>
+
+                        <div class="pipeline-container">
+                            <!-- Animated SVG Braid -->
+                            <svg class="absolute inset-x-0 top-1/2 -translate-y-1/2 w-full h-8 opacity-20 pointer-events-none"
+                                preserveAspectRatio="none">
+                                <path
+                                    d="M0,15 Q25,0 50,15 T100,15 T150,15 T200,15 T250,15 T300,15 T350,15 T400,15 T450,15 T500,15 T550,15 T600,15 T650,15 T700,15 T750,15 T800,15 T850,15 T900,15 T950,15 T1000,15"
+                                    fill="none" stroke="url(#braidGrad)" stroke-width="2" class="braid-path">
+                                    <animate attributeName="stroke-dashoffset" from="1000" to="0" dur="10s"
+                                        repeatCount="indefinite" />
+                                </path>
+                                <defs>
+                                    <linearGradient id="braidGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                        <stop offset="0%" class="braid-stop-0" />
+                                        <stop offset="100%" class="braid-stop-100" />
+                                    </linearGradient>
+                                </defs>
+                            </svg>
+
+                            <template x-for="(node, index) in pipelineWorkflow" :key="node.stage">
+                                <div class="pipeline-node group">
+                                    <div class="node-icon" :class="node.status === 'ok' ? 'ok' : 'active'">
+                                        <i :data-lucide="
+                                            node.stage === 'capture' ? 'camera' :
+                                            node.stage === 'embed' ? 'cpu' :
+                                            node.stage === 'gate' ? 'git-branch' :
+                                            node.stage === 'peft' ? 'zap' :
+                                            node.stage === 'shield' ? 'shield-check' :
+                                            node.stage === 'sync' ? 'refresh-cw' : 'download-cloud'
+                                        " class="w-5 h-5"></i>
+                                        <!-- Particle Emitter for active nodes -->
+                                        <template x-if="node.status !== 'ok'">
+                                            <div
+                                                class="absolute inset-0 animate-ping opacity-20 bg-sky-500 rounded-full">
+                                            </div>
+                                        </template>
+                                    </div>
+                                    <span class="node-label" x-text="node.stage"></span>
+                                    <span class="node-latency animate-pulse-subtle"
+                                        x-text="node.latency_ms + ' ms'"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-4 gap-4 mb-6">
+                        <div class="gh-card">
+                            <span
+                                class="text-[10px] text-[#8b949e] uppercase font-bold tracking-wider mb-1 block">Active
                                 Identifiers</span>
-                            <template x-if="loading.stats">
-                                <div class="skeleton h-8 w-20 mt-2"></div>
-                            </template>
-                            <template x-if="!loading.stats && !errors.stats">
-                                <div class="flex items-end gap-2">
-                                    <span class="text-3xl font-bold font-mono"
-                                        x-text="endpoints.length || certificates.length || 14"></span>
-                                    <span class="text-emerald-400 text-xs mb-1 flex items-center gap-1">
-                                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                                        Live Seats
-                                    </span>
-                                </div>
-                            </template>
-                            <template x-if="errors.stats">
-                                <div class="text-red-400 text-xs mt-2 flex items-center gap-1">
-                                    <i data-lucide="alert-circle" class="w-3 h-3"></i>
-                                    <span x-text="errors.stats"></span>
-                                </div>
-                            </template>
-                        </div>
-
-                        <!-- Model Lineage Card -->
-                        <div class="plm-card gradient-card-purple">
-                            <span class="text-[10px] text-white/60 uppercase font-bold tracking-wider mb-1 block">Model
-                                Lineage Score</span>
                             <div class="flex items-end gap-2">
-                                <span class="text-3xl font-bold font-mono">99.8</span>
-                                <span class="text-violet-400 text-xs mb-1">% Authenticated</span>
+                                <span class="text-2xl font-bold font-mono"
+                                    x-text="endpoints.length || certificates.length || 14"></span>
+                                <span class="text-[#3fb950] text-[10px] mb-1 flex items-center gap-1">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-[#3fb950] animate-pulse"></span>
+                                    Live
+                                </span>
                             </div>
                         </div>
-
-                        <!-- Privacy Budget Card with Chart -->
-                        <div class="plm-card gradient-card-amber relative overflow-hidden">
+                        <div class="gh-card">
                             <span
-                                class="text-[10px] text-white/60 uppercase font-bold tracking-wider mb-1 block">Privacy
-                                Budget</span>
-                            <div class="flex items-center gap-3">
-                                <div class="w-16 h-16">
-                                    <canvas id="privacyChart"></canvas>
-                                </div>
-                                <div>
-                                    <span class="text-2xl font-bold font-mono"
-                                        x-text="'ε ' + ((stats.privacy_cap || 10) - (stats.privacy_consumed || 1.6)).toFixed(1)"></span>
-                                    <div class="text-[10px] text-white/40">Remaining</div>
-                                </div>
+                                class="text-[10px] text-[#8b949e] uppercase font-bold tracking-wider mb-1 block">Lineage
+                                Score</span>
+                            <div class="flex items-end gap-2">
+                                <span class="text-2xl font-bold font-mono">99.8</span>
+                                <span class="text-[#58a6ff] text-[10px] mb-1">% Auth</span>
                             </div>
                         </div>
-
-                        <!-- NEW: Triple-Trust Matrix Card -->
-                        <div class="plm-card gradient-card-green relative group overflow-hidden">
-                            <div
-                                class="absolute -right-4 -top-4 w-24 h-24 bg-white/5 rounded-full blur-2xl group-hover:bg-white/10 transition-all">
+                        <div class="gh-card">
+                            <span class="text-[10px] text-[#8b949e] uppercase font-bold tracking-wider mb-1 block">PQC
+                                Days</span>
+                            <div class="flex items-end gap-2">
+                                <span class="text-2xl font-bold font-mono text-[#d29922]"
+                                    x-text="keyRotation.pqc_days_remaining"></span>
+                                <span class="text-[#8b949e] text-[10px] mb-1">Until Rotation</span>
                             </div>
-                            <span
-                                class="text-[10px] text-white/60 uppercase font-bold tracking-wider mb-2 block flex justify-between">
-                                Triple-Trust Readiness
-                                <span class="font-mono text-emerald-400"
+                        </div>
+                        <div class="gh-card">
+                            <span class="text-[10px] text-[#8b949e] uppercase font-bold tracking-wider mb-1 block">Trust
+                                Health</span>
+                            <div class="flex items-end gap-2">
+                                <span class="text-2xl font-bold font-mono text-[#3fb950]"
                                     x-text="trustPosture.compliance_health + '%'"></span>
-                            </span>
-
-                            <div class="grid grid-cols-3 gap-2 mt-2">
-                                <div class="bg-black/20 p-2 rounded border border-white/5 text-center">
-                                    <div class="text-[8px] text-white/40 uppercase mb-1">Identity</div>
-                                    <i data-lucide="shield-check"
-                                        :class="trustPosture.layers?.transport.status === 'ok' ? 'text-emerald-400' : 'text-red-400'"
-                                        class="w-4 h-4 mx-auto"></i>
-                                </div>
-                                <div class="bg-black/20 p-2 rounded border border-white/5 text-center">
-                                    <div class="text-[8px] text-white/40 uppercase mb-1">Privacy</div>
-                                    <i data-lucide="lock"
-                                        :class="trustPosture.layers?.privacy.status === 'ok' ? 'text-emerald-400' : 'text-red-400'"
-                                        class="w-4 h-4 mx-auto"></i>
-                                </div>
-                                <div class="bg-black/20 p-2 rounded border border-white/5 text-center">
-                                    <div class="text-[8px] text-white/40 uppercase mb-1">Quantum</div>
-                                    <i data-lucide="cpu"
-                                        :class="trustPosture.layers?.integrity.status === 'ok' ? 'text-sky-400' : 'text-red-400'"
-                                        class="w-4 h-4 mx-auto"></i>
-                                </div>
-                            </div>
-
-                            <div class="mt-3 flex items-center justify-between">
-                                <div class="flex flex-wrap gap-1">
-                                    <span class="badge badge-success text-[7px] py-0 px-1">Dilithium-3</span>
-                                    <span class="badge badge-success text-[7px] py-0 px-1">mTLS-HMAC</span>
-                                </div>
-                                <div class="text-[9px] font-bold text-white/60 uppercase"
-                                    x-text="trustPosture.threat_environment"></div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Lineage Chart Section -->
-                    <div class="grid grid-cols-3 gap-6 mb-10">
-                        <div class="plm-card col-span-2">
-                            <h4 class="text-sm font-semibold mb-4 flex items-center gap-2 text-white/80">
-                                <i data-lucide="bar-chart-3" class="w-4 h-4 text-sky-400"></i>
-                                Recent Run Scores
-                            </h4>
-                            <div class="h-48">
-                                <canvas id="lineageChart"></canvas>
-                            </div>
-                        </div>
-                        <div class="plm-card">
-                            <h4 class="text-sm font-semibold mb-4 flex items-center gap-2 text-white/80">
-                                <i data-lucide="activity" class="w-4 h-4 text-emerald-400"></i>
-                                Threat Environment
-                            </h4>
-                            <div class="space-y-4">
-                                <div class="flex justify-between items-center">
-                                    <span class="text-xs text-white/40">Global Posture</span>
-                                    <span
-                                        :class="trustPosture.threat_environment === 'STABLE' ? 'text-emerald-400' : 'text-amber-400'"
-                                        class="font-mono text-sm font-bold"
-                                        x-text="trustPosture.threat_environment"></span>
-                                </div>
-                                <div class="flex justify-between items-center">
-                                    <span class="text-xs text-white/40">At Risk Fleets</span>
-                                    <span class="font-mono text-sm text-red-400"
-                                        x-text="trustPosture.at_risk_fleets"></span>
-                                </div>
-                                <div class="flex justify-between items-center border-t border-white/5 pt-3">
-                                    <span class="text-xs text-white/40">Audit Events</span>
-                                    <span class="font-mono text-sm" x-text="auditLogs.length"></span>
-                                </div>
-                                <div class="flex justify-between items-center">
-                                    <span class="text-xs text-white/40">Renewal Jobs</span>
-                                    <span class="font-mono text-sm" x-text="identityJobs.length"></span>
-                                </div>
-                                <div class="flex justify-between items-center">
-                                    <span class="text-xs text-white/40">PQC Integrity</span>
-                                    <span
-                                        class="text-[10px] text-sky-400 px-1.5 py-0.5 bg-sky-500/10 rounded uppercase font-bold">Verified</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <h3 class="text-lg font-semibold mb-6 flex items-center gap-2">
-                        <i data-lucide="activity" class="text-sky-500 w-5 h-5"></i> System Activity Proof
-                        <template x-if="loading.jobs">
-                            <span class="ml-2 text-xs text-white/30 animate-pulse">Loading...</span>
-                        </template>
-                    </h3>
-
-                    <div class="plm-card">
-                        <!-- Error State -->
-                        <template x-if="errors.jobs">
-                            <div class="flex flex-col items-center justify-center py-12 text-center">
-                                <div class="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center mb-4">
-                                    <i data-lucide="alert-triangle" class="w-6 h-6 text-red-400"></i>
-                                </div>
-                                <p class="text-white/60 text-sm">Failed to load activity data</p>
-                                <p class="text-white/30 text-xs mt-1" x-text="errors.jobs"></p>
-                                <button @click="fetchJobs()"
-                                    class="mt-4 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-xs transition-colors">
-                                    Retry
-                                </button>
-                            </div>
-                        </template>
-
-                        <!-- Loading Skeleton -->
-                        <template x-if="loading.jobs && !errors.jobs">
-                            <div class="space-y-4">
-                                <template x-for="i in 5">
-                                    <div class="flex items-center gap-4">
-                                        <div class="skeleton h-4 w-20"></div>
-                                        <div class="skeleton h-4 w-32"></div>
-                                        <div class="skeleton h-4 w-40"></div>
-                                        <div class="skeleton h-4 w-24"></div>
-                                        <div class="skeleton h-4 w-16"></div>
-                                    </div>
-                                </template>
-                            </div>
-                        </template>
-
-                        <!-- Empty State -->
-                        <template x-if="!loading.jobs && !errors.jobs && jobs.length === 0">
-                            <div class="flex flex-col items-center justify-center py-12 text-center">
-                                <div class="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-4">
-                                    <i data-lucide="inbox" class="w-6 h-6 text-white/20"></i>
-                                </div>
-                                <p class="text-white/40 text-sm">No activity recorded yet</p>
-                                <p class="text-white/20 text-xs mt-1">Run an enablement job to see activity here</p>
-                            </div>
-                        </template>
-
-                        <!-- Data Table -->
-                        <template x-if="!loading.jobs && !errors.jobs && jobs.length > 0">
-                            <table class="w-full text-left text-sm">
-                                <thead>
-                                    <tr class="text-white/40 border-b border-white/5">
-                                        <th class="pb-3 font-medium">Trace ID</th>
-                                        <th class="pb-3 font-medium">Model Type</th>
-                                        <th class="pb-3 font-medium">Audit Proof</th>
-                                        <th class="pb-3 font-medium">Time</th>
-                                        <th class="pb-3 font-medium">Status</th>
+                    <div class="gh-card">
+                        <h4 class="text-sm font-semibold mb-4 flex items-center gap-2">
+                            <i data-lucide="activity" class="text-[#58a6ff] w-4 h-4"></i> System Activity Proof
+                        </h4>
+                        <table class="w-full text-left text-xs">
+                            <thead>
+                                <tr class="text-[#8b949e] border-b border-[#30363d]">
+                                    <th class="pb-2">Trace ID</th>
+                                    <th class="pb-2">Type</th>
+                                    <th class="pb-2">Time</th>
+                                    <th class="pb-2">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-[#30363d]">
+                                <template x-for="job in jobs.slice(0, 5)" :key="job.id">
+                                    <tr class="hover:bg-[#161b22]">
+                                        <td class="py-2 font-mono text-[#58a6ff]" x-text="job.id.substring(0,8)"></td>
+                                        <td class="py-2" x-text="job.type"></td>
+                                        <td class="py-2 text-[#8b949e]" x-text="formatRelativeTime(job.created_at)">
+                                        </td>
+                                        <td class="py-2">
+                                            <span :class="getStatusColor(job.status)" class="font-bold"
+                                                x-text="job.status"></span>
+                                        </td>
                                     </tr>
-                                </thead>
-                                <tbody class="divide-y divide-white/5">
-                                    <template x-for="job in jobs" :key="job.id">
-                                        <tr class="hover:bg-white/[0.02] transition-all group cursor-pointer">
-                                            <td class="py-4 font-mono text-xs text-sky-400/80"
-                                                x-text="job.id.substring(0,8)">
-                                            </td>
-                                            <td class="py-4">
-                                                <div class="flex items-center gap-2">
-                                                    <div
-                                                        class="w-2 h-2 rounded-full bg-sky-500 group-hover:animate-pulse">
-                                                    </div>
-                                                    <span x-text="job.type"></span>
-                                                </div>
-                                            </td>
-                                            <td class="py-4">
-                                                <span
-                                                    class="text-[10px] font-mono text-white/30 truncate max-w-[150px] inline-block hover:text-white/60 transition-colors"
-                                                    x-text="job.api_key_hash"></span>
-                                            </td>
-                                            <td class="py-4 text-white/40 text-xs"
-                                                x-text="formatRelativeTime(job.created_at)"></td>
-                                            <td class="py-4">
-                                                <span
-                                                    :class="getStatusBg(job.status) + ' ' + getStatusColor(job.status)"
-                                                    class="px-2 py-1 rounded-full text-[10px] font-medium"
-                                                    x-text="job.status"></span>
-                                            </td>
-                                        </tr>
-                                    </template>
-                                </tbody>
-                            </table>
-                        </template>
+                                </template>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
 
-                <!-- Lineage Tab -->
-                <div x-show="activeTab === 'lineage'" x-transition x-cloak>
-                    <h3 class="text-lg font-semibold mb-6 flex items-center gap-2">
-                        <i data-lucide="git-branch" class="text-sky-500 w-5 h-5"></i> Model Lineage & Runs
-                        <template x-if="loading.runs">
-                            <span class="ml-2 text-xs text-white/30 animate-pulse">Loading...</span>
-                        </template>
-                    </h3>
-
-                    <div class="plm-card">
-                        <!-- Error State -->
-                        <template x-if="errors.runs">
-                            <div class="flex flex-col items-center justify-center py-12 text-center">
-                                <div class="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center mb-4">
-                                    <i data-lucide="alert-triangle" class="w-6 h-6 text-red-400"></i>
-                                </div>
-                                <p class="text-white/60 text-sm">Failed to load lineage data</p>
-                                <p class="text-white/30 text-xs mt-1" x-text="errors.runs"></p>
-                                <button @click="fetchRuns()"
-                                    class="mt-4 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-xs transition-colors">
-                                    Retry
-                                </button>
-                            </div>
-                        </template>
-
-                        <!-- Loading Skeleton -->
-                        <template x-if="loading.runs && !errors.runs">
-                            <div class="space-y-4">
-                                <template x-for="i in 5">
-                                    <div class="flex items-center gap-4">
-                                        <div class="skeleton h-4 w-24"></div>
-                                        <div class="skeleton h-4 w-32"></div>
-                                        <div class="skeleton h-4 w-20"></div>
-                                        <div class="skeleton h-4 w-32"></div>
-                                        <div class="skeleton h-4 w-16"></div>
-                                    </div>
-                                </template>
-                            </div>
-                        </template>
-
-                        <!-- Empty State -->
-                        <template x-if="!loading.runs && !errors.runs && runs.length === 0">
-                            <div class="flex flex-col items-center justify-center py-12 text-center">
-                                <div class="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-4">
-                                    <i data-lucide="git-branch" class="w-6 h-6 text-white/20"></i>
-                                </div>
-                                <p class="text-white/40 text-sm">No runs recorded</p>
-                                <p class="text-white/20 text-xs mt-1">Register a model run to see lineage data</p>
-                            </div>
-                        </template>
-
-                        <!-- Data Table -->
-                        <template x-if="!loading.runs && !errors.runs && runs.length > 0">
-                            <table class="w-full text-left text-sm">
-                                <thead>
-                                    <tr class="text-white/40 border-b border-white/5">
-                                        <th class="pb-3 font-medium">Run ID</th>
-                                        <th class="pb-3 font-medium">Git Commit</th>
-                                        <th class="pb-3 font-medium">SDK Version</th>
-                                        <th class="pb-3 font-medium">Created At</th>
-                                        <th class="pb-3 font-medium">Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-white/5">
-                                    <template x-for="run in runs" :key="run.run_id">
-                                        <tr class="hover:bg-white/[0.02] transition-all hover-lift">
-                                            <td class="py-4 font-mono text-xs text-white/80"
-                                                x-text="run.run_id.substring(0,8)"></td>
-                                            <td class="py-4 font-mono text-xs text-sky-400"
-                                                x-text="run.git_commit ? run.git_commit.substring(0,7) : '-'"></td>
-                                            <td class="py-4 text-xs font-mono text-white/60" x-text="run.sdk_version">
-                                            </td>
-                                            <td class="py-4 text-white/40 text-xs" x-text="formatDate(run.created_at)">
-                                            </td>
-                                            <td class="py-4">
-                                                <span
-                                                    :class="getStatusBg(run.status) + ' ' + getStatusColor(run.status)"
-                                                    class="px-2 py-1 rounded-full text-[10px] font-medium"
-                                                    x-text="run.status"></span>
-                                            </td>
-                                        </tr>
-                                    </template>
-                                </tbody>
-                            </table>
-                        </template>
-                    </div>
-                </div>
-
-                <!-- Compliance Tab -->
-                <div x-show="activeTab === 'compliance'" x-transition x-cloak>
-                    <div class="flex justify-between items-center mb-6">
-                        <h3 class="text-lg font-semibold">Enterprise Compliance Registry</h3>
+                <!-- PEFT Studio Tab -->
+                <div x-show="activeTab === 'peft-studio'" x-transition x-cloak>
+                    <div class="gh-header">
+                        <div class="flex items-center gap-2">
+                            <h2 class="text-xl font-semibold">PEFT Studio</h2>
+                            <span class="badge badge-warning">BETA</span>
+                        </div>
                         <div class="flex gap-2">
-                            <span class="badge badge-info text-[10px]">ISO 9001</span>
-                            <span class="badge badge-info text-[10px]">SOC 2</span>
-                            <span class="badge badge-info text-[10px]">GDPR</span>
+                            <button @click="peftStudio.actions.applyProfile('local-hf')" class="btn">
+                                <i data-lucide="file-json" class="w-4 h-4"></i> Local HF Profile
+                            </button>
+                            <button @click="peftStudio.actions.startRun()" class="btn btn-primary"
+                                :disabled="peftStudio.step < 7">
+                                <i data-lucide="play" class="w-4 h-4"></i> Start Run
+                            </button>
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-2 gap-6 mb-10">
-                        <div
-                            class="plm-card border-emerald-500/20 hover:border-emerald-500/40 glow-emerald transition-all">
-                            <h4 class="font-bold flex items-center gap-2 mb-4">
-                                <i data-lucide="check-circle" class="text-emerald-500 w-4 h-4"></i> SOC 2 Type II
-                            </h4>
-                            <p class="text-xs text-white/50 leading-relaxed mb-4">Verification logs synchronized with
-                                UKF Audit Ledger. Total controls mapped: 24/24.</p>
-                            <div
-                                class="flex justify-between items-center bg-white/5 p-3 rounded-lg border border-white/5">
-                                <span class="text-[10px] font-mono text-white/40 uppercase">Last Verification</span>
-                                <span class="text-xs font-semibold uppercase text-emerald-400 flex items-center gap-2">
-                                    <span class="w-2 h-2 rounded-full bg-emerald-500 pulse-dot"></span>
-                                    PASSED: 2026-01-01
-                                </span>
-                            </div>
-                        </div>
-                        <div
-                            class="plm-card border-emerald-500/20 hover:border-emerald-500/40 glow-emerald transition-all">
-                            <h4 class="font-bold flex items-center gap-2 mb-4">
-                                <i data-lucide="shield" class="text-emerald-500 w-4 h-4"></i> TGSP Manifest Integrity
-                            </h4>
-                            <p class="text-xs text-white/50 leading-relaxed mb-4">Cryptographic pinning of container
-                                layers active. All manifests verified against fleet CA.</p>
-                            <div
-                                class="flex justify-between items-center bg-white/5 p-3 rounded-lg border border-white/5">
-                                <span class="text-[10px] font-mono text-white/40 uppercase">Active Profiles</span>
-                                <span class="text-xs font-semibold uppercase text-emerald-400 flex items-center gap-2">
-                                    <span class="w-2 h-2 rounded-full bg-emerald-500 pulse-dot"></span>
-                                    <span x-text="tgspPackages.filter(p => p.status === 'verified').length"></span>
-                                    Verified
-                                </span>
-                            </div>
-                        </div>
-
-                        <!-- NEW: EKU Split Migration Card -->
-                        <div :class="certificates.some(c => c.has_eku_conflict) ? 'border-red-500/30' : 'border-white/10'"
-                            class="plm-card transition-all col-span-2 mt-2">
-                            <div class="flex justify-between items-start">
-                                <div>
-                                    <h4 class="font-bold flex items-center gap-2 mb-2">
-                                        <i data-lucide="split" class="text-sky-400 w-4 h-4"></i> Chrome 2026 EKU Split
-                                        Readiness
-                                    </h4>
-                                    <p class="text-xs text-white/50 leading-relaxed mb-4">Automated migration to split
-                                        public TLS and mTLS certificates. <a href="#"
-                                            class="text-sky-400 underline">Learn more</a></p>
-                                </div>
-                                <button @click="executeEKUMigration()"
-                                    :disabled="!certificates.some(c => c.has_eku_conflict)"
-                                    class="bg-sky-600 hover:bg-sky-500 disabled:opacity-30 disabled:cursor-not-allowed px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-lg shadow-sky-600/20">
-                                    Trigger Migration
-                                </button>
-                            </div>
-
-                            <template x-if="certificates.some(c => c.has_eku_conflict)">
-                                <div
-                                    class="bg-red-500/10 border border-red-500/20 p-3 rounded-lg flex items-center gap-3">
-                                    <i data-lucide="alert-triangle"
-                                        class="text-red-400 w-5 h-5 flex-shrink-0 animate-bounce"></i>
-                                    <span class="text-xs text-red-200">
-                                        Found <strong
-                                            x-text="certificates.filter(c => c.has_eku_conflict).length"></strong>
-                                        certificates with EKU conflicts.
-                                        Manual action required before June 15, 2026.
-                                    </span>
+                    <!-- New Grid Layout for PEFT Wizard -->
+                    <div class="peft-grid">
+                        <!-- Left: Sidebar Stepper -->
+                        <div class="gh-card p-0 stepper-vertical h-full">
+                            <template
+                                x-for="(label, idx) in ['Backend', 'Model', 'Dataset', 'Hyperparams', 'Integrations', 'Review', 'Launch']">
+                                <div class="step-item"
+                                    :class="{'active': peftStudio.step === (idx + 1), 'completed': peftStudio.step > (idx + 1)}"
+                                    @click="peftStudio.step = (idx + 1)">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-5 h-5 flex items-center justify-center rounded-sm text-[10px] border border-[#333]"
+                                            :class="peftStudio.step > (idx + 1) ? 'bg-white text-black border-white' : 'text-[#666]'">
+                                            <span x-text="idx + 1"></span>
+                                        </div>
+                                        <span x-text="label"></span>
+                                    </div>
                                 </div>
                             </template>
                         </div>
-                    </div>
 
-                    <!-- NEW: Identity Renewal Monitor -->
-                    <h4 class="text-sm font-semibold mb-4 flex items-center gap-2 text-white/80">
-                        <i data-lucide="refresh-cw" class="w-4 h-4 text-sky-400"></i> Active Identity Renewals
-                        <template x-if="loading.identity">
-                            <span class="ml-2 text-xs text-white/30 animate-pulse">Polling...</span>
-                        </template>
-                    </h4>
-
-                    <div class="plm-card mb-10">
-                        <template x-if="identityJobs.length === 0">
-                            <p class="text-center py-6 text-xs text-white/30 italic">No active renewal jobs</p>
-                        </template>
-                        <template x-if="identityJobs.length > 0">
-                            <table class="w-full text-left text-xs">
-                                <thead>
-                                    <tr class="text-white/40 border-b border-white/5 pb-2">
-                                        <th class="py-2">Job ID</th>
-                                        <th class="py-2">Endpoint</th>
-                                        <th class="py-2">Policy</th>
-                                        <th class="py-2">Status</th>
-                                        <th class="py-2">Progress</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-white/5">
-                                    <template x-for="job in identityJobs" :key="job.id">
-                                        <tr class="hover:bg-white/5">
-                                            <td class="py-3 font-mono text-sky-400" x-text="job.id.substring(0,8)"></td>
-                                            <td class="py-3 text-white/70" x-text="job.endpoint_id"></td>
-                                            <td class="py-3 text-white/40" x-text="job.policy_id.substring(0,8)"></td>
-                                            <td class="py-3">
-                                                <span
-                                                    :class="getStatusBg(job.status) + ' ' + getStatusColor(job.status)"
-                                                    class="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-tighter"
-                                                    x-text="job.status"></span>
-                                            </td>
-                                            <td class="py-3">
-                                                <div class="h-1 w-24 bg-white/5 rounded-full overflow-hidden">
-                                                    <div class="h-full bg-sky-500 transition-all duration-1000"
-                                                        :style="'width: ' + (job.status === 'succeeded' ? 100 : (job.status === 'failed' ? 10 : 50)) + '%'">
-                                                    </div>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    </template>
-                                </tbody>
-                            </table>
-                        </template>
-                    </div>
-
-                    <h4 class="text-sm font-semibold mb-4 flex items-center gap-2 text-white/80">
-                        <i data-lucide="package" class="w-4 h-4 text-sky-400"></i> Registered Security Profiles (TGSP)
-                        <template x-if="loading.tgsp">
-                            <span class="ml-2 text-xs text-white/30 animate-pulse">Loading...</span>
-                        </template>
-                    </h4>
-
-                    <div class="plm-card">
-                        <!-- Error State -->
-                        <template x-if="errors.tgsp">
-                            <div class="flex flex-col items-center justify-center py-12 text-center">
-                                <div class="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center mb-4">
-                                    <i data-lucide="alert-triangle" class="w-6 h-6 text-red-400"></i>
-                                </div>
-                                <p class="text-white/60 text-sm">Failed to load security profiles</p>
-                                <p class="text-white/30 text-xs mt-1" x-text="errors.tgsp"></p>
-                                <button @click="fetchTGSP()"
-                                    class="mt-4 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-xs transition-colors">
-                                    Retry
-                                </button>
-                            </div>
-                        </template>
-
-                        <!-- Loading Skeleton -->
-                        <template x-if="loading.tgsp && !errors.tgsp">
-                            <div class="space-y-4">
-                                <template x-for="i in 3">
-                                    <div class="flex items-center gap-4">
-                                        <div class="skeleton h-4 w-32"></div>
-                                        <div class="skeleton h-4 w-24"></div>
-                                        <div class="skeleton h-4 w-40"></div>
-                                        <div class="skeleton h-4 w-24"></div>
-                                        <div class="skeleton h-4 w-16"></div>
+                        <!-- Right: Wizard Content -->
+                        <div class="wizard-content">
+                            <!-- Step 1: Backend -->
+                            <div x-show="peftStudio.step === 1" class="gh-card">
+                                <h3 class="font-semibold mb-4 text-lg border-b border-[#333] pb-2">Choose Training
+                                    Backend</h3>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div class="gh-card hover:border-orange cursor-pointer transition-all"
+                                        :class="{'border-orange': peftStudio.draft.training_config.backend === 'hf'}"
+                                        @click="peftStudio.draft.training_config.backend = 'hf'">
+                                        <div class="flex justify-between items-start mb-2">
+                                            <span class="font-bold flex items-center gap-2"><i data-lucide="cpu"
+                                                    class="w-4 h-4"></i> HF Transformers</span>
+                                            <span class="badge badge-success">INSTALLED</span>
+                                        </div>
+                                        <p class="text-xs text-[#666]">Native LoRA/QLoRA support.</p>
                                     </div>
-                                </template>
-                            </div>
-                        </template>
-
-                        <!-- Empty State -->
-                        <template x-if="!loading.tgsp && !errors.tgsp && tgspPackages.length === 0">
-                            <div class="flex flex-col items-center justify-center py-12 text-center">
-                                <div class="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-4">
-                                    <i data-lucide="package" class="w-6 h-6 text-white/20"></i>
+                                    <div class="gh-card opacity-50 cursor-not-allowed">
+                                        <div class="flex justify-between items-start mb-2">
+                                            <span class="font-bold flex items-center gap-2"><i data-lucide="box"
+                                                    class="w-4 h-4"></i> Axolotl</span>
+                                            <span class="badge badge-warning">MISSING</span>
+                                        </div>
+                                        <p class="text-xs text-[#666]">Config-driven training.</p>
+                                    </div>
                                 </div>
-                                <p class="text-white/40 text-sm">No security profiles registered</p>
+                                <div class="mt-6">
+                                    <label class="text-xs font-semibold uppercase text-[#666] mb-1 block">Method</label>
+                                    <select x-model="peftStudio.draft.training_config.method"
+                                        class="w-full bg-[#111] border border-[#333] p-2 text-white">
+                                        <option value="lora">LoRA (Ranked Adaptation)</option>
+                                        <option value="qlora">QLoRA (4-bit Quantized)</option>
+                                    </select>
+                                </div>
                             </div>
-                        </template>
+                            <!-- Step 2: Model Source -->
+                            <div x-show="peftStudio.step === 2" class="gh-card">
+                                <h3 class="font-semibold mb-4 text-lg border-b border-[#333] pb-2">Model Source</h3>
+                                <div class="space-y-4">
+                                    <div>
+                                        <label class="text-xs font-semibold text-[#666]">HuggingFace Hub ID</label>
+                                        <input type="text" x-model="peftStudio.draft.training_config.model_name_or_path"
+                                            class="w-full bg-[#111] border border-[#333] p-2 text-white mt-1"
+                                            placeholder="e.g. meta-llama/Llama-2-7b-hf">
+                                    </div>
+                                    <button class="btn" @click="peftStudio.actions.testConnector('training_hf')">
+                                        <i data-lucide="wifi" class="w-4 h-4"></i> Test Connectivity
+                                    </button>
+                                </div>
+                            </div>
+                            <!-- Step 3: Dataset Source -->
+                            <div x-show="peftStudio.step === 3" class="gh-card">
+                                <h3 class="font-semibold mb-4 text-lg border-b border-[#333] pb-2">Dataset Source</h3>
+                                <div class="space-y-4">
+                                    <div>
+                                        <label class="text-xs font-semibold text-[#666]">HF Dataset ID</label>
+                                        <input type="text"
+                                            x-model="peftStudio.draft.training_config.dataset_name_or_path"
+                                            class="w-full bg-[#111] border border-[#333] p-2 text-white mt-1"
+                                            placeholder="e.g. databricks/databricks-dolly-15k">
+                                    </div>
+                                    <div class="flex gap-4">
+                                        <label class="flex items-center gap-2 text-xs text-[#888]">
+                                            <input type="checkbox" checked class="accent-[#ff5722]"> Tokenize on-the-fly
+                                        </label>
+                                        <label class="flex items-center gap-2 text-xs text-[#888]">
+                                            <input type="checkbox" class="accent-[#ff5722]"> Packing
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
 
-                        <!-- Data Table -->
-                        <template x-if="!loading.tgsp && !errors.tgsp && tgspPackages.length > 0">
-                            <table class="w-full text-left text-sm">
-                                <thead>
-                                    <tr class="text-white/40 border-b border-white/5">
-                                        <th class="pb-3 font-medium">Package ID</th>
-                                        <th class="pb-3 font-medium">Producer</th>
-                                        <th class="pb-3 font-medium">Policy Match</th>
-                                        <th class="pb-3 font-medium">Verified On</th>
-                                        <th class="pb-3 font-medium">Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-white/5">
-                                    <template x-for="pkg in tgspPackages" :key="pkg.id">
-                                        <tr class="hover:bg-white/[0.02] transition-all hover-lift">
-                                            <td class="py-4 font-mono text-xs text-white/80"
-                                                x-text="pkg.id.substring(0,12)"></td>
-                                            <td class="py-4 text-xs text-white/60" x-text="pkg.producer_id"></td>
-                                            <td class="py-4">
-                                                <div class="flex flex-col">
-                                                    <span class="text-xs font-medium text-sky-400"
-                                                        x-text="pkg.policy_id"></span>
-                                                    <span class="text-[10px] font-mono text-white/30"
-                                                        x-text="'v' + pkg.policy_version"></span>
-                                                </div>
-                                            </td>
-                                            <td class="py-4 text-white/40 text-xs"
-                                                x-text="new Date(pkg.created_at).toLocaleDateString()"></td>
-                                            <td class="py-4">
-                                                <span
-                                                    :class="getStatusBg(pkg.status) + ' ' + getStatusColor(pkg.status)"
-                                                    class="px-2 py-1 rounded-full text-[10px] font-medium"
-                                                    x-text="pkg.status"></span>
-                                            </td>
-                                        </tr>
-                                    </template>
-                                </tbody>
-                            </table>
+                            <!-- Step 4: Hyperparameters -->
+                            <div x-show="peftStudio.step === 4" class="gh-card">
+                                <h3 class="font-semibold mb-4 text-lg border-b border-[#333] pb-2">Hyperparameters</h3>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="text-xs font-semibold text-[#666]">Learning Rate</label>
+                                        <input type="number" x-model="peftStudio.draft.training_config.learning_rate"
+                                            class="w-full bg-[#111] border border-[#333] p-2 text-white mt-1"
+                                            placeholder="5e-5">
+                                    </div>
+                                    <div>
+                                        <label class="text-xs font-semibold text-[#666]">Batch Size</label>
+                                        <input type="number" x-model="peftStudio.draft.training_config.batch_size"
+                                            class="w-full bg-[#111] border border-[#333] p-2 text-white mt-1"
+                                            placeholder="4">
+                                    </div>
+                                    <div>
+                                        <label class="text-xs font-semibold text-[#666]">Max Steps</label>
+                                        <input type="number" x-model="peftStudio.draft.training_config.max_steps"
+                                            class="w-full bg-[#111] border border-[#333] p-2 text-white mt-1"
+                                            placeholder="100">
+                                    </div>
+                                    <div>
+                                        <label class="text-xs font-semibold text-[#666]">Seed</label>
+                                        <input type="number" x-model="peftStudio.draft.training_config.seed"
+                                            class="w-full bg-[#111] border border-[#333] p-2 text-white mt-1"
+                                            placeholder="42">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Step 5: Integrations -->
+                            <div x-show="peftStudio.step === 5" class="gh-card">
+                                <h3 class="font-semibold mb-4 text-lg border-b border-[#333] pb-2">Integrations</h3>
+                                <div class="grid grid-cols-1 gap-2">
+                                    <div
+                                        class="gh-card p-3 flex justify-between items-center hover:border-orange cursor-pointer transition-all">
+                                        <div><span class="font-bold">MLflow</span>
+                                            <p class="text-xs text-[#666]">Log metrics</p>
+                                        </div>
+                                        <button class="btn btn-sm"><i data-lucide="settings"
+                                                class="w-3 h-3"></i></button>
+                                    </div>
+                                    <div
+                                        class="gh-card p-3 flex justify-between items-center hover:border-orange cursor-pointer transition-all">
+                                        <div><span class="font-bold">W&B</span>
+                                            <p class="text-xs text-[#666]">Experiment tracking</p>
+                                        </div>
+                                        <button class="btn btn-sm"><i data-lucide="settings"
+                                                class="w-3 h-3"></i></button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Step 6: Governance -->
+                            <div x-show="peftStudio.step === 6" class="gh-card">
+                                <h3 class="font-semibold mb-4 text-lg border-b border-[#333] pb-2">Governance</h3>
+                                <div class="space-y-4">
+                                    <div class="gh-card p-3 bg-transparent border border-[#333]">
+                                        <label class="flex items-center gap-3">
+                                            <input type="checkbox" x-model="peftStudio.draft.dp_enabled"
+                                                class="accent-[#ff5722]">
+                                            <div>
+                                                <div class="font-bold">Differential Privacy</div>
+                                                <div class="text-xs text-[#666]">Add DP-SGD noise.</div>
+                                            </div>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Step 7: Review -->
+                            <div x-show="peftStudio.step === 7" class="gh-card">
+                                <h3 class="font-semibold mb-4 text-lg border-b border-[#333] pb-2">Review</h3>
+                                <div class="grid grid-cols-2 gap-4 text-xs font-mono mb-4">
+                                    <div class="p-3 bg-[#111] border border-[#333]">
+                                        <div class="text-[#666] mb-1">CONFIG</div>
+                                        <div x-text="'Backend: ' + peftStudio.draft.training_config.backend"></div>
+                                        <div x-text="'Model: ' + peftStudio.draft.training_config.model_name_or_path">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="p-3 bg-orange-dim border border-orange text-orange text-xs">
+                                    Ready to launch training run.
+                                </div>
+                            </div>
+
+                            <!-- Step 8: Monitor -->
+                            <div x-show="peftStudio.step === 8" class="gh-card">
+                                <div class="flex justify-between items-start mb-4">
+                                    <div>
+                                        <h3 class="font-semibold text-lg"
+                                            x-text="'Run: ' + (peftStudio.run.run_id || 'Starting...')"></h3>
+                                        <div class="flex items-center gap-2 mt-1">
+                                            <span class="badge"
+                                                :class="peftStudio.run.status === 'completed' ? 'badge-success' : 'badge-warning'"
+                                                x-text="peftStudio.run.status"></span>
+                                        </div>
+                                    </div>
+                                    <div class="flex gap-2">
+                                        <button class="btn" @click="peftStudio.actions.promote('stable')"
+                                            :disabled="peftStudio.run.status !== 'completed'">
+                                            <i data-lucide="check-circle" class="w-4 h-4"></i> Promote
+                                        </button>
+                                        <button class="btn" @click="peftStudio.step = 1">
+                                            <i data-lucide="rotate-ccw" class="w-4 h-4"></i> New
+                                        </button>
+                                    </div>
+                                </div>
+                                <div
+                                    class="w-full bg-[#111] h-2 rounded-full overflow-hidden mb-4 border border-[#333]">
+                                    <div class="bg-orange-500 h-full transition-all duration-500"
+                                        :style="'width: ' + peftStudio.run.progress + '%'"></div>
+                                </div>
+                            </div>
+                        </div> <!-- End Wizard Content -->
+                    </div> <!-- End PEFT Grid -->
+
+                    <div class="log-stream" id="runLogs">
+                        <template x-for="log in peftStudio.run.logs">
+                            <div class="mb-1" x-text="log"></div>
                         </template>
                     </div>
                 </div>
-
-                <!-- Key Vault Tab -->
-                <div x-show="activeTab === 'vault'" x-transition x-cloak>
-                    <h3 class="text-lg font-semibold mb-6 flex items-center gap-2">
-                        <i data-lucide="key" class="text-sky-500 w-5 h-5"></i> Machine Identity Vault
-                        <template x-if="loading.inventory">
-                            <span class="ml-2 text-xs text-white/30 animate-pulse">Loading...</span>
-                        </template>
-                    </h3>
-
-                    <div class="plm-card">
-                        <!-- Error State -->
-                        <template x-if="errors.inventory">
-                            <div class="flex flex-col items-center justify-center py-12 text-center">
-                                <div class="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center mb-4">
-                                    <i data-lucide="alert-triangle" class="w-6 h-6 text-red-400"></i>
-                                </div>
-                                <p class="text-white/60 text-sm">Failed to load identity vault</p>
-                                <p class="text-white/30 text-xs mt-1" x-text="errors.inventory"></p>
-                                <button @click="fetchInventory()"
-                                    class="mt-4 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-xs transition-colors">
-                                    Retry
-                                </button>
-                            </div>
-                        </template>
-
-                        <!-- Loading Skeleton -->
-                        <template x-if="loading.inventory && !errors.inventory">
-                            <div class="space-y-4">
-                                <template x-for="i in 5">
-                                    <div class="flex items-center gap-4">
-                                        <div class="skeleton h-4 w-40"></div>
-                                        <div class="skeleton h-4 w-32"></div>
-                                        <div class="skeleton h-4 w-32"></div>
-                                        <div class="skeleton h-4 w-24"></div>
-                                    </div>
-                                </template>
-                            </div>
-                        </template>
-
-                        <!-- Empty State -->
-                        <template x-if="!loading.inventory && !errors.inventory && certificates.length === 0">
-                            <div class="flex flex-col items-center justify-center py-12 text-center">
-                                <div class="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-4">
-                                    <i data-lucide="key" class="w-6 h-6 text-white/20"></i>
-                                </div>
-                                <p class="text-white/40 text-sm">Vault empty</p>
-                                <p class="text-white/20 text-xs mt-1">No machine identities found</p>
-                            </div>
-                        </template>
-
-                        <!-- Data Table -->
-                        <template x-if="!loading.inventory && !errors.inventory && certificates.length > 0">
-                            <table class="w-full text-left text-sm">
-                                <thead>
-                                    <tr class="text-white/40 border-b border-white/5">
-                                        <th class="pb-3 font-medium">Subject DN</th>
-                                        <th class="pb-3 font-medium">Issuer</th>
-                                        <th class="pb-3 font-medium">Conf</th>
-                                        <th class="pb-3 font-medium">Expires</th>
-                                        <th class="pb-3 font-medium">Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-white/5">
-                                    <template x-for="cert in certificates" :key="cert.id">
-                                        <tr class="hover:bg-white/[0.02] transition-all hover-lift">
-                                            <td class="py-4 text-xs font-mono text-white/80" x-text="cert.subject"></td>
-                                            <td class="py-4 text-xs text-white/50" x-text="cert.issuer"></td>
-                                            <td class="py-4">
-                                                <template x-if="cert.has_eku_conflict">
-                                                    <div class="w-4 h-4 text-red-400" title="EKU Split Required">
-                                                        <i data-lucide="alert-triangle" class="w-4 h-4"></i>
-                                                    </div>
-                                                </template>
-                                                <template x-if="!cert.has_eku_conflict">
-                                                    <i data-lucide="check" class="text-emerald-400/30 w-4 h-4"></i>
-                                                </template>
-                                            </td>
-                                            <td class="py-4 text-xs text-white/50"
-                                                x-text="new Date(cert.not_after).toLocaleDateString()"></td>
-                                            <td class="py-4">
-                                                <span :class="getCertExpiryClass(cert.days_to_expiry)"
-                                                    class="px-2 py-1 rounded-full text-[10px] font-bold"
-                                                    x-text="cert.days_to_expiry + ' days'"></span>
-                                            </td>
-                                        </tr>
-                                    </template>
-                                </tbody>
-                            </table>
-                        </template>
-                    </div>
-                </div>
-
-                <!-- Audit Tab -->
-                <div x-show="activeTab === 'audit'" x-transition x-cloak>
-                    <h3 class="text-lg font-semibold mb-6 flex items-center gap-2">
-                        <i data-lucide="clipboard-list" class="text-sky-500 w-5 h-5"></i> Tamper-Proof Audit Trail
-                        <template x-if="loading.audit">
-                            <span class="ml-2 text-xs text-white/30 animate-pulse">Loading...</span>
-                        </template>
-                    </h3>
-
-                    <div class="plm-card">
-                        <!-- Error State -->
-                        <template x-if="errors.audit">
-                            <div class="flex flex-col items-center justify-center py-12 text-center">
-                                <div class="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center mb-4">
-                                    <i data-lucide="alert-triangle" class="w-6 h-6 text-red-400"></i>
-                                </div>
-                                <p class="text-white/60 text-sm">Failed to load audit logs</p>
-                                <p class="text-white/30 text-xs mt-1" x-text="errors.audit"></p>
-                                <button @click="fetchAudit()"
-                                    class="mt-4 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-xs transition-colors">
-                                    Retry
-                                </button>
-                            </div>
-                        </template>
-
-                        <!-- Loading Skeleton -->
-                        <template x-if="loading.audit && !errors.audit">
-                            <div class="space-y-4">
-                                <template x-for="i in 8">
-                                    <div class="flex items-center gap-4">
-                                        <div class="skeleton h-4 w-32"></div>
-                                        <div class="skeleton h-4 w-24"></div>
-                                        <div class="skeleton h-4 w-20"></div>
-                                        <div class="skeleton h-4 w-40"></div>
-                                        <div class="skeleton h-4 w-16"></div>
-                                    </div>
-                                </template>
-                            </div>
-                        </template>
-
-                        <!-- Empty State -->
-                        <template x-if="!loading.audit && !errors.audit && auditLogs.length === 0">
-                            <div class="flex flex-col items-center justify-center py-12 text-center">
-                                <div class="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-4">
-                                    <i data-lucide="clipboard-list" class="w-6 h-6 text-white/20"></i>
-                                </div>
-                                <p class="text-white/40 text-sm">Audit trail empty</p>
-                                <p class="text-white/20 text-xs mt-1">Security events will appear here</p>
-                            </div>
-                        </template>
-
-                        <!-- Data Table -->
-                        <template x-if="!loading.audit && !errors.audit && auditLogs.length > 0">
-                            <table class="w-full text-left text-sm">
-                                <thead>
-                                    <tr class="text-white/40 border-b border-white/5">
-                                        <th class="pb-3 font-medium">Timestamp</th>
-                                        <th class="pb-3 font-medium">Actor</th>
-                                        <th class="pb-3 font-medium">Action</th>
-                                        <th class="pb-3 font-medium">Target</th>
-                                        <th class="pb-3 font-medium">Hash</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-white/5">
-                                    <template x-for="log in auditLogs" :key="log.id">
-                                        <tr class="hover:bg-white/[0.02] transition-all hover-lift">
-                                            <td class="py-4 text-xs text-white/40" x-text="formatDate(log.timestamp)">
-                                            </td>
-                                            <td class="py-4">
-                                                <div class="flex flex-col">
-                                                    <span class="text-xs font-bold text-sky-400"
-                                                        x-text="log.actor_type"></span>
-                                                    <span
-                                                        class="text-[10px] text-white/30 truncate max-w-[100px] font-mono"
-                                                        x-text="log.actor_id"></span>
-                                                </div>
-                                            </td>
-                                            <td class="py-4">
-                                                <span class="badge badge-info" x-text="log.action"></span>
-                                            </td>
-                                            <td class="py-4 text-xs font-mono text-white/60"
-                                                x-text="log.target_type + ':' + log.target_id"></td>
-                                            <td class="py-4 text-[10px] font-mono text-white/20 truncate max-w-[80px]"
-                                                x-text="log.entry_hash"></td>
-                                        </tr>
-                                    </template>
-                                </tbody>
-                            </table>
-                        </template>
-                    </div>
-                </div>
-            </main>
         </div>
+
+        <!-- Wizard Navigation -->
+        <div class="flex justify-between mt-6">
+            <button class="btn" @click="peftStudio.step--"
+                :disabled="peftStudio.step === 1 || peftStudio.step === 8">Back</button>
+            <button class="btn btn-primary" @click="peftStudio.step++" x-show="peftStudio.step < 7">Next</button>
+            <button class="btn btn-primary" @click="peftStudio.actions.startRun()" x-show="peftStudio.step === 7">Launch
+                Fine-Tuning</button>
+        </div>
+    </div>
+
+
+    <!-- Lineage Tab -->
+    <div x-show="activeTab === 'lineage'" x-transition x-cloak>
+        <div class="gh-header">
+            <h2 class="text-xl font-semibold">Model Lineage & Runs</h2>
+            <span class="text-xs text-[#8b949e]">Provenance Tracking</span>
+        </div>
+
+        <div class="gh-card">
+            <table class="w-full text-left text-xs">
+                <thead>
+                    <tr class="text-[#8b949e] border-b border-[#30363d]">
+                        <th class="pb-2">Run ID</th>
+                        <th class="pb-2">Git Commit</th>
+                        <th class="pb-2">SDK</th>
+                        <th class="pb-2">Created</th>
+                        <th class="pb-2">Status</th>
+                        <th class="pb-2 text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-[#30363d]">
+                    <template x-for="run in runs" :key="run.run_id">
+                        <tr class="hover:bg-[#161b22]">
+                            <td class="py-3 font-mono text-[#58a6ff]" x-text="run.run_id.substring(0,8)">
+                            </td>
+                            <td class="py-3 font-mono text-[#8b949e]"
+                                x-text="run.git_commit ? run.git_commit.substring(0,7) : '-'"></td>
+                            <td class="py-3" x-text="run.sdk_version"></td>
+                            <td class="py-3 text-[#8b949e]" x-text="formatDate(run.created_at)"></td>
+                            <span :class="getStatusColor(run.status)" class="font-bold" x-text="run.status"></span>
+                            </td>
+                            <td class="py-3 text-right">
+                                <button class="btn btn-xs border-[#30363d] hover:border-sky-500 hover:text-sky-400"
+                                    @click.stop="deployPackage(run.run_id)">
+                                    <i data-lucide="rocket" class="w-3 h-3 mr-1"></i> Deploy
+                                </button>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Compliance Registry Tab (Restored) -->
+    <div x-show="activeTab === 'compliance'" x-transition x-cloak>
+        <div class="gh-header">
+            <div>
+                <h2 class="text-xl font-semibold">Compliance Registry</h2>
+                <span class="text-xs text-[#8b949e]">TGSP Packages & Security Profiles</span>
+            </div>
+            <button class="btn" @click="fetchTGSP()">Refresh Registry</button>
+        </div>
+
+        <div class="grid grid-cols-3 gap-6">
+            <!-- Left: Stats -->
+            <div class="space-y-6">
+                <div class="gh-card">
+                    <h4 class="text-[10px] font-bold uppercase tracking-widest text-[#8b949e] mb-2">Registry
+                        Health
+                    </h4>
+                    <div class="flex items-end gap-2">
+                        <span class="text-3xl font-bold font-mono text-white">98.2%</span>
+                        <span class="text-xs text-emerald-400 mb-1">Pass Rate</span>
+                    </div>
+                    <div class="mt-4 space-y-2">
+                        <div class="flex justify-between text-xs">
+                            <span class="text-[#8b949e]">Signatures Verified</span>
+                            <span class="text-white">12,402</span>
+                        </div>
+                        <div class="flex justify-between text-xs">
+                            <span class="text-[#8b949e]">Malicious Pkgs</span>
+                            <span class="text-red-400">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="gh-card bg-[#161b22]/50 border-dashed">
+                    <div class="flex flex-col items-center justify-center py-6 text-center">
+                        <i data-lucide="upload-cloud" class="w-8 h-8 text-[#30363d] mb-2"></i>
+                        <h5 class="text-xs font-semibold text-[#c9d1d9]">Upload TGSP</h5>
+                        <p class="text-[10px] text-[#8b949e] mt-1 max-w-[150px]">Drag & drop signed packages
+                            to
+                            undergo verification.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Packages List -->
+            <div class="col-span-2">
+                <div class="gh-card">
+                    <h4 class="text-sm font-semibold mb-4 text-[#c9d1d9]">Verified Packages</h4>
+
+                    <div class="space-y-3">
+                        <template x-if="loading.tgsp">
+                            <div class="space-y-3">
+                                <div class="skeleton h-16 w-full rounded"></div>
+                                <div class="skeleton h-16 w-full rounded"></div>
+                                <div class="skeleton h-16 w-full rounded"></div>
+                            </div>
+                        </template>
+
+                        <template x-if="!loading.tgsp && tgspPackages.length === 0">
+                            <div class="text-center py-10">
+                                <span class="text-[#8b949e] text-xs">No active profiles found.</span>
+                            </div>
+                        </template>
+
+                        <template x-for="pkg in tgspPackages" :key="pkg.id">
+                            <div
+                                class="p-3 border border-[#30363d] rounded bg-[#0d1117] hover:border-[#58a6ff] transition-colors group">
+                                <div class="flex justify-between items-start">
+                                    <div class="flex items-start gap-3">
+                                        <div
+                                            class="w-8 h-8 rounded bg-[#1f6feb]/20 flex items-center justify-center mt-1">
+                                            <i data-lucide="package" class="w-4 h-4 text-[#58a6ff]"></i>
+                                        </div>
+                                        <div>
+                                            <h5 class="text-sm font-bold text-[#58a6ff] group-hover:underline"
+                                                x-text="pkg.name"></h5>
+                                            <div class="flex items-center gap-2 mt-1">
+                                                <span
+                                                    class="text-[10px] bg-[#30363d] px-1.5 py-0.5 rounded text-[#c9d1d9] font-mono"
+                                                    x-text="'v' + pkg.version"></span>
+                                                <span class="text-[10px] text-[#8b949e]"
+                                                    x-text="'ID: ' + pkg.id"></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="flex flex-col items-end gap-1">
+                                        <span class="gh-badge gh-badge-success flex items-center gap-1">
+                                            <i data-lucide="check-circle" class="w-3 h-3"></i> Signed
+                                        </span>
+                                        <span class="text-[10px] text-[#8b949e]"
+                                            x-text="formatDate(pkg.uploaded_at)"></span>
+                                    </div>
+                                </div>
+
+                                <i data-lucide="container" class="w-3 h-3 text-emerald-400"></i>
+                                <span class="text-[10px] text-[#8b949e]">Container</span>
+                            </div>
+                            <div class="ml-auto">
+                                <button class="text-[10px] text-[#58a6ff] hover:text-white font-medium">View
+                                    Report</button>
+                            </div>
+                    </div>
+                </div>
+                </template>
+            </div>
+        </div>
+    </div>
+    </div>
+    </div>
+
+    <!-- Key Vault (KMS) Tab -->
+    <div x-show="activeTab === 'vault'" x-transition x-cloak>
+        <div class="gh-header">
+            <div>
+                <h2 class="text-xl font-semibold">Enterprise KMS Manager</h2>
+                <span class="text-xs text-[#8b949e]">Key Lifecycle & Fleet Policy</span>
+            </div>
+            <div class="flex gap-2">
+                <button class="btn" @click="rotateMasterKey()">Rotate Master Key</button>
+                <button class="btn btn-primary" @click="provisionFleetKey()">Provision New Fleet
+                    Key</button>
+            </div>
+        </div>
+
+        <div class="kms-grid">
+            <div class="space-y-4">
+                <div class="gh-card">
+                    <h4 class="text-sm font-semibold mb-4 flex items-center gap-2">
+                        <i data-lucide="key" class="text-amber-500 w-4 h-4"></i> Active Cryptographic Fleet
+                    </h4>
+                    <div class="space-y-0">
+                        <template x-for="cert in certificates.slice(0, 5)" :key="cert.id">
+                            <div
+                                class="key-status-row hover:bg-[#1c2128] rounded-md transition-colors cursor-pointer group">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-8 h-8 rounded bg-amber-500/10 flex items-center justify-center">
+                                        <i data-lucide="shield"
+                                            class="w-4 h-4 text-amber-500 group-hover:animate-pulse"></i>
+                                    </div>
+                                    <div class="flex flex-col">
+                                        <span class="font-mono text-xs text-[#58a6ff]"
+                                            x-text="cert.id.substring(0,12)"></span>
+                                        <span class="text-[10px] text-[#8b949e]"
+                                            x-text="cert.subject_common_name"></span>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-6">
+                                    <div class="flex flex-col items-end">
+                                        <span
+                                            class="text-[9px] uppercase font-bold text-[#8b949e] tracking-tight">Primitive</span>
+                                        <span class="text-[11px] font-mono"
+                                            x-text="cert.is_pqc ? 'Dilithium-3' : 'mTLS-RSA-4k'"></span>
+                                    </div>
+                                    <div class="w-24 text-right">
+                                        <span :class="getCertExpiryClass(cert.days_to_expiry)"
+                                            class="text-[10px] px-2 py-0.5 rounded-full font-bold bg-white/5"
+                                            x-text="cert.days_to_expiry + 'd remaining'"></span>
+                                    </div>
+                                    <button class="text-[#8b949e] hover:text-white transition-colors"
+                                        title="Rotate Locally" @click="rotateKey(cert.id)">
+                                        <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <div class="gh-card">
+                    <h4 class="text-[10px] font-bold uppercase tracking-widest text-[#8b949e] mb-4">KMS
+                        Access
+                        Policies
+                    </h4>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div
+                            class="p-4 bg-black/20 rounded border border-[#30363d] hover:border-[#58a6ff]/50 transition-colors">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="text-xs font-semibold text-[#c9d1d9]">Auto-Rotation</span>
+                                <span class="gh-badge gh-badge-success">ACTIVE</span>
+                            </div>
+                            <div class="text-2xl font-bold font-mono text-white">30d <span
+                                    class="text-xs font-normal text-[#8b949e]">TTL</span></div>
+                            <p class="text-[10px] text-[#8b949e] mt-2">PQC leaf keys are rotated every 30
+                                days
+                                automatically.</p>
+                        </div>
+                        <div
+                            class="p-4 bg-black/20 rounded border border-[#30363d] hover:border-[#58a6ff]/50 transition-colors">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="text-xs font-semibold text-[#c9d1d9]">TEE Attestation</span>
+                                <span class="gh-badge gh-badge-success">ENFORCED</span>
+                            </div>
+                            <div class="text-2xl font-bold font-mono text-white">Lv. 4 <span
+                                    class="text-xs font-normal text-[#8b949e]">HARD</span></div>
+                            <p class="text-[10px] text-[#8b949e] mt-2">Hardware-backed evidence fabric
+                                required for
+                                all
+                                unwrap calls.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="gh-card">
+                <h4 class="text-[10px] font-bold uppercase tracking-widest text-[#8b949e] mb-6">
+                    Cryptographic Health
+                </h4>
+                <div class="flex flex-col items-center">
+                    <div class="crypto-health-ring relative">
+                        <svg width="120" height="120" class="-rotate-90">
+                            <circle cx="60" cy="60" r="50" fill="none" class="stroke-[#30363d]" stroke-width="8">
+                            </circle>
+                            <circle cx="60" cy="60" r="50" fill="none" class="stroke-emerald-500" stroke-width="8"
+                                stroke-dasharray="314.15" stroke-dashoffset="31.4" stroke-linecap="round"></circle>
+                        </svg>
+                        <div class="absolute inset-0 flex flex-col items-center justify-center">
+                            <span class="text-2xl font-bold text-emerald-500">90%</span>
+                        </div>
+                    </div>
+                    <div class="text-center mt-6">
+                        <div class="text-xs font-bold text-[#c9d1d9]">Quantum-Secure Readiness</div>
+                        <p class="text-[11px] text-[#8b949e] mt-1 leading-relaxed px-4">
+                            9 of 10 active certificates are currently utilizing Post-Quantum algorithms
+                            (Dilithium/Kyber).
+                        </p>
+                    </div>
+
+                    <div class="w-full mt-8 pt-6 border-t border-[#30363d]">
+                        <h5 class="text-[10px] uppercase font-bold text-[#8b949e] mb-4">Recent Audit Proofs
+                        </h5>
+                        <div class="space-y-4">
+                            <div class="flex items-center gap-2 group">
+                                <div class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                                <span class="text-[11px] text-[#c9d1d9]">K7-FLEET: Rotation Signature</span>
+                                <span class="text-[10px] text-[#8b949e] ml-auto">2h ago</span>
+                            </div>
+                            <div class="flex items-center gap-2 group">
+                                <div class="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                                <span class="text-[11px] text-[#c9d1d9]">N2-SIG: HSM Policy Sync</span>
+                                <span class="text-[10px] text-[#8b949e] ml-auto">5h ago</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Audit Tab -->
+    <div x-show="activeTab === 'audit'" x-transition x-cloak>
+        <div class="gh-header">
+            <div>
+                <h2 class="text-xl font-semibold">Immutable Audit Trail</h2>
+                <span class="text-xs text-[#8b949e]">Cryptographic Traceability</span>
+            </div>
+            <button @click="fetchAudit()" class="btn">
+                <i data-lucide="refresh-cw" class="w-3 h-3 inline mr-1"
+                    :class="loading.audit ? 'animate-spin' : ''"></i>
+                Sync Records
+            </button>
+        </div>
+
+        <div class="gh-card p-0 overflow-hidden">
+            <template x-if="loading.audit && auditLogs.length === 0">
+                <div class="p-8 space-y-4">
+                    <template x-for="i in 5">
+                        <div class="flex items-center gap-4">
+                            <div class="skeleton h-4 w-1/4"></div>
+                            <div class="skeleton h-4 w-1/2"></div>
+                            <div class="skeleton h-4 w-1/4"></div>
+                        </div>
+                    </template>
+                </div>
+            </template>
+
+            <template x-if="!loading.audit && auditLogs.length > 0">
+                <table class="w-full text-left text-sm border-collapse">
+                    <thead>
+                        <tr class="text-[#8b949e] border-b border-[#30363d] bg-black/10">
+                            <th class="p-4 font-bold text-[10px] uppercase tracking-wider">Timestamp</th>
+                            <th class="p-4 font-bold text-[10px] uppercase tracking-wider">Actor Context
+                            </th>
+                            <th class="p-4 font-bold text-[10px] uppercase tracking-wider">Action</th>
+                            <th class="p-4 font-bold text-[10px] uppercase tracking-wider">Target Resource
+                            </th>
+                            <th class="p-4 font-bold text-[10px] uppercase tracking-wider text-right">
+                                Integrity Hash
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-[#30363d]">
+                        <template x-for="log in auditLogs" :key="log.id">
+                            <tr class="hover:bg-[#1c2128] transition-colors">
+                                <td class="p-4 text-xs text-[#8b949e] whitespace-nowrap"
+                                    x-text="formatDate(log.timestamp)"></td>
+                                <td class="p-4">
+                                    <div class="flex flex-col">
+                                        <span class="text-xs font-bold text-[#58a6ff]" x-text="log.actor_type"></span>
+                                        <span class="text-[10px] text-[#8b949e] font-mono"
+                                            x-text="log.actor_id.substring(0,12)"></span>
+                                    </div>
+                                </td>
+                                <td class="p-4">
+                                    <span class="badge badge-info" x-text="log.action"></span>
+                                </td>
+                                <td class="p-4">
+                                    <div class="flex flex-col">
+                                        <span class="text-xs text-[#c9d1d9]" x-text="log.target_type"></span>
+                                        <span class="text-[10px] text-[#8b949e] font-mono"
+                                            x-text="log.target_id.substring(0,12)"></span>
+                                    </div>
+                                </td>
+                                <td class="p-4 text-right">
+                                    <span class="text-[10px] font-mono text-[#444c56] hover:text-[#8b949e] cursor-help"
+                                        :title="log.entry_hash" x-text="log.entry_hash.substring(0,16)"></span>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </template>
+
+            <template x-if="!loading.audit && auditLogs.length === 0">
+                <div class="flex flex-col items-center justify-center py-20 text-center">
+                    <div class="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
+                        <i data-lucide="clipboard-list" class="w-8 h-8 text-[#30363d]"></i>
+                    </div>
+                    <h4 class="text-md font-semibold text-[#c9d1d9]">No security events found</h4>
+                    <p class="text-sm text-[#8b949e] max-w-xs mt-2">The tamper-proof ledger is currently
+                        empty.
+                        Events
+                        will appear here as they are processed.</p>
+                </div>
+            </template>
+        </div>
+    </div>
+    <!-- Fleets & Devices Tab -->
+    <div x-show="activeTab === 'fleets'" x-transition x-cloak>
+        <div class="gh-header">
+            <h2 class="text-xl font-semibold">Fleets & Devices</h2>
+            <button class="btn btn-primary" @click="generateEnrollmentToken()">
+                <i data-lucide="plus" class="w-4 h-4"></i> New Enrollment Token
+            </button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <template x-for="fleet in fleets" :key="fleet.id">
+                <div class="gh-card hover:border-[#58a6ff] transition-colors cursor-pointer relative group">
+                    <div class="flex justify-between items-start mb-4">
+                        <div class="flex items-center gap-3">
+                            <div
+                                class="w-10 h-10 rounded bg-[#161b22] border border-[#30363d] flex items-center justify-center">
+                                <i data-lucide="server" class="w-5 h-5 text-[#8b949e]"></i>
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-sm" x-text="fleet.name"></h3>
+                                <p class="text-xs text-[#8b949e]" x-text="fleet.region"></p>
+                            </div>
+                        </div>
+                        <span class="badge badge-success" x-text="fleet.status"></span>
+                    </div>
+                    <div class="flex justify-between text-xs text-[#8b949e] border-t border-[#30363d] pt-3">
+                        <span><strong class="text-white" x-text="fleet.devices_online"></strong> / <span
+                                x-text="fleet.devices_total"></span> Online</span>
+                        <span>Trust: <strong class="text-emerald-400" x-text="fleet.trust_score + '%'"></strong></span>
+                    </div>
+                    <div class="absolute top-4 right-14 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button class="btn btn-sm border-red-500 text-red-500"
+                            @click.stop="revokeFleet(fleet.id)">Revoke</button>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <!-- Global Settings Tab -->
+    <div x-show="activeTab === 'settings'" x-transition x-cloak>
+        <div class="gh-header">
+            <h2 class="text-xl font-semibold">Global Settings</h2>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- KMS Configuration -->
+            <div class="gh-card">
+                <h3 class="font-bold text-sm mb-4 flex items-center gap-2">
+                    <i data-lucide="key" class="w-4 h-4 text-orange-500"></i> Key Management Service (KMS)
+                </h3>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-[#8b949e] mb-1">Provider</label>
+                        <select x-model="settings.kms.provider" title="KMS Provider Selector"
+                            class="w-full bg-[#0d1117] border border-[#30363d] rounded p-2 text-sm text-white focus:border-orange-500 outline-none">
+                            <option value="local">Local Development</option>
+                            <option value="aws">AWS KMS</option>
+                            <option value="azure">Azure Key Vault</option>
+                            <option value="gcp">Google Cloud KMS</option>
+                        </select>
+                    </div>
+
+                    <template x-if="settings.kms.provider !== 'local'">
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-xs font-bold text-[#8b949e] mb-1">Resource ARN / URL</label>
+                                <input type="text" x-model="settings.kms.resource_id"
+                                    placeholder="arn:aws:kms:us-east-1:..."
+                                    class="w-full bg-[#0d1117] border border-[#30363d] rounded p-2 text-sm text-white focus:border-orange-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-[#8b949e] mb-1">Client Secret
+                                    (Encrypted)</label>
+                                <input type="password" placeholder="••••••••••••••••"
+                                    class="w-full bg-[#0d1117] border border-[#30363d] rounded p-2 text-sm text-white focus:border-orange-500 outline-none">
+                            </div>
+                        </div>
+                    </template>
+
+                    <div class="pt-2">
+                        <button class="btn w-full justify-center" @click="testKMSConnection()">
+                            <i data-lucide="link" class="w-3 h-3"></i> Test Connection
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RTPL Privacy Config -->
+            <div class="gh-card">
+                <h3 class="font-bold text-sm mb-4 flex items-center gap-2">
+                    <i data-lucide="ghost" class="w-4 h-4 text-orange-500"></i> RTPL Privacy Defense
+                </h3>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-[#8b949e] mb-1">Defense Mode</label>
+                        <div class="grid grid-cols-3 gap-2">
+                            <button class="btn text-xs justify-center"
+                                :class="settings.rtpl.mode === 'front' ? 'btn-primary' : ''"
+                                @click="settings.rtpl.mode = 'front'">
+                                FRONT (Rayleigh)
+                            </button>
+                            <button class="btn text-xs justify-center"
+                                :class="settings.rtpl.mode === 'wtf-pad' ? 'btn-primary' : ''"
+                                @click="settings.rtpl.mode = 'wtf-pad'">
+                                WTF-PAD
+                            </button>
+                            <button class="btn text-xs justify-center"
+                                :class="settings.rtpl.mode === 'padding' ? 'btn-primary' : ''"
+                                @click="settings.rtpl.mode = 'padding'">
+                                Padding Only
+                            </button>
+                        </div>
+                        <p class="text-[10px] text-[#8b949e] mt-1" x-show="settings.rtpl.mode === 'front'">
+                            Injects dummy packets at start of bursts. Zero latency, moderate overhead.
+                        </p>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-[#8b949e] mb-1">Determinism Profile</label>
+                        <select x-model="settings.rtpl.profile" title="RTPL Determinism Profile"
+                            class="w-full bg-[#0d1117] border border-[#30363d] rounded p-2 text-sm text-white focus:border-orange-500 outline-none">
+                            <option value="surgical">Surgical (Strict &lt; 0.5ms jitter)</option>
+                            <option value="collaborative">Collaborative (General Purpose)</option>
+                            <option value="warehouse">Warehouse (High Latency Tolerance)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    </main>
+    </div>
     </div>
 
     <script src="app.js"></script>
     <script>
-        // Re-initialize icons after Alpine renders
         document.addEventListener('alpine:initialized', () => {
             lucide.createIcons();
         });
-
-        // Re-run icons when tabs change
         window.addEventListener('tab-changed', () => {
             lucide.createIcons();
+            // Re-run icons when individual tabs might have new content
+            setTimeout(() => lucide.createIcons(), 10);
         });
     </script>
 </body>

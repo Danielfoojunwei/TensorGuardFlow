@@ -10,6 +10,9 @@ from .models.identity_models import (  # noqa: F401
 )
 from .models.enablement_models import * # noqa: F401
 from .models.evidence_models import * # noqa: F401
+from .models.peft_models import ( # noqa: F401
+    IntegrationConfig, PeftWizardDraft, PeftRun
+)
 
 # Default to local sqlite for ease of deployment in MVP
 DATABASE_URL = os.getenv("DATABASE_URL")

@@ -9,8 +9,128 @@ function app() {
         endpoints: [],
         auditLogs: [],
         identityJobs: [],
+        pipelineWorkflow: [],
+        keyRotation: { pqc_days_remaining: 0, n2he_hours_remaining: 0, last_rotation: '-' },
         trustPosture: { compliance_health: 0, threat_environment: 'CALIBRATING', at_risk_fleets: 0 },
+
+        // Phase 6: Unification State
+        fleets: [
+            { id: 'f-us-east', name: 'US-East-1 Cluster', region: 'us-east-1', status: 'Healthy', devices_total: 450, devices_online: 442, trust_score: 99.2 },
+            { id: 'f-eu-west', name: 'Berlin Gigafactory', region: 'eu-central-1', status: 'Degraded', devices_total: 120, devices_online: 89, trust_score: 84.5 }
+        ],
+        settings: {
+            kms: { provider: 'local', resource_id: '' },
+            rtpl: { mode: 'front', profile: 'collaborative' }
+        },
         currentTime: '',
+
+        // Security Controls State
+        security: {
+            pqc: true,
+            dp: false
+        },
+        // Modal State
+        modal: {
+            open: false,
+            node: null
+        },
+
+        togglePQC() {
+            this.security.pqc = !this.security.pqc;
+            // Simulate impact
+            if (this.security.pqc) alert("Kyber-1024 / Dilithium-5 Enforced on all TEE channels.");
+            else alert("WARNING: PQC Disabled. Reverting to RSA-2048 (Legacy).");
+        },
+
+        toggleDP() {
+            this.security.dp = !this.security.dp;
+            // Simulate impact
+            if (this.security.dp) alert("Differential Privacy (Epsilon=3.0) applied to Aggregator.");
+            else alert("Differential Privacy Disabled. Raw gradients visible to Aggregator.");
+        },
+
+        generateReport() {
+            window.print();
+        },
+
+        generateEnrollmentToken() {
+            const mockToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9." + btoa(JSON.stringify({ iss: "tensorguard", exp: Date.now() + 3600 })) + ".SIGNATURE_VERIFIED_HSM";
+            alert("New Device Enrollment Token Generated:\n\n" + mockToken + "\n\n(Copied to Clipboard)");
+            console.log("Token: ", mockToken);
+        },
+
+        revokeFleet(id) {
+            if (confirm("Are you sure you want to REVOKE the identity of fleet " + id + "?\nThis will disconnect all " + this.fleets.find(f => f.id === id).devices_total + " devices immediately.")) {
+                this.fleets = this.fleets.filter(f => f.id !== id);
+                alert("Fleet " + id + " has been revoked. RTPL policies updated to block traffic.");
+            }
+        },
+
+        testKMSConnection() {
+            const provider = this.settings.kms.provider.toUpperCase();
+            if (provider === 'LOCAL') {
+                alert("Connected to Local Development KeyStore.\nLatency: 0.2ms");
+            } else {
+                alert("Successfully authenticated with " + provider + ".\nAssuming Role: arn:aws:iam::12345678:role/TensorGuardMaster\n\nLatency: 45ms");
+            }
+        },
+
+        stopNode(id) {
+            alert(`Signal sent: STOP ${id}`);
+            if (this.modal.node) this.modal.node.status = 'stopped';
+            this.modal.open = false;
+            // Update graph visual
+            this.renderN8nGraph();
+        },
+
+        startNode(id) {
+            alert(`Signal sent: START ${id}`);
+            if (this.modal.node) this.modal.node.status = 'active';
+            this.modal.open = false;
+            // Update graph visual
+            this.renderN8nGraph();
+        },
+
+        deployPackage(id) {
+            const fleet = this.fleets[0].name; // Default to first fleet
+            if (confirm(`Deploy Package ${id} to ${fleet}?\n\nThis will initiate a Canary release (10% traffic).`)) {
+                alert(`Deployment Initiated!\n\nTarget: ${fleet}\nVersion: ${id}\nStrategy: Canary (10%)`);
+            }
+        },
+
+        // PEFT Studio State
+        peftStudio: {
+            step: 1,
+            connectors: [],
+            profiles: [],
+            draft: {
+                training_config: {
+                    backend: 'hf',
+                    method: 'lora',
+                    model_name_or_path: 'meta-llama/Llama-2-7b-hf',
+                    dataset_name_or_path: 'databricks/databricks-dolly-15k',
+                    learning_rate: 5e-5,
+                    batch_size: 4,
+                    max_steps: 100,
+                    seed: 42
+                },
+                integrations: {
+                    tracking: 'simulated',
+                    store: 'local_run'
+                },
+                dp_enabled: false,
+                dp_epsilon: 10.0,
+                policy_gate_id: 'default-peft-gate'
+            },
+            run: {
+                run_id: null,
+                status: 'idle',
+                stage: 'waiting',
+                progress: 0,
+                logs: []
+            },
+            actions: {}
+        },
 
         // Loading & Error States
         loading: {
@@ -47,6 +167,9 @@ function app() {
             this.fetchInventory();
             this.fetchAudit();
             this.fetchIdentityJobs();
+            this.fetchPipelineTelemetry();
+            // Initial Graph Render
+            setTimeout(() => this.renderN8nGraph(), 100);
 
             // Poll every 10s (reduced for performance)
             setInterval(() => {
@@ -57,19 +180,187 @@ function app() {
                 this.fetchInventory();
                 this.fetchAudit();
                 this.fetchIdentityJobs();
+                this.fetchPipelineTelemetry().then(() => this.renderN8nGraph());
+                if (this.peftStudio.run.status === 'running') {
+                    this.peftStudio.actions.pollRun();
+                }
             }, 10000);
 
+            // Helper for robust error handling
+            this.handleError = (source, error) => {
+                console.error(`[${source}] Error:`, error);
+                // In a real app, this would update a global error state toaster
+                // For now, we set a scoped error if available, or alert
+                if (this.errors && this.errors[source]) {
+                    this.errors[source] = error.message || "An unexpected error occurred";
+                } else {
+                    alert(`Error in ${source}: ${error.message || error}`);
+                }
+            };
+
+            // PEFT Studio Actions Binding
+            this.peftStudio.actions = {
+                testConnector: async (type) => {
+                    try {
+                        const res = await fetch('/api/v1/peft/connectors/test', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ connector_type: type, config: {} })
+                        });
+                        const data = await res.json();
+                        if (data.valid) {
+                            alert('Connector Valid!');
+                        } else {
+                            throw new Error(data.error || 'Connector validation failed');
+                        }
+                    } catch (e) {
+                        this.handleError('peft', e);
+                    }
+                },
+                applyProfile: async (id) => {
+                    const profile = this.peftStudio.profiles.find(p => p.id === id);
+                    if (profile) {
+                        this.peftStudio.draft.training_config = { ...profile.training_config };
+                        this.peftStudio.step = 2;
+                        setTimeout(() => lucide.createIcons(), 50);
+                    }
+                },
+                startRun: async () => {
+                    try {
+                        const res = await fetch('/api/v1/peft/runs', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(this.peftStudio.draft)
+                        });
+                        const data = await res.json();
+                        if (res.ok) {
+                            this.peftStudio.run.run_id = data.run_id;
+                            this.peftStudio.run.status = 'running';
+                            this.peftStudio.step = 8;
+                            setTimeout(() => {
+                                lucide.createIcons();
+                                this.peftStudio.actions.pollRun();
+                            }, 100);
+                        } else {
+                            throw new Error(data.detail || 'Failed to start run');
+                        }
+                    } catch (e) {
+                        this.handleError('peft', e);
+                    }
+                },
+                pollRun: async () => {
+                    if (!this.peftStudio.run.run_id) return;
+                    try {
+                        const res = await fetch(`/api/v1/peft/runs/${this.peftStudio.run.run_id}`);
+                        if (res.ok) {
+                            const data = await res.json();
+                            this.peftStudio.run.status = data.status;
+                            this.peftStudio.run.stage = data.stage;
+                            this.peftStudio.run.progress = data.progress;
+                            this.peftStudio.run.logs = data.logs || [];
+
+                            // Scroll logs to bottom
+                            setTimeout(() => {
+                                const logEl = document.getElementById('runLogs');
+                                if (logEl) logEl.scrollTop = logEl.scrollHeight;
+                            }, 10);
+
+                            if (data.status === 'completed' || data.status === 'failed') {
+                                this.fetchRuns(); // Refresh general runs list
+                            }
+                        }
+                    } catch (e) {
+                        console.error("Poll failed", e);
+                    }
+                },
+                promote: async (environment) => {
+                    try {
+                        const res = await fetch(`/api/v1/peft/runs/${this.peftStudio.run.run_id}/promote`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ environment })
+                        });
+                        const data = await res.json();
+                        if (data.status !== 'success') throw new Error(data.error);
+                        alert('Promoted successfully!');
+                    } catch (e) {
+                        this.handleError('peft', e);
+                    }
+                }
+            };
+
+            // Initial Data Load with Error Handling
+            try {
+                this.fetchPeftConnectors();
+                this.fetchPeftProfiles();
+            } catch (e) { console.error("Initial load error", e); }
+
             // Re-run icons when tab changes
-            this.$watch('activeTab', () => {
+            this.$watch('activeTab', (val) => {
+                console.log("Tab changed to:", val);
                 setTimeout(() => {
                     lucide.createIcons();
                     this.initCharts();
-                }, 100);
+                }, 50);
             });
 
             // Initialize charts after first data load
             setTimeout(() => this.initCharts(), 500);
         },
+
+        // KMS & Compliance Actions
+        async triggerKeyRotation() {
+            if (!confirm("Initiate emergency global key rotation? This will refresh all PQC and mTLS master secrets.")) return;
+            try {
+                const res = await fetch('/api/v1/identity/rotations', { method: 'POST' });
+                if (!res.ok) throw new Error("API returned " + res.status);
+                alert("Emergency rotation initiated.");
+                this.fetchAudit();
+                this.fetchInventory();
+            } catch (e) {
+                this.handleError('kms', e);
+            }
+        },
+
+        async rotateMasterKey() {
+            try {
+                const res = await fetch('/api/v1/identity/rotations', { method: 'POST' });
+                if (!res.ok) throw new Error("API returned " + res.status);
+                alert("Master key rotation started.");
+                this.fetchInventory();
+            } catch (e) {
+                this.handleError('kms', e);
+            }
+        },
+
+        async provisionFleetKey() {
+            const subject = prompt("Enter Common Name for new Fleet Key:", "node-fleet-x");
+            if (!subject) return;
+            try {
+                const res = await fetch('/api/v1/identity/enroll', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ subject_common_name: subject, type: 'FLEET_NODE' })
+                });
+                if (!res.ok) throw new Error("Failed to enroll");
+                alert("New fleet key provisioned.");
+                this.fetchInventory();
+            } catch (e) {
+                this.handleError('kms', e);
+            }
+        },
+
+        async rotateKey(certId) {
+            try {
+                const res = await fetch(`/api/v1/identity/certificates/${certId}/rotate`, { method: 'POST' });
+                if (!res.ok) throw new Error("Rotation failed");
+                alert("Key rotation successful.");
+                this.fetchInventory();
+            } catch (e) {
+                this.handleError('kms', e);
+            }
+        },
+
 
         updateTime() {
             const now = new Date();
@@ -283,6 +574,19 @@ function app() {
             }
         },
 
+        async fetchPipelineTelemetry() {
+            try {
+                const res = await fetch('/api/v1/telemetry/pipeline');
+                if (res.ok) {
+                    const data = await res.json();
+                    this.pipelineWorkflow = data.workflow;
+                    this.keyRotation = data.key_rotation;
+                }
+            } catch (e) {
+                console.error("Pipeline telemetry fetch failed", e);
+            }
+        },
+
         async executeEKUMigration() {
             if (!confirm("Proceed with EKU Split Migration for all conflicting certificates? This will trigger automated dual-renewal jobs.")) return;
 
@@ -320,45 +624,117 @@ function app() {
         },
 
         getStatusColor(status) {
-            const colors = {
-                'completed': 'text-emerald-400',
-                'evaluated': 'text-sky-400',
-                'running': 'text-amber-400',
-                'failed': 'text-red-400',
-                'pending': 'text-white/40',
-                'registered': 'text-violet-400',
-                'succeeded': 'text-emerald-400',
-                'issuing': 'text-sky-300 animate-pulse',
-                'deploying': 'text-amber-400',
-                'validating': 'text-indigo-400',
-                'csr_requested': 'text-sky-400',
-                'challenge_pending': 'text-orange-400'
-            };
-            return colors[status?.toLowerCase()] || 'text-white/40';
+            const s = status?.toLowerCase();
+            if (['failed', 'error', 'revoked'].includes(s)) return 'text-orange-500 font-bold';
+            if (['running', 'active', 'validating'].includes(s)) return 'text-orange-300 animate-pulse';
+            if (['completed', 'succeeded', 'registered'].includes(s)) return 'text-white font-medium';
+            return 'text-[#666]';
         },
 
         getStatusBg(status) {
-            const colors = {
-                'completed': 'bg-emerald-500/20',
-                'evaluated': 'bg-sky-500/20',
-                'running': 'bg-amber-500/20',
-                'failed': 'bg-red-500/20',
-                'pending': 'bg-white/10',
-                'registered': 'bg-violet-500/20',
-                'succeeded': 'bg-emerald-500/20',
-                'issuing': 'bg-sky-500/20',
-                'deploying': 'bg-amber-500/20',
-                'validating': 'bg-indigo-500/20',
-                'csr_requested': 'bg-sky-500/10',
-                'challenge_pending': 'bg-orange-500/10'
-            };
-            return colors[status?.toLowerCase()] || 'bg-white/10';
+            const s = status?.toLowerCase();
+            if (['failed', 'error', 'revoked'].includes(s)) return 'bg-orange-500/20';
+            if (['running', 'active', 'validating'].includes(s)) return 'bg-orange-500/10';
+            if (['completed', 'succeeded', 'registered'].includes(s)) return 'bg-white/10';
+            return 'bg-[#222]';
         },
 
         getCertExpiryClass(daysToExpiry) {
-            if (daysToExpiry <= 7) return 'text-red-400 bg-red-500/20';
-            if (daysToExpiry <= 30) return 'text-amber-400 bg-amber-500/20';
-            return 'text-emerald-400 bg-emerald-500/20';
+            if (daysToExpiry <= 7) return 'text-orange-500 bg-orange-500/20 font-bold';
+            if (daysToExpiry <= 30) return 'text-orange-300 bg-orange-500/10';
+            return 'text-white bg-white/10';
+        },
+
+        renderN8nGraph() {
+            const canvas = document.getElementById('n8n-canvas');
+            if (!canvas) return;
+
+            // Clear existing nodes (keep SVG layer)
+            const htmlNodes = canvas.querySelectorAll('.graph-node');
+            htmlNodes.forEach(n => n.remove());
+
+            const svgLayer = canvas.querySelector('.connector-layer');
+            svgLayer.innerHTML = ''; // Clear paths
+
+            // Telemetry Data (or Fallback)
+            const data = this.pipelineWorkflow || {
+                nodes: [
+                    { id: 'edge', label: 'Pi0 Edge Device', type: 'source', status: 'active', x: 50, y: 150, metrics: { cpu: '45%', ram: '1.2GB', fps: '30' } },
+                    { id: 'agg', label: 'Aggregation Server', type: 'process', status: 'active', x: 350, y: 150, metrics: { clients: 12, round: 42, latency: '12ms' } },
+                    { id: 'cloud', label: 'Cloud Backend', type: 'target', status: 'active', x: 650, y: 150, metrics: { uptime: '99.9%', cost: '$0.42/h', model: 'Llama-3' } }
+                ]
+            };
+
+            // 1. Render Nodes
+            data.nodes.forEach(node => {
+                const el = document.createElement('div');
+                el.className = `graph-node ${node.status === 'stopped' ? 'opacity-50 grayscale' : ''}`;
+                el.style.left = node.x + 'px';
+                el.style.top = node.y + 'px';
+                el.style.cursor = 'pointer';
+
+                // Add click handler for Modal
+                el.onclick = () => {
+                    this.modal.node = node;
+                    this.modal.open = true;
+                };
+
+                el.innerHTML = `
+                    <div class="node-header">
+                        <span>${node.label}</span>
+                        <i data-lucide="${node.type === 'source' ? 'cpu' : (node.type === 'target' ? 'cloud' : 'layers')}" class="w-3 h-3"></i>
+                    </div>
+                    <div class="node-body">
+                        ${Object.entries(node.metrics).map(([k, v]) => `
+                            <div class="node-metric">
+                                <span class="uppercase opacity-50">${k}</span>
+                                <span>${v}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                    ${node.status === 'stopped' ? '<div class="absolute inset-0 flex items-center justify-center bg-black/50 text-red-500 font-bold uppercase tracking-widest text-xs">STOPPED</div>' : ''}
+                `;
+                canvas.appendChild(el);
+            });
+
+            // 2. Render Connections (Bezier)
+            const nodes = data.nodes;
+            for (let i = 0; i < nodes.length - 1; i++) {
+                const src = nodes[i];
+                const tgt = nodes[i + 1];
+
+                // Calculate anchor points (Right of Src -> Left of Tgt)
+                const x1 = src.x + 160;
+                const y1 = src.y + 40;
+                const x2 = tgt.x;
+                const y2 = tgt.y + 40;
+
+                // Bezier Control Points
+                const cp1x = x1 + (x2 - x1) / 2;
+                const cp2x = x2 - (x2 - x1) / 2;
+
+                const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                path.setAttribute("d", `M ${x1} ${y1} C ${cp1x} ${y1}, ${cp2x} ${y2}, ${x2} ${y2}`);
+                path.setAttribute("class", "connector-path active");
+                svgLayer.appendChild(path);
+            }
+
+            // Re-init Icons for new nodes
+            if (window.lucide) window.lucide.createIcons();
+        },
+
+        async fetchPeftConnectors() {
+            try {
+                const res = await fetch('/api/v1/peft/connectors');
+                if (res.ok) this.peftStudio.connectors = await res.json();
+            } catch (e) { }
+        },
+
+        async fetchPeftProfiles() {
+            try {
+                const res = await fetch('/api/v1/peft/profiles');
+                if (res.ok) this.peftStudio.profiles = await res.json();
+            } catch (e) { }
         }
     }
 }

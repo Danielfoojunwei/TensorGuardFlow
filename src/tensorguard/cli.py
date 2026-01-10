@@ -105,15 +105,55 @@ def bench(subcommand_args):
     bench_main()
 
 
-# === COMPLIANCE ===
-@cli.command("compliance")
-@click.option("--evidence-dir", default="./artifacts/evidence", help="Directory containing .tge.json files")
-@click.option("--output", "-o", default="./compliance_bundle.zip", help="Output ZIP file path")
-def compliance_export(evidence_dir, output):
-    """Export compliance evidence bundle for ISO 27001 / NIST CSF audit."""
-    from .compliance.export import export_compliance_bundle
-    result = export_compliance_bundle(evidence_dir, output)
     click.echo(f"Compliance bundle exported: {result}")
+
+
+# === PEFT STUDIO ===
+@cli.group()
+def peft():
+    """PEFT (Parameter-Efficient Fine-Tuning) Studio & Orchestration."""
+    pass
+
+
+@peft.command("ui")
+@click.option("--host", default="0.0.0.0", help="Host to bind to")
+@click.option("--port", default=8000, help="Port to listen on")
+def peft_ui(host, port):
+    """Launch the PEFT Studio UI."""
+    import uvicorn
+    import webbrowser
+    from threading import Timer
+
+    def open_browser():
+        webbrowser.open(f"http://{host if host != '0.0.0.0' else 'localhost'}:{port}/#peft-studio")
+
+    Timer(1.5, open_browser).start()
+    uvicorn.run("tensorguard.platform.main:app", host=host, port=port, reload=False)
+
+
+@peft.command("run")
+@click.argument("config_path", type=click.Path(exists=True))
+def peft_run(config_path):
+    """Run a PEFT workflow from a JSON/YAML configuration file."""
+    import json
+    import asyncio
+    from .integrations.peft_hub.workflow import PeftWorkflow
+    from .integrations.peft_hub.schemas import PeftRunConfig
+
+    with open(config_path, 'r') as f:
+        config_data = json.load(f)
+
+    config = PeftRunConfig(**config_data)
+    workflow = PeftWorkflow(config)
+
+    click.echo(f"Starting PEFT Run [Simulation={config.simulation}]...")
+    
+    async def _run():
+        async for log in workflow.execute():
+            click.echo(log)
+
+    asyncio.run(_run())
+    click.echo("PEFT Run Completed.")
 
 
 def main():
