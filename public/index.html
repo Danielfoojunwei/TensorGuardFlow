@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TensorGuard Enterprise PLM</title>
+    <title>TensorGuard Enterprise PLM v2.1</title>
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -44,32 +44,86 @@
 
     <div class="main-grid">
         <!-- Sidebar -->
-        <aside class="bg-[#0f0f17] border-r border-white/5 flex flex-col p-6 fixed h-full w-[260px]">
-            <div class="flex items-center gap-3 mb-10 overflow-hidden">
+        <aside class="bg-[#0f0f17] border-r border-white/5 flex flex-col p-6 fixed h-full w-[260px] overflow-y-auto">
+            <div class="flex items-center gap-3 mb-8 overflow-hidden">
                 <div
                     class="w-8 h-8 rounded-lg bg-sky-500 flex-shrink-0 flex items-center justify-center text-white font-bold">
                     T</div>
                 <div class="flex flex-col">
                     <span class="font-bold text-sm tracking-tight">TensorGuard</span>
-                    <span class="text-[10px] text-white/40 uppercase tracking-widest font-semibold">Enterprise
-                        PLM</span>
+                    <span class="text-[10px] text-white/40 uppercase tracking-widest font-semibold">Enterprise PLM
+                        v2.1</span>
+                </div>
+            </div>
+
+            <!-- System Health Indicator -->
+            <div class="mb-6 p-3 rounded-lg bg-gradient-to-r from-emerald-500/10 to-transparent border border-emerald-500/20"
+                x-show="systemHealth.status === 'healthy'">
+                <div class="flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span class="text-xs text-emerald-400 font-medium">System Healthy</span>
+                </div>
+            </div>
+            <div class="mb-6 p-3 rounded-lg bg-gradient-to-r from-amber-500/10 to-transparent border border-amber-500/20"
+                x-show="systemHealth.status === 'degraded'">
+                <div class="flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                    <span class="text-xs text-amber-400 font-medium">Degraded Mode</span>
+                </div>
+            </div>
+            <div class="mb-6 p-3 rounded-lg bg-gradient-to-r from-red-500/10 to-transparent border border-red-500/20"
+                x-show="systemHealth.status === 'unhealthy'">
+                <div class="flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                    <span class="text-xs text-red-400 font-medium">System Unhealthy</span>
                 </div>
             </div>
 
             <nav class="space-y-1 flex-1">
+                <div class="text-[10px] text-white/30 uppercase tracking-widest font-bold mb-2 mt-2">Overview</div>
                 <div @click="activeTab = 'dashboard'" class="sidebar-link"
                     :class="{'active': activeTab === 'dashboard'}">
                     <i data-lucide="layout-dashboard"></i> <span>Dashboard</span>
                 </div>
-                <div @click="activeTab = 'lineage'" class="sidebar-link" :class="{'active': activeTab === 'lineage'}">
-                    <i data-lucide="git-branch"></i> <span>Model Lineage</span>
+
+                <div class="text-[10px] text-white/30 uppercase tracking-widest font-bold mb-2 mt-6">Operations</div>
+                <div @click="activeTab = 'pipeline'" class="sidebar-link" :class="{'active': activeTab === 'pipeline'}">
+                    <i data-lucide="git-merge"></i> <span>Pipeline Monitor</span>
+                    <span x-show="pipelineErrors > 0"
+                        class="ml-auto bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full"
+                        x-text="pipelineErrors"></span>
+                </div>
+                <div @click="activeTab = 'errors'" class="sidebar-link" :class="{'active': activeTab === 'errors'}">
+                    <i data-lucide="alert-circle"></i> <span>Error Console</span>
+                    <span x-show="errorCount > 0"
+                        class="ml-auto bg-amber-500 text-white text-[9px] px-1.5 py-0.5 rounded-full"
+                        x-text="errorCount"></span>
+                </div>
+                <div @click="activeTab = 'config'" class="sidebar-link" :class="{'active': activeTab === 'config'}">
+                    <i data-lucide="settings"></i> <span>Configuration</span>
+                </div>
+
+                <div class="text-[10px] text-white/30 uppercase tracking-widest font-bold mb-2 mt-6">Security</div>
+                <div @click="activeTab = 'keys'" class="sidebar-link" :class="{'active': activeTab === 'keys'}">
+                    <i data-lucide="key"></i> <span>Key Management</span>
+                    <span x-show="keysNeedingRotation > 0"
+                        class="ml-auto bg-amber-500 text-white text-[9px] px-1.5 py-0.5 rounded-full"
+                        x-text="keysNeedingRotation"></span>
+                </div>
+                <div @click="activeTab = 'vault'" class="sidebar-link" :class="{'active': activeTab === 'vault'}">
+                    <i data-lucide="shield"></i> <span>Identity Vault</span>
                 </div>
                 <div @click="activeTab = 'compliance'" class="sidebar-link"
                     :class="{'active': activeTab === 'compliance'}">
-                    <i data-lucide="shield-check"></i> <span>Compliance Registry</span>
+                    <i data-lucide="shield-check"></i> <span>Compliance</span>
                 </div>
-                <div @click="activeTab = 'vault'" class="sidebar-link" :class="{'active': activeTab === 'vault'}">
-                    <i data-lucide="key"></i> <span>Key Vault</span>
+
+                <div class="text-[10px] text-white/30 uppercase tracking-widest font-bold mb-2 mt-6">Lineage</div>
+                <div @click="activeTab = 'lineage'" class="sidebar-link" :class="{'active': activeTab === 'lineage'}">
+                    <i data-lucide="git-branch"></i> <span>Model Lineage</span>
+                </div>
+                <div @click="activeTab = 'versions'" class="sidebar-link" :class="{'active': activeTab === 'versions'}">
+                    <i data-lucide="history"></i> <span>Version Control</span>
                 </div>
                 <div @click="activeTab = 'audit'" class="sidebar-link" :class="{'active': activeTab === 'audit'}">
                     <i data-lucide="clipboard-list"></i> <span>Audit Trail</span>
@@ -89,296 +143,835 @@
             </div>
         </aside>
 
-        <!-- Main Content (Spacer for fixed sidebar) -->
+        <!-- Main Content -->
         <div class="col-start-2">
             <header
                 class="h-16 border-b border-white/5 flex items-center px-10 sticky top-0 bg-[#0a0a0f]/80 backdrop-blur z-40 justify-between">
-                <div class="flex items-center gap-2 text-xs text-white/40 font-mono">
-                    <span>SYSTEM_TIME</span>
+                <div class="flex items-center gap-4 text-xs text-white/40 font-mono">
                     <span class="text-white/60" x-text="currentTime"></span>
                     <span class="mx-2">|</span>
-                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-                    <span class="text-emerald-500">PRODUCTION READY</span>
+                    <span class="flex items-center gap-1">
+                        <span class="w-2 h-2 rounded-full" :class="systemHealth.status === 'healthy' ? 'bg-emerald-500' : systemHealth.status === 'degraded' ? 'bg-amber-500' : 'bg-red-500'"></span>
+                        <span :class="systemHealth.status === 'healthy' ? 'text-emerald-500' : systemHealth.status === 'degraded' ? 'text-amber-500' : 'text-red-500'"
+                            x-text="degradation.level.toUpperCase()"></span>
+                    </span>
+                    <span class="mx-2">|</span>
+                    <span class="flex items-center gap-1">
+                        <i data-lucide="cpu" class="w-3 h-3"></i>
+                        <span x-text="systemMetrics.cpu_usage_percent?.toFixed(1) + '%'">--</span>
+                    </span>
+                    <span class="flex items-center gap-1">
+                        <i data-lucide="memory-stick" class="w-3 h-3"></i>
+                        <span x-text="systemMetrics.memory_usage_percent?.toFixed(1) + '%'">--</span>
+                    </span>
                 </div>
                 <div class="flex items-center gap-4">
+                    <button @click="refreshAll()"
+                        class="bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-md text-xs font-medium border border-white/10 transition-colors flex items-center gap-2">
+                        <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+                        Refresh
+                    </button>
                     <button
                         class="bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-md text-xs font-medium border border-white/10 transition-colors">Export
                         Report</button>
                     <button
                         class="bg-sky-600 hover:bg-sky-500 px-3 py-1.5 rounded-md text-xs font-medium transition-colors shadow-lg shadow-sky-600/20">New
-                        Enablement Run</button>
+                        Training Run</button>
                 </div>
             </header>
 
             <main class="content-area">
                 <!-- Dashboard Tab -->
                 <div x-show="activeTab === 'dashboard'" x-transition x-cloak>
-                    <div class="grid grid-cols-4 gap-6 mb-10">
-                        <!-- Active Identifiers Card -->
-                        <div class="plm-card gradient-card-blue">
-                            <span class="text-[10px] text-white/60 uppercase font-bold tracking-wider mb-1 block">Active
-                                Identifiers</span>
-                            <template x-if="loading.stats">
-                                <div class="skeleton h-8 w-20 mt-2"></div>
-                            </template>
-                            <template x-if="!loading.stats && !errors.stats">
-                                <div class="flex items-end gap-2">
-                                    <span class="text-3xl font-bold font-mono"
-                                        x-text="endpoints.length || certificates.length || 14"></span>
-                                    <span class="text-emerald-400 text-xs mb-1 flex items-center gap-1">
-                                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                                        Live Seats
-                                    </span>
-                                </div>
-                            </template>
-                            <template x-if="errors.stats">
-                                <div class="text-red-400 text-xs mt-2 flex items-center gap-1">
-                                    <i data-lucide="alert-circle" class="w-3 h-3"></i>
-                                    <span x-text="errors.stats"></span>
-                                </div>
-                            </template>
-                        </div>
-
-                        <!-- Model Lineage Card -->
-                        <div class="plm-card gradient-card-purple">
-                            <span class="text-[10px] text-white/60 uppercase font-bold tracking-wider mb-1 block">Model
-                                Lineage Score</span>
+                    <!-- Top Stats Row -->
+                    <div class="grid grid-cols-5 gap-4 mb-8">
+                        <!-- System Health Card -->
+                        <div class="plm-card gradient-card-green">
+                            <span class="text-[10px] text-white/60 uppercase font-bold tracking-wider mb-1 block">System
+                                Health</span>
                             <div class="flex items-end gap-2">
-                                <span class="text-3xl font-bold font-mono">99.8</span>
-                                <span class="text-violet-400 text-xs mb-1">% Authenticated</span>
+                                <span class="text-3xl font-bold font-mono"
+                                    x-text="systemHealth.healthy_count + '/' + systemHealth.total_count"></span>
+                                <span class="text-emerald-400 text-xs mb-1">Components</span>
+                            </div>
+                            <div class="mt-2 flex gap-1">
+                                <span class="text-[9px] text-emerald-400 bg-emerald-500/20 px-1.5 py-0.5 rounded"
+                                    x-text="systemHealth.healthy_count + ' healthy'"></span>
+                                <span x-show="systemHealth.degraded_count > 0"
+                                    class="text-[9px] text-amber-400 bg-amber-500/20 px-1.5 py-0.5 rounded"
+                                    x-text="systemHealth.degraded_count + ' degraded'"></span>
                             </div>
                         </div>
 
-                        <!-- Privacy Budget Card with Chart -->
-                        <div class="plm-card gradient-card-amber relative overflow-hidden">
-                            <span
-                                class="text-[10px] text-white/60 uppercase font-bold tracking-wider mb-1 block">Privacy
+                        <!-- Active Pipelines Card -->
+                        <div class="plm-card gradient-card-blue">
+                            <span class="text-[10px] text-white/60 uppercase font-bold tracking-wider mb-1 block">Active
+                                Pipelines</span>
+                            <div class="flex items-end gap-2">
+                                <span class="text-3xl font-bold font-mono"
+                                    x-text="pipelines.filter(p => p.status === 'healthy').length"></span>
+                                <span class="text-sky-400 text-xs mb-1 flex items-center gap-1">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse"></span>
+                                    Running
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Circuit Breakers Card -->
+                        <div class="plm-card gradient-card-purple">
+                            <span class="text-[10px] text-white/60 uppercase font-bold tracking-wider mb-1 block">Circuit
+                                Breakers</span>
+                            <div class="flex items-end gap-2">
+                                <span class="text-3xl font-bold font-mono" x-text="circuits.length"></span>
+                                <span
+                                    :class="openCircuits.length > 0 ? 'text-red-400' : 'text-emerald-400'"
+                                    class="text-xs mb-1"
+                                    x-text="openCircuits.length > 0 ? openCircuits.length + ' OPEN' : 'All Closed'"></span>
+                            </div>
+                        </div>
+
+                        <!-- Privacy Budget Card -->
+                        <div class="plm-card gradient-card-amber">
+                            <span class="text-[10px] text-white/60 uppercase font-bold tracking-wider mb-1 block">Privacy
                                 Budget</span>
                             <div class="flex items-center gap-3">
-                                <div class="w-16 h-16">
+                                <div class="w-12 h-12">
                                     <canvas id="privacyChart"></canvas>
                                 </div>
                                 <div>
-                                    <span class="text-2xl font-bold font-mono"
+                                    <span class="text-xl font-bold font-mono"
                                         x-text="'ε ' + ((stats.privacy_cap || 10) - (stats.privacy_consumed || 1.6)).toFixed(1)"></span>
                                     <div class="text-[10px] text-white/40">Remaining</div>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- NEW: Triple-Trust Matrix Card -->
-                        <div class="plm-card gradient-card-green relative group overflow-hidden">
-                            <div
-                                class="absolute -right-4 -top-4 w-24 h-24 bg-white/5 rounded-full blur-2xl group-hover:bg-white/10 transition-all">
-                            </div>
-                            <span
-                                class="text-[10px] text-white/60 uppercase font-bold tracking-wider mb-2 block flex justify-between">
-                                Triple-Trust Readiness
-                                <span class="font-mono text-emerald-400"
-                                    x-text="trustPosture.compliance_health + '%'"></span>
-                            </span>
-
-                            <div class="grid grid-cols-3 gap-2 mt-2">
-                                <div class="bg-black/20 p-2 rounded border border-white/5 text-center">
-                                    <div class="text-[8px] text-white/40 uppercase mb-1">Identity</div>
-                                    <i data-lucide="shield-check"
-                                        :class="trustPosture.layers?.transport.status === 'ok' ? 'text-emerald-400' : 'text-red-400'"
-                                        class="w-4 h-4 mx-auto"></i>
-                                </div>
-                                <div class="bg-black/20 p-2 rounded border border-white/5 text-center">
-                                    <div class="text-[8px] text-white/40 uppercase mb-1">Privacy</div>
-                                    <i data-lucide="lock"
-                                        :class="trustPosture.layers?.privacy.status === 'ok' ? 'text-emerald-400' : 'text-red-400'"
-                                        class="w-4 h-4 mx-auto"></i>
-                                </div>
-                                <div class="bg-black/20 p-2 rounded border border-white/5 text-center">
-                                    <div class="text-[8px] text-white/40 uppercase mb-1">Quantum</div>
-                                    <i data-lucide="cpu"
-                                        :class="trustPosture.layers?.integrity.status === 'ok' ? 'text-sky-400' : 'text-red-400'"
-                                        class="w-4 h-4 mx-auto"></i>
-                                </div>
-                            </div>
-
-                            <div class="mt-3 flex items-center justify-between">
-                                <div class="flex flex-wrap gap-1">
-                                    <span class="badge badge-success text-[7px] py-0 px-1">Dilithium-3</span>
-                                    <span class="badge badge-success text-[7px] py-0 px-1">mTLS-HMAC</span>
-                                </div>
-                                <div class="text-[9px] font-bold text-white/60 uppercase"
-                                    x-text="trustPosture.threat_environment"></div>
+                        <!-- Keys Status Card -->
+                        <div class="plm-card" :class="keysNeedingRotation > 0 ? 'gradient-card-red' : 'gradient-card-green'">
+                            <span class="text-[10px] text-white/60 uppercase font-bold tracking-wider mb-1 block">Key
+                                Status</span>
+                            <div class="flex items-end gap-2">
+                                <span class="text-3xl font-bold font-mono" x-text="keys.length"></span>
+                                <span :class="keysNeedingRotation > 0 ? 'text-red-400' : 'text-emerald-400'"
+                                    class="text-xs mb-1"
+                                    x-text="keysNeedingRotation > 0 ? keysNeedingRotation + ' need rotation' : 'All Current'"></span>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Lineage Chart Section -->
-                    <div class="grid grid-cols-3 gap-6 mb-10">
+                    <!-- Pipeline Overview Section -->
+                    <div class="grid grid-cols-3 gap-6 mb-8">
                         <div class="plm-card col-span-2">
                             <h4 class="text-sm font-semibold mb-4 flex items-center gap-2 text-white/80">
-                                <i data-lucide="bar-chart-3" class="w-4 h-4 text-sky-400"></i>
-                                Recent Run Scores
-                            </h4>
-                            <div class="h-48">
-                                <canvas id="lineageChart"></canvas>
-                            </div>
-                        </div>
-                        <div class="plm-card">
-                            <h4 class="text-sm font-semibold mb-4 flex items-center gap-2 text-white/80">
-                                <i data-lucide="activity" class="w-4 h-4 text-emerald-400"></i>
-                                Threat Environment
+                                <i data-lucide="git-merge" class="w-4 h-4 text-sky-400"></i>
+                                Data Flow Overview
                             </h4>
                             <div class="space-y-4">
-                                <div class="flex justify-between items-center">
-                                    <span class="text-xs text-white/40">Global Posture</span>
-                                    <span
-                                        :class="trustPosture.threat_environment === 'STABLE' ? 'text-emerald-400' : 'text-amber-400'"
-                                        class="font-mono text-sm font-bold"
-                                        x-text="trustPosture.threat_environment"></span>
-                                </div>
-                                <div class="flex justify-between items-center">
-                                    <span class="text-xs text-white/40">At Risk Fleets</span>
-                                    <span class="font-mono text-sm text-red-400"
-                                        x-text="trustPosture.at_risk_fleets"></span>
-                                </div>
-                                <div class="flex justify-between items-center border-t border-white/5 pt-3">
-                                    <span class="text-xs text-white/40">Audit Events</span>
-                                    <span class="font-mono text-sm" x-text="auditLogs.length"></span>
-                                </div>
-                                <div class="flex justify-between items-center">
-                                    <span class="text-xs text-white/40">Renewal Jobs</span>
-                                    <span class="font-mono text-sm" x-text="identityJobs.length"></span>
-                                </div>
-                                <div class="flex justify-between items-center">
-                                    <span class="text-xs text-white/40">PQC Integrity</span>
-                                    <span
-                                        class="text-[10px] text-sky-400 px-1.5 py-0.5 bg-sky-500/10 rounded uppercase font-bold">Verified</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <h3 class="text-lg font-semibold mb-6 flex items-center gap-2">
-                        <i data-lucide="activity" class="text-sky-500 w-5 h-5"></i> System Activity Proof
-                        <template x-if="loading.jobs">
-                            <span class="ml-2 text-xs text-white/30 animate-pulse">Loading...</span>
-                        </template>
-                    </h3>
-
-                    <div class="plm-card">
-                        <!-- Error State -->
-                        <template x-if="errors.jobs">
-                            <div class="flex flex-col items-center justify-center py-12 text-center">
-                                <div class="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center mb-4">
-                                    <i data-lucide="alert-triangle" class="w-6 h-6 text-red-400"></i>
-                                </div>
-                                <p class="text-white/60 text-sm">Failed to load activity data</p>
-                                <p class="text-white/30 text-xs mt-1" x-text="errors.jobs"></p>
-                                <button @click="fetchJobs()"
-                                    class="mt-4 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-xs transition-colors">
-                                    Retry
-                                </button>
-                            </div>
-                        </template>
-
-                        <!-- Loading Skeleton -->
-                        <template x-if="loading.jobs && !errors.jobs">
-                            <div class="space-y-4">
-                                <template x-for="i in 5">
-                                    <div class="flex items-center gap-4">
-                                        <div class="skeleton h-4 w-20"></div>
-                                        <div class="skeleton h-4 w-32"></div>
-                                        <div class="skeleton h-4 w-40"></div>
-                                        <div class="skeleton h-4 w-24"></div>
-                                        <div class="skeleton h-4 w-16"></div>
+                                <template x-for="pipeline in pipelines" :key="pipeline.pipeline_name">
+                                    <div class="bg-white/5 rounded-lg p-4 border border-white/5">
+                                        <div class="flex justify-between items-center mb-3">
+                                            <span class="font-medium text-sm"
+                                                x-text="pipeline.pipeline_name.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())"></span>
+                                            <span
+                                                :class="pipeline.status === 'healthy' ? 'text-emerald-400 bg-emerald-500/20' : 'text-red-400 bg-red-500/20'"
+                                                class="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase"
+                                                x-text="pipeline.status"></span>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <template x-for="(stage, idx) in pipeline.stages" :key="stage.name">
+                                                <div class="flex items-center">
+                                                    <div
+                                                        class="flex flex-col items-center min-w-[80px] bg-black/20 rounded p-2">
+                                                        <span class="text-[9px] text-white/40 truncate w-full text-center"
+                                                            x-text="stage.name"></span>
+                                                        <span class="text-[10px] font-mono"
+                                                            :class="stage.status === 'healthy' ? 'text-emerald-400' : 'text-red-400'"
+                                                            x-text="stage.latency_ms.toFixed(1) + 'ms'"></span>
+                                                    </div>
+                                                    <template x-if="idx < pipeline.stages.length - 1">
+                                                        <i data-lucide="arrow-right"
+                                                            class="w-4 h-4 text-white/20 mx-1"></i>
+                                                    </template>
+                                                </div>
+                                            </template>
+                                        </div>
+                                        <div class="flex justify-between mt-3 text-[10px] text-white/40">
+                                            <span>Total: <span class="text-white/60 font-mono"
+                                                    x-text="pipeline.total_latency_ms.toFixed(1) + 'ms'"></span></span>
+                                            <span>Success: <span class="text-emerald-400 font-mono"
+                                                    x-text="pipeline.success_rate + '%'"></span></span>
+                                            <span>Throughput: <span class="text-sky-400 font-mono"
+                                                    x-text="pipeline.current_throughput.toFixed(0) + '/s'"></span></span>
+                                        </div>
                                     </div>
                                 </template>
                             </div>
-                        </template>
+                        </div>
 
-                        <!-- Empty State -->
-                        <template x-if="!loading.jobs && !errors.jobs && jobs.length === 0">
-                            <div class="flex flex-col items-center justify-center py-12 text-center">
-                                <div class="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-4">
-                                    <i data-lucide="inbox" class="w-6 h-6 text-white/20"></i>
+                        <!-- System Metrics -->
+                        <div class="plm-card">
+                            <h4 class="text-sm font-semibold mb-4 flex items-center gap-2 text-white/80">
+                                <i data-lucide="activity" class="w-4 h-4 text-emerald-400"></i>
+                                System Telemetry
+                            </h4>
+                            <div class="space-y-4">
+                                <div class="flex justify-between items-center">
+                                    <span class="text-xs text-white/40">CPU Usage</span>
+                                    <div class="flex items-center gap-2">
+                                        <div class="w-24 h-2 bg-white/10 rounded-full overflow-hidden">
+                                            <div class="h-full bg-sky-500 transition-all"
+                                                :style="'width: ' + (systemMetrics.cpu_usage_percent || 0) + '%'"></div>
+                                        </div>
+                                        <span class="font-mono text-xs text-white/60 w-12 text-right"
+                                            x-text="(systemMetrics.cpu_usage_percent || 0).toFixed(1) + '%'"></span>
+                                    </div>
                                 </div>
-                                <p class="text-white/40 text-sm">No activity recorded yet</p>
-                                <p class="text-white/20 text-xs mt-1">Run an enablement job to see activity here</p>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-xs text-white/40">Memory</span>
+                                    <div class="flex items-center gap-2">
+                                        <div class="w-24 h-2 bg-white/10 rounded-full overflow-hidden">
+                                            <div class="h-full bg-violet-500 transition-all"
+                                                :style="'width: ' + (systemMetrics.memory_usage_percent || 0) + '%'">
+                                            </div>
+                                        </div>
+                                        <span class="font-mono text-xs text-white/60 w-12 text-right"
+                                            x-text="(systemMetrics.memory_usage_percent || 0).toFixed(1) + '%'"></span>
+                                    </div>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-xs text-white/40">Disk</span>
+                                    <div class="flex items-center gap-2">
+                                        <div class="w-24 h-2 bg-white/10 rounded-full overflow-hidden">
+                                            <div class="h-full bg-amber-500 transition-all"
+                                                :style="'width: ' + (systemMetrics.disk_usage_percent || 0) + '%'"></div>
+                                        </div>
+                                        <span class="font-mono text-xs text-white/60 w-12 text-right"
+                                            x-text="(systemMetrics.disk_usage_percent || 0).toFixed(1) + '%'"></span>
+                                    </div>
+                                </div>
+                                <div class="border-t border-white/5 pt-4 mt-4">
+                                    <div class="flex justify-between items-center mb-2">
+                                        <span class="text-xs text-white/40">Active Threads</span>
+                                        <span class="font-mono text-sm"
+                                            x-text="systemMetrics.thread_count || '--'"></span>
+                                    </div>
+                                    <div class="flex justify-between items-center mb-2">
+                                        <span class="text-xs text-white/40">Connections</span>
+                                        <span class="font-mono text-sm"
+                                            x-text="systemMetrics.active_connections || '--'"></span>
+                                    </div>
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-xs text-white/40">Network I/O</span>
+                                        <span class="font-mono text-sm text-sky-400"
+                                            x-text="formatBytes(systemMetrics.network_bytes_sent || 0) + ' / ' + formatBytes(systemMetrics.network_bytes_recv || 0)"></span>
+                                    </div>
+                                </div>
                             </div>
-                        </template>
+                        </div>
+                    </div>
 
-                        <!-- Data Table -->
-                        <template x-if="!loading.jobs && !errors.jobs && jobs.length > 0">
-                            <table class="w-full text-left text-sm">
-                                <thead>
-                                    <tr class="text-white/40 border-b border-white/5">
-                                        <th class="pb-3 font-medium">Trace ID</th>
-                                        <th class="pb-3 font-medium">Model Type</th>
-                                        <th class="pb-3 font-medium">Audit Proof</th>
-                                        <th class="pb-3 font-medium">Time</th>
-                                        <th class="pb-3 font-medium">Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-white/5">
-                                    <template x-for="job in jobs" :key="job.id">
-                                        <tr class="hover:bg-white/[0.02] transition-all group cursor-pointer">
-                                            <td class="py-4 font-mono text-xs text-sky-400/80"
-                                                x-text="job.id.substring(0,8)">
-                                            </td>
-                                            <td class="py-4">
-                                                <div class="flex items-center gap-2">
+                    <!-- Recent Errors & Activity -->
+                    <div class="grid grid-cols-2 gap-6">
+                        <div class="plm-card">
+                            <h4 class="text-sm font-semibold mb-4 flex items-center justify-between">
+                                <span class="flex items-center gap-2 text-white/80">
+                                    <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-400"></i>
+                                    Recent Errors
+                                </span>
+                                <button @click="activeTab = 'errors'"
+                                    class="text-[10px] text-sky-400 hover:text-sky-300">View All</button>
+                            </h4>
+                            <div class="space-y-2 max-h-48 overflow-y-auto">
+                                <template x-for="error in errors.slice(0, 5)" :key="error.timestamp">
+                                    <div class="flex items-start gap-3 p-2 rounded bg-white/5 hover:bg-white/10 transition-colors">
+                                        <i data-lucide="alert-circle"
+                                            :class="error.level === 'error' ? 'text-red-400' : error.level === 'warning' ? 'text-amber-400' : 'text-sky-400'"
+                                            class="w-4 h-4 flex-shrink-0 mt-0.5"></i>
+                                        <div class="flex-1 min-w-0">
+                                            <div class="flex justify-between items-start">
+                                                <span class="text-xs font-medium truncate" x-text="error.message"></span>
+                                                <span class="text-[9px] text-white/30 ml-2 flex-shrink-0"
+                                                    x-text="formatRelativeTime(error.timestamp * 1000)"></span>
+                                            </div>
+                                            <span class="text-[10px] text-white/40" x-text="error.component"></span>
+                                        </div>
+                                    </div>
+                                </template>
+                                <template x-if="errors.length === 0">
+                                    <p class="text-center py-4 text-xs text-white/30">No recent errors</p>
+                                </template>
+                            </div>
+                        </div>
+
+                        <div class="plm-card">
+                            <h4 class="text-sm font-semibold mb-4 flex items-center justify-between">
+                                <span class="flex items-center gap-2 text-white/80">
+                                    <i data-lucide="zap" class="w-4 h-4 text-sky-400"></i>
+                                    Circuit Breaker Status
+                                </span>
+                            </h4>
+                            <div class="space-y-2 max-h-48 overflow-y-auto">
+                                <template x-for="circuit in circuits" :key="circuit.name">
+                                    <div class="flex items-center justify-between p-2 rounded bg-white/5">
+                                        <div class="flex items-center gap-2">
+                                            <span class="w-2 h-2 rounded-full"
+                                                :class="circuit.state === 'closed' ? 'bg-emerald-500' : circuit.state === 'open' ? 'bg-red-500' : 'bg-amber-500'"></span>
+                                            <span class="text-xs font-mono" x-text="circuit.name"></span>
+                                        </div>
+                                        <div class="flex items-center gap-3">
+                                            <span class="text-[10px] text-white/40"
+                                                x-text="'Fail: ' + (circuit.failure_rate * 100).toFixed(1) + '%'"></span>
+                                            <span class="text-[10px] px-2 py-0.5 rounded"
+                                                :class="circuit.state === 'closed' ? 'text-emerald-400 bg-emerald-500/20' : circuit.state === 'open' ? 'text-red-400 bg-red-500/20' : 'text-amber-400 bg-amber-500/20'"
+                                                x-text="circuit.state.toUpperCase()"></span>
+                                        </div>
+                                    </div>
+                                </template>
+                                <template x-if="circuits.length === 0">
+                                    <p class="text-center py-4 text-xs text-white/30">No circuit breakers registered</p>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pipeline Monitor Tab -->
+                <div x-show="activeTab === 'pipeline'" x-transition x-cloak>
+                    <h3 class="text-lg font-semibold mb-6 flex items-center gap-2">
+                        <i data-lucide="git-merge" class="text-sky-500 w-5 h-5"></i> Pipeline Monitor
+                    </h3>
+
+                    <div class="space-y-6">
+                        <template x-for="pipeline in pipelines" :key="pipeline.pipeline_name">
+                            <div class="plm-card">
+                                <div class="flex justify-between items-center mb-6">
+                                    <div>
+                                        <h4 class="font-semibold text-lg"
+                                            x-text="pipeline.pipeline_name.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())">
+                                        </h4>
+                                        <p class="text-xs text-white/40">Real-time data flow visualization</p>
+                                    </div>
+                                    <div class="flex items-center gap-4">
+                                        <div class="text-right">
+                                            <div class="text-[10px] text-white/40">Total Latency</div>
+                                            <div class="font-mono text-lg text-sky-400"
+                                                x-text="pipeline.total_latency_ms.toFixed(1) + 'ms'"></div>
+                                        </div>
+                                        <div class="text-right">
+                                            <div class="text-[10px] text-white/40">Success Rate</div>
+                                            <div class="font-mono text-lg"
+                                                :class="pipeline.success_rate >= 99 ? 'text-emerald-400' : pipeline.success_rate >= 95 ? 'text-amber-400' : 'text-red-400'"
+                                                x-text="pipeline.success_rate + '%'"></div>
+                                        </div>
+                                        <span
+                                            :class="pipeline.status === 'healthy' ? 'text-emerald-400 bg-emerald-500/20 border-emerald-500/30' : 'text-red-400 bg-red-500/20 border-red-500/30'"
+                                            class="text-xs px-3 py-1 rounded-full font-bold uppercase border"
+                                            x-text="pipeline.status"></span>
+                                    </div>
+                                </div>
+
+                                <!-- Pipeline Stages Visualization -->
+                                <div class="relative">
+                                    <div class="flex items-center justify-between">
+                                        <template x-for="(stage, idx) in pipeline.stages" :key="stage.name">
+                                            <div class="flex items-center flex-1">
+                                                <div class="flex-1 flex flex-col items-center">
                                                     <div
-                                                        class="w-2 h-2 rounded-full bg-sky-500 group-hover:animate-pulse">
+                                                        :class="stage.status === 'healthy' ? 'border-emerald-500/50 bg-emerald-500/10' : 'border-red-500/50 bg-red-500/10'"
+                                                        class="w-full max-w-[160px] border rounded-lg p-4 relative group hover:scale-105 transition-transform">
+                                                        <div class="absolute -top-2 left-1/2 transform -translate-x-1/2">
+                                                            <span class="w-4 h-4 rounded-full border-2 flex items-center justify-center"
+                                                                :class="stage.status === 'healthy' ? 'border-emerald-500 bg-emerald-500' : 'border-red-500 bg-red-500'">
+                                                                <i data-lucide="check"
+                                                                    class="w-2 h-2 text-white"></i>
+                                                            </span>
+                                                        </div>
+                                                        <div class="text-center mt-2">
+                                                            <div class="font-medium text-sm" x-text="stage.name"></div>
+                                                            <div class="mt-2 space-y-1">
+                                                                <div class="flex justify-between text-[10px]">
+                                                                    <span class="text-white/40">Latency</span>
+                                                                    <span class="font-mono text-sky-400"
+                                                                        x-text="stage.latency_ms.toFixed(2) + 'ms'"></span>
+                                                                </div>
+                                                                <div class="flex justify-between text-[10px]">
+                                                                    <span class="text-white/40">Throughput</span>
+                                                                    <span class="font-mono text-violet-400"
+                                                                        x-text="stage.throughput.toFixed(0) + '/s'"></span>
+                                                                </div>
+                                                                <div class="flex justify-between text-[10px]">
+                                                                    <span class="text-white/40">Errors</span>
+                                                                    <span class="font-mono"
+                                                                        :class="stage.error_count > 0 ? 'text-red-400' : 'text-white/40'"
+                                                                        x-text="stage.error_count"></span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
                                                     </div>
-                                                    <span x-text="job.type"></span>
                                                 </div>
-                                            </td>
-                                            <td class="py-4">
-                                                <span
-                                                    class="text-[10px] font-mono text-white/30 truncate max-w-[150px] inline-block hover:text-white/60 transition-colors"
-                                                    x-text="job.api_key_hash"></span>
-                                            </td>
-                                            <td class="py-4 text-white/40 text-xs"
-                                                x-text="formatRelativeTime(job.created_at)"></td>
-                                            <td class="py-4">
-                                                <span
-                                                    :class="getStatusBg(job.status) + ' ' + getStatusColor(job.status)"
-                                                    class="px-2 py-1 rounded-full text-[10px] font-medium"
-                                                    x-text="job.status"></span>
-                                            </td>
-                                        </tr>
-                                    </template>
-                                </tbody>
-                            </table>
+                                                <template x-if="idx < pipeline.stages.length - 1">
+                                                    <div class="flex-shrink-0 w-8 flex items-center justify-center">
+                                                        <div class="w-full h-0.5 bg-gradient-to-r from-white/20 to-white/5">
+                                                        </div>
+                                                        <i data-lucide="chevron-right"
+                                                            class="w-4 h-4 text-white/30 absolute"></i>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
                         </template>
                     </div>
                 </div>
 
-                <!-- Lineage Tab -->
+                <!-- Error Console Tab -->
+                <div x-show="activeTab === 'errors'" x-transition x-cloak>
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-lg font-semibold flex items-center gap-2">
+                            <i data-lucide="alert-circle" class="text-amber-500 w-5 h-5"></i> Error Console
+                        </h3>
+                        <div class="flex items-center gap-4">
+                            <select x-model="errorFilter.level"
+                                class="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs">
+                                <option value="">All Levels</option>
+                                <option value="error">Errors</option>
+                                <option value="warning">Warnings</option>
+                                <option value="info">Info</option>
+                            </select>
+                            <select x-model="errorFilter.component"
+                                class="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs">
+                                <option value="">All Components</option>
+                                <option value="aggregator">Aggregator</option>
+                                <option value="crypto">Crypto</option>
+                                <option value="identity">Identity</option>
+                                <option value="pipeline">Pipeline</option>
+                                <option value="network">Network</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Error Summary Cards -->
+                    <div class="grid grid-cols-4 gap-4 mb-6">
+                        <div class="plm-card bg-red-500/5 border-red-500/20">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-lg bg-red-500/20 flex items-center justify-center">
+                                    <i data-lucide="x-circle" class="w-5 h-5 text-red-400"></i>
+                                </div>
+                                <div>
+                                    <div class="text-2xl font-bold font-mono text-red-400"
+                                        x-text="errorSummary.by_level?.error || 0"></div>
+                                    <div class="text-[10px] text-white/40 uppercase">Errors</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="plm-card bg-amber-500/5 border-amber-500/20">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
+                                    <i data-lucide="alert-triangle" class="w-5 h-5 text-amber-400"></i>
+                                </div>
+                                <div>
+                                    <div class="text-2xl font-bold font-mono text-amber-400"
+                                        x-text="errorSummary.by_level?.warning || 0"></div>
+                                    <div class="text-[10px] text-white/40 uppercase">Warnings</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="plm-card bg-sky-500/5 border-sky-500/20">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-lg bg-sky-500/20 flex items-center justify-center">
+                                    <i data-lucide="info" class="w-5 h-5 text-sky-400"></i>
+                                </div>
+                                <div>
+                                    <div class="text-2xl font-bold font-mono text-sky-400"
+                                        x-text="errorSummary.by_level?.info || 0"></div>
+                                    <div class="text-[10px] text-white/40 uppercase">Info</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="plm-card">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center">
+                                    <i data-lucide="clock" class="w-5 h-5 text-white/60"></i>
+                                </div>
+                                <div>
+                                    <div class="text-2xl font-bold font-mono" x-text="errorSummary.total_24h || 0"></div>
+                                    <div class="text-[10px] text-white/40 uppercase">Last 24h</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Error Log Table -->
+                    <div class="plm-card">
+                        <table class="w-full text-left text-sm">
+                            <thead>
+                                <tr class="text-white/40 border-b border-white/5">
+                                    <th class="pb-3 font-medium w-32">Time</th>
+                                    <th class="pb-3 font-medium w-20">Level</th>
+                                    <th class="pb-3 font-medium w-28">Component</th>
+                                    <th class="pb-3 font-medium">Message</th>
+                                    <th class="pb-3 font-medium w-28">Trace ID</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-white/5">
+                                <template x-for="error in filteredErrors" :key="error.timestamp + error.trace_id">
+                                    <tr class="hover:bg-white/[0.02] transition-all cursor-pointer"
+                                        @click="selectedError = error">
+                                        <td class="py-3 text-xs text-white/40"
+                                            x-text="formatTimestamp(error.timestamp)"></td>
+                                        <td class="py-3">
+                                            <span
+                                                :class="error.level === 'error' ? 'text-red-400 bg-red-500/20' : error.level === 'warning' ? 'text-amber-400 bg-amber-500/20' : 'text-sky-400 bg-sky-500/20'"
+                                                class="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase"
+                                                x-text="error.level"></span>
+                                        </td>
+                                        <td class="py-3 text-xs font-mono text-white/60" x-text="error.component"></td>
+                                        <td class="py-3 text-xs truncate max-w-[300px]" x-text="error.message"></td>
+                                        <td class="py-3 text-[10px] font-mono text-sky-400"
+                                            x-text="error.trace_id || '-'"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Key Management Tab -->
+                <div x-show="activeTab === 'keys'" x-transition x-cloak>
+                    <h3 class="text-lg font-semibold mb-6 flex items-center gap-2">
+                        <i data-lucide="key" class="text-sky-500 w-5 h-5"></i> Cryptographic Key Management
+                    </h3>
+
+                    <!-- Key Status Overview -->
+                    <div class="grid grid-cols-4 gap-4 mb-6">
+                        <div class="plm-card">
+                            <div class="text-[10px] text-white/40 uppercase mb-1">Total Keys</div>
+                            <div class="text-2xl font-bold font-mono" x-text="keys.length"></div>
+                        </div>
+                        <div class="plm-card" :class="keysNeedingRotation > 0 ? 'border-amber-500/30' : ''">
+                            <div class="text-[10px] text-white/40 uppercase mb-1">Rotation Due</div>
+                            <div class="text-2xl font-bold font-mono"
+                                :class="keysNeedingRotation > 0 ? 'text-amber-400' : ''"
+                                x-text="keysNeedingRotation"></div>
+                        </div>
+                        <div class="plm-card">
+                            <div class="text-[10px] text-white/40 uppercase mb-1">Aggregation Keys</div>
+                            <div class="text-2xl font-bold font-mono"
+                                x-text="keys.filter(k => k.scope === 'aggregation').length"></div>
+                        </div>
+                        <div class="plm-card">
+                            <div class="text-[10px] text-white/40 uppercase mb-1">Identity Keys</div>
+                            <div class="text-2xl font-bold font-mono"
+                                x-text="keys.filter(k => k.scope === 'identity').length"></div>
+                        </div>
+                    </div>
+
+                    <!-- Key Table -->
+                    <div class="plm-card">
+                        <table class="w-full text-left text-sm">
+                            <thead>
+                                <tr class="text-white/40 border-b border-white/5">
+                                    <th class="pb-3 font-medium">Key ID</th>
+                                    <th class="pb-3 font-medium">Scope</th>
+                                    <th class="pb-3 font-medium">Algorithm</th>
+                                    <th class="pb-3 font-medium">Uses Remaining</th>
+                                    <th class="pb-3 font-medium">Next Rotation</th>
+                                    <th class="pb-3 font-medium">Status</th>
+                                    <th class="pb-3 font-medium">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-white/5">
+                                <template x-for="key in keys" :key="key.key_id">
+                                    <tr class="hover:bg-white/[0.02] transition-all">
+                                        <td class="py-4 font-mono text-xs text-sky-400" x-text="key.key_id"></td>
+                                        <td class="py-4">
+                                            <span class="text-xs px-2 py-0.5 rounded bg-white/10" x-text="key.scope"></span>
+                                        </td>
+                                        <td class="py-4 text-xs font-mono text-white/60" x-text="key.algorithm"></td>
+                                        <td class="py-4">
+                                            <div class="flex items-center gap-2">
+                                                <div class="w-16 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                                                    <div class="h-full transition-all"
+                                                        :class="key.uses_remaining < 300 ? 'bg-red-500' : key.uses_remaining < 700 ? 'bg-amber-500' : 'bg-emerald-500'"
+                                                        :style="'width: ' + (key.uses_remaining / 10) + '%'"></div>
+                                                </div>
+                                                <span class="text-xs font-mono" x-text="key.uses_remaining"></span>
+                                            </div>
+                                        </td>
+                                        <td class="py-4 text-xs text-white/40"
+                                            x-text="key.next_rotation_at ? formatTimestamp(key.next_rotation_at) : 'N/A'">
+                                        </td>
+                                        <td class="py-4">
+                                            <span
+                                                :class="key.rotation_due ? 'text-amber-400 bg-amber-500/20' : 'text-emerald-400 bg-emerald-500/20'"
+                                                class="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase"
+                                                x-text="key.rotation_due ? 'ROTATION DUE' : 'CURRENT'"></span>
+                                        </td>
+                                        <td class="py-4">
+                                            <button @click="rotateKey(key.key_id)"
+                                                class="text-xs px-3 py-1 rounded bg-sky-600 hover:bg-sky-500 transition-colors">
+                                                Rotate
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Configuration Tab -->
+                <div x-show="activeTab === 'config'" x-transition x-cloak>
+                    <h3 class="text-lg font-semibold mb-6 flex items-center gap-2">
+                        <i data-lucide="settings" class="text-sky-500 w-5 h-5"></i> System Configuration
+                    </h3>
+
+                    <div class="grid grid-cols-3 gap-6">
+                        <!-- Identity Subsystem -->
+                        <div class="plm-card">
+                            <h4 class="font-semibold mb-4 flex items-center gap-2">
+                                <i data-lucide="fingerprint" class="w-4 h-4 text-violet-400"></i>
+                                Identity Management
+                            </h4>
+                            <div class="space-y-4">
+                                <div class="flex justify-between items-center">
+                                    <span class="text-xs text-white/60">Subsystem</span>
+                                    <span class="text-xs px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400">ENABLED</span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-xs text-white/60">Key Type</span>
+                                    <span class="text-xs font-mono">ECDSA</span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-xs text-white/60">Scan Interval</span>
+                                    <span class="text-xs font-mono">3600s</span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-xs text-white/60">Auto Renew</span>
+                                    <span class="text-xs px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400">ON</span>
+                                </div>
+                                <div class="border-t border-white/5 pt-3 mt-3">
+                                    <div class="text-[10px] text-white/40 mb-2">Active Scanners</div>
+                                    <div class="flex flex-wrap gap-1">
+                                        <span class="text-[9px] px-1.5 py-0.5 rounded bg-white/10">Kubernetes</span>
+                                        <span class="text-[9px] px-1.5 py-0.5 rounded bg-white/10">Nginx</span>
+                                        <span class="text-[9px] px-1.5 py-0.5 rounded bg-white/10">Filesystem</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Network Subsystem -->
+                        <div class="plm-card">
+                            <h4 class="font-semibold mb-4 flex items-center gap-2">
+                                <i data-lucide="shield" class="w-4 h-4 text-sky-400"></i>
+                                Network Traffic Privacy
+                            </h4>
+                            <div class="space-y-4">
+                                <div class="flex justify-between items-center">
+                                    <span class="text-xs text-white/60">Subsystem</span>
+                                    <span class="text-xs px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400">ENABLED</span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-xs text-white/60">Defense Mode</span>
+                                    <span class="text-xs font-mono text-sky-400">FRONT</span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-xs text-white/60">Proxy Port</span>
+                                    <span class="text-xs font-mono">9000</span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-xs text-white/60">Padding Size</span>
+                                    <span class="text-xs font-mono">800 bytes</span>
+                                </div>
+                                <div class="border-t border-white/5 pt-3 mt-3">
+                                    <div class="text-[10px] text-white/40 mb-2">Active Defenses</div>
+                                    <div class="flex flex-wrap gap-1">
+                                        <span class="text-[9px] px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-400">FRONT</span>
+                                        <span class="text-[9px] px-1.5 py-0.5 rounded bg-white/10">WTF-PAD Ready</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ML Subsystem -->
+                        <div class="plm-card">
+                            <h4 class="font-semibold mb-4 flex items-center gap-2">
+                                <i data-lucide="brain" class="w-4 h-4 text-emerald-400"></i>
+                                Federated Learning
+                            </h4>
+                            <div class="space-y-4">
+                                <div class="flex justify-between items-center">
+                                    <span class="text-xs text-white/60">Subsystem</span>
+                                    <span class="text-xs px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400">ENABLED</span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-xs text-white/60">Model Type</span>
+                                    <span class="text-xs font-mono">PI0</span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-xs text-white/60">Security Level</span>
+                                    <span class="text-xs px-2 py-0.5 rounded bg-sky-500/20 text-sky-400">HIGH (FHE+DP)</span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-xs text-white/60">DP Epsilon</span>
+                                    <span class="text-xs font-mono">3.0</span>
+                                </div>
+                                <div class="border-t border-white/5 pt-3 mt-3">
+                                    <div class="text-[10px] text-white/40 mb-2">Pipeline Config</div>
+                                    <div class="grid grid-cols-2 gap-2 text-[10px]">
+                                        <div class="flex justify-between">
+                                            <span class="text-white/40">Max Norm</span>
+                                            <span class="font-mono">1.0</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-white/40">Sparsity</span>
+                                            <span class="font-mono">0.5</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-white/40">Compression</span>
+                                            <span class="font-mono">32x</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Degradation Status -->
+                    <div class="plm-card mt-6">
+                        <h4 class="font-semibold mb-4 flex items-center gap-2">
+                            <i data-lucide="gauge" class="w-4 h-4 text-amber-400"></i>
+                            Graceful Degradation Status
+                        </h4>
+                        <div class="grid grid-cols-4 gap-4">
+                            <div>
+                                <div class="text-[10px] text-white/40 mb-1">Current Level</div>
+                                <span
+                                    :class="degradation.level === 'normal' ? 'text-emerald-400' : degradation.level === 'light' ? 'text-sky-400' : degradation.level === 'moderate' ? 'text-amber-400' : 'text-red-400'"
+                                    class="font-mono text-lg font-bold uppercase" x-text="degradation.level"></span>
+                            </div>
+                            <div>
+                                <div class="text-[10px] text-white/40 mb-1">Reason</div>
+                                <span class="text-sm" x-text="degradation.reason"></span>
+                            </div>
+                            <div>
+                                <div class="text-[10px] text-white/40 mb-1">Enabled Features</div>
+                                <span class="text-sm font-mono" x-text="degradation.enabled_features?.length || 0"></span>
+                            </div>
+                            <div>
+                                <div class="text-[10px] text-white/40 mb-1">Disabled Features</div>
+                                <span class="text-sm font-mono"
+                                    :class="degradation.disabled_features?.length > 0 ? 'text-amber-400' : ''"
+                                    x-text="degradation.disabled_features?.length || 0"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Version Control Tab -->
+                <div x-show="activeTab === 'versions'" x-transition x-cloak>
+                    <h3 class="text-lg font-semibold mb-6 flex items-center gap-2">
+                        <i data-lucide="history" class="text-sky-500 w-5 h-5"></i> Version Control & Lineage
+                    </h3>
+
+                    <!-- Version Info -->
+                    <div class="grid grid-cols-4 gap-4 mb-6">
+                        <div class="plm-card">
+                            <div class="text-[10px] text-white/40 uppercase mb-1">System Version</div>
+                            <div class="text-xl font-bold font-mono" x-text="versionInfo.system_version || '--'"></div>
+                        </div>
+                        <div class="plm-card">
+                            <div class="text-[10px] text-white/40 uppercase mb-1">API Version</div>
+                            <div class="text-xl font-bold font-mono" x-text="versionInfo.api_version || '--'"></div>
+                        </div>
+                        <div class="plm-card">
+                            <div class="text-[10px] text-white/40 uppercase mb-1">Git Commit</div>
+                            <div class="text-xl font-bold font-mono text-sky-400"
+                                x-text="versionInfo.git_commit || '--'"></div>
+                        </div>
+                        <div class="plm-card">
+                            <div class="text-[10px] text-white/40 uppercase mb-1">Current Model</div>
+                            <div class="text-xl font-bold font-mono text-emerald-400"
+                                x-text="modelLineage.current_version || '--'"></div>
+                        </div>
+                    </div>
+
+                    <!-- Component Versions -->
+                    <div class="plm-card mb-6">
+                        <h4 class="font-semibold mb-4">Component Versions</h4>
+                        <div class="grid grid-cols-5 gap-4">
+                            <template x-for="(version, component) in (versionInfo.components || {})" :key="component">
+                                <div class="bg-white/5 rounded-lg p-3 text-center">
+                                    <div class="text-[10px] text-white/40 uppercase mb-1" x-text="component"></div>
+                                    <div class="font-mono text-sm" x-text="version"></div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Model Lineage -->
+                    <div class="plm-card">
+                        <h4 class="font-semibold mb-4 flex items-center gap-2">
+                            <i data-lucide="git-branch" class="w-4 h-4 text-violet-400"></i>
+                            Model Version Lineage
+                        </h4>
+                        <div class="relative">
+                            <div class="absolute left-4 top-0 bottom-0 w-0.5 bg-white/10"></div>
+                            <div class="space-y-4">
+                                <template x-for="(version, idx) in (modelLineage.lineage || [])" :key="version.version">
+                                    <div class="relative pl-10">
+                                        <div
+                                            class="absolute left-2.5 w-3 h-3 rounded-full border-2 bg-[#0a0a0f]"
+                                            :class="idx === 0 ? 'border-emerald-500' : 'border-white/30'">
+                                        </div>
+                                        <div class="bg-white/5 rounded-lg p-4 hover:bg-white/10 transition-colors">
+                                            <div class="flex justify-between items-start mb-2">
+                                                <div>
+                                                    <span class="font-mono text-sm"
+                                                        :class="idx === 0 ? 'text-emerald-400' : ''"
+                                                        x-text="version.version"></span>
+                                                    <span class="text-xs text-white/30 ml-2"
+                                                        x-text="'from ' + version.parent"></span>
+                                                </div>
+                                                <span class="text-[10px] text-white/40"
+                                                    x-text="formatTimestamp(version.created_at)"></span>
+                                            </div>
+                                            <div class="grid grid-cols-3 gap-4 text-[11px]">
+                                                <div>
+                                                    <span class="text-white/40">Clients:</span>
+                                                    <span class="ml-1 font-mono"
+                                                        x-text="version.clients_contributed"></span>
+                                                </div>
+                                                <div>
+                                                    <span class="text-white/40">Privacy ε:</span>
+                                                    <span class="ml-1 font-mono text-amber-400"
+                                                        x-text="version.privacy_budget_used?.toFixed(2)"></span>
+                                                </div>
+                                                <div>
+                                                    <span class="text-white/40">Score:</span>
+                                                    <span class="ml-1 font-mono text-emerald-400"
+                                                        x-text="(version.validation_score * 100).toFixed(1) + '%'"></span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Lineage Tab (Training Runs) -->
                 <div x-show="activeTab === 'lineage'" x-transition x-cloak>
                     <h3 class="text-lg font-semibold mb-6 flex items-center gap-2">
-                        <i data-lucide="git-branch" class="text-sky-500 w-5 h-5"></i> Model Lineage & Runs
-                        <template x-if="loading.runs">
-                            <span class="ml-2 text-xs text-white/30 animate-pulse">Loading...</span>
-                        </template>
+                        <i data-lucide="git-branch" class="text-sky-500 w-5 h-5"></i> Model Lineage & Training Runs
                     </h3>
 
                     <div class="plm-card">
-                        <!-- Error State -->
-                        <template x-if="errors.runs">
-                            <div class="flex flex-col items-center justify-center py-12 text-center">
-                                <div class="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center mb-4">
-                                    <i data-lucide="alert-triangle" class="w-6 h-6 text-red-400"></i>
-                                </div>
-                                <p class="text-white/60 text-sm">Failed to load lineage data</p>
-                                <p class="text-white/30 text-xs mt-1" x-text="errors.runs"></p>
-                                <button @click="fetchRuns()"
-                                    class="mt-4 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-xs transition-colors">
-                                    Retry
-                                </button>
-                            </div>
-                        </template>
-
-                        <!-- Loading Skeleton -->
-                        <template x-if="loading.runs && !errors.runs">
+                        <template x-if="loading.runs">
                             <div class="space-y-4">
                                 <template x-for="i in 5">
                                     <div class="flex items-center gap-4">
@@ -392,19 +985,16 @@
                             </div>
                         </template>
 
-                        <!-- Empty State -->
-                        <template x-if="!loading.runs && !errors.runs && runs.length === 0">
+                        <template x-if="!loading.runs && runs.length === 0">
                             <div class="flex flex-col items-center justify-center py-12 text-center">
                                 <div class="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-4">
                                     <i data-lucide="git-branch" class="w-6 h-6 text-white/20"></i>
                                 </div>
                                 <p class="text-white/40 text-sm">No runs recorded</p>
-                                <p class="text-white/20 text-xs mt-1">Register a model run to see lineage data</p>
                             </div>
                         </template>
 
-                        <!-- Data Table -->
-                        <template x-if="!loading.runs && !errors.runs && runs.length > 0">
+                        <template x-if="!loading.runs && runs.length > 0">
                             <table class="w-full text-left text-sm">
                                 <thead>
                                     <tr class="text-white/40 border-b border-white/5">
@@ -417,9 +1007,9 @@
                                 </thead>
                                 <tbody class="divide-y divide-white/5">
                                     <template x-for="run in runs" :key="run.run_id">
-                                        <tr class="hover:bg-white/[0.02] transition-all hover-lift">
+                                        <tr class="hover:bg-white/[0.02] transition-all">
                                             <td class="py-4 font-mono text-xs text-white/80"
-                                                x-text="run.run_id.substring(0,8)"></td>
+                                                x-text="run.run_id?.substring(0,8)"></td>
                                             <td class="py-4 font-mono text-xs text-sky-400"
                                                 x-text="run.git_commit ? run.git_commit.substring(0,7) : '-'"></td>
                                             <td class="py-4 text-xs font-mono text-white/60" x-text="run.sdk_version">
@@ -427,10 +1017,77 @@
                                             <td class="py-4 text-white/40 text-xs" x-text="formatDate(run.created_at)">
                                             </td>
                                             <td class="py-4">
-                                                <span
-                                                    :class="getStatusBg(run.status) + ' ' + getStatusColor(run.status)"
+                                                <span :class="getStatusBg(run.status) + ' ' + getStatusColor(run.status)"
                                                     class="px-2 py-1 rounded-full text-[10px] font-medium"
                                                     x-text="run.status"></span>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Identity Vault Tab -->
+                <div x-show="activeTab === 'vault'" x-transition x-cloak>
+                    <h3 class="text-lg font-semibold mb-6 flex items-center gap-2">
+                        <i data-lucide="shield" class="text-sky-500 w-5 h-5"></i> Machine Identity Vault
+                    </h3>
+
+                    <div class="plm-card">
+                        <template x-if="loading.inventory">
+                            <div class="space-y-4">
+                                <template x-for="i in 5">
+                                    <div class="flex items-center gap-4">
+                                        <div class="skeleton h-4 w-40"></div>
+                                        <div class="skeleton h-4 w-32"></div>
+                                        <div class="skeleton h-4 w-32"></div>
+                                        <div class="skeleton h-4 w-24"></div>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+
+                        <template x-if="!loading.inventory && certificates.length === 0">
+                            <div class="flex flex-col items-center justify-center py-12 text-center">
+                                <div class="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-4">
+                                    <i data-lucide="key" class="w-6 h-6 text-white/20"></i>
+                                </div>
+                                <p class="text-white/40 text-sm">Vault empty</p>
+                            </div>
+                        </template>
+
+                        <template x-if="!loading.inventory && certificates.length > 0">
+                            <table class="w-full text-left text-sm">
+                                <thead>
+                                    <tr class="text-white/40 border-b border-white/5">
+                                        <th class="pb-3 font-medium">Subject DN</th>
+                                        <th class="pb-3 font-medium">Issuer</th>
+                                        <th class="pb-3 font-medium">Conf</th>
+                                        <th class="pb-3 font-medium">Expires</th>
+                                        <th class="pb-3 font-medium">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-white/5">
+                                    <template x-for="cert in certificates" :key="cert.id">
+                                        <tr class="hover:bg-white/[0.02] transition-all">
+                                            <td class="py-4 text-xs font-mono text-white/80" x-text="cert.subject"></td>
+                                            <td class="py-4 text-xs text-white/50" x-text="cert.issuer"></td>
+                                            <td class="py-4">
+                                                <template x-if="cert.has_eku_conflict">
+                                                    <i data-lucide="alert-triangle" class="w-4 h-4 text-red-400"></i>
+                                                </template>
+                                                <template x-if="!cert.has_eku_conflict">
+                                                    <i data-lucide="check" class="text-emerald-400/30 w-4 h-4"></i>
+                                                </template>
+                                            </td>
+                                            <td class="py-4 text-xs text-white/50"
+                                                x-text="new Date(cert.not_after).toLocaleDateString()"></td>
+                                            <td class="py-4">
+                                                <span :class="getCertExpiryClass(cert.days_to_expiry)"
+                                                    class="px-2 py-1 rounded-full text-[10px] font-bold"
+                                                    x-text="cert.days_to_expiry + ' days'"></span>
                                             </td>
                                         </tr>
                                     </template>
@@ -452,8 +1109,7 @@
                     </div>
 
                     <div class="grid grid-cols-2 gap-6 mb-10">
-                        <div
-                            class="plm-card border-emerald-500/20 hover:border-emerald-500/40 glow-emerald transition-all">
+                        <div class="plm-card border-emerald-500/20 hover:border-emerald-500/40 transition-all">
                             <h4 class="font-bold flex items-center gap-2 mb-4">
                                 <i data-lucide="check-circle" class="text-emerald-500 w-4 h-4"></i> SOC 2 Type II
                             </h4>
@@ -463,13 +1119,12 @@
                                 class="flex justify-between items-center bg-white/5 p-3 rounded-lg border border-white/5">
                                 <span class="text-[10px] font-mono text-white/40 uppercase">Last Verification</span>
                                 <span class="text-xs font-semibold uppercase text-emerald-400 flex items-center gap-2">
-                                    <span class="w-2 h-2 rounded-full bg-emerald-500 pulse-dot"></span>
-                                    PASSED: 2026-01-01
+                                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                    PASSED
                                 </span>
                             </div>
                         </div>
-                        <div
-                            class="plm-card border-emerald-500/20 hover:border-emerald-500/40 glow-emerald transition-all">
+                        <div class="plm-card border-emerald-500/20 hover:border-emerald-500/40 transition-all">
                             <h4 class="font-bold flex items-center gap-2 mb-4">
                                 <i data-lucide="shield" class="text-emerald-500 w-4 h-4"></i> TGSP Manifest Integrity
                             </h4>
@@ -479,148 +1134,20 @@
                                 class="flex justify-between items-center bg-white/5 p-3 rounded-lg border border-white/5">
                                 <span class="text-[10px] font-mono text-white/40 uppercase">Active Profiles</span>
                                 <span class="text-xs font-semibold uppercase text-emerald-400 flex items-center gap-2">
-                                    <span class="w-2 h-2 rounded-full bg-emerald-500 pulse-dot"></span>
+                                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
                                     <span x-text="tgspPackages.filter(p => p.status === 'verified').length"></span>
                                     Verified
                                 </span>
                             </div>
                         </div>
-
-                        <!-- NEW: EKU Split Migration Card -->
-                        <div :class="certificates.some(c => c.has_eku_conflict) ? 'border-red-500/30' : 'border-white/10'"
-                            class="plm-card transition-all col-span-2 mt-2">
-                            <div class="flex justify-between items-start">
-                                <div>
-                                    <h4 class="font-bold flex items-center gap-2 mb-2">
-                                        <i data-lucide="split" class="text-sky-400 w-4 h-4"></i> Chrome 2026 EKU Split
-                                        Readiness
-                                    </h4>
-                                    <p class="text-xs text-white/50 leading-relaxed mb-4">Automated migration to split
-                                        public TLS and mTLS certificates. <a href="#"
-                                            class="text-sky-400 underline">Learn more</a></p>
-                                </div>
-                                <button @click="executeEKUMigration()"
-                                    :disabled="!certificates.some(c => c.has_eku_conflict)"
-                                    class="bg-sky-600 hover:bg-sky-500 disabled:opacity-30 disabled:cursor-not-allowed px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-lg shadow-sky-600/20">
-                                    Trigger Migration
-                                </button>
-                            </div>
-
-                            <template x-if="certificates.some(c => c.has_eku_conflict)">
-                                <div
-                                    class="bg-red-500/10 border border-red-500/20 p-3 rounded-lg flex items-center gap-3">
-                                    <i data-lucide="alert-triangle"
-                                        class="text-red-400 w-5 h-5 flex-shrink-0 animate-bounce"></i>
-                                    <span class="text-xs text-red-200">
-                                        Found <strong
-                                            x-text="certificates.filter(c => c.has_eku_conflict).length"></strong>
-                                        certificates with EKU conflicts.
-                                        Manual action required before June 15, 2026.
-                                    </span>
-                                </div>
-                            </template>
-                        </div>
-                    </div>
-
-                    <!-- NEW: Identity Renewal Monitor -->
-                    <h4 class="text-sm font-semibold mb-4 flex items-center gap-2 text-white/80">
-                        <i data-lucide="refresh-cw" class="w-4 h-4 text-sky-400"></i> Active Identity Renewals
-                        <template x-if="loading.identity">
-                            <span class="ml-2 text-xs text-white/30 animate-pulse">Polling...</span>
-                        </template>
-                    </h4>
-
-                    <div class="plm-card mb-10">
-                        <template x-if="identityJobs.length === 0">
-                            <p class="text-center py-6 text-xs text-white/30 italic">No active renewal jobs</p>
-                        </template>
-                        <template x-if="identityJobs.length > 0">
-                            <table class="w-full text-left text-xs">
-                                <thead>
-                                    <tr class="text-white/40 border-b border-white/5 pb-2">
-                                        <th class="py-2">Job ID</th>
-                                        <th class="py-2">Endpoint</th>
-                                        <th class="py-2">Policy</th>
-                                        <th class="py-2">Status</th>
-                                        <th class="py-2">Progress</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-white/5">
-                                    <template x-for="job in identityJobs" :key="job.id">
-                                        <tr class="hover:bg-white/5">
-                                            <td class="py-3 font-mono text-sky-400" x-text="job.id.substring(0,8)"></td>
-                                            <td class="py-3 text-white/70" x-text="job.endpoint_id"></td>
-                                            <td class="py-3 text-white/40" x-text="job.policy_id.substring(0,8)"></td>
-                                            <td class="py-3">
-                                                <span
-                                                    :class="getStatusBg(job.status) + ' ' + getStatusColor(job.status)"
-                                                    class="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-tighter"
-                                                    x-text="job.status"></span>
-                                            </td>
-                                            <td class="py-3">
-                                                <div class="h-1 w-24 bg-white/5 rounded-full overflow-hidden">
-                                                    <div class="h-full bg-sky-500 transition-all duration-1000"
-                                                        :style="'width: ' + (job.status === 'succeeded' ? 100 : (job.status === 'failed' ? 10 : 50)) + '%'">
-                                                    </div>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    </template>
-                                </tbody>
-                            </table>
-                        </template>
                     </div>
 
                     <h4 class="text-sm font-semibold mb-4 flex items-center gap-2 text-white/80">
-                        <i data-lucide="package" class="w-4 h-4 text-sky-400"></i> Registered Security Profiles (TGSP)
-                        <template x-if="loading.tgsp">
-                            <span class="ml-2 text-xs text-white/30 animate-pulse">Loading...</span>
-                        </template>
+                        <i data-lucide="package" class="w-4 h-4 text-sky-400"></i> Security Profiles (TGSP)
                     </h4>
 
                     <div class="plm-card">
-                        <!-- Error State -->
-                        <template x-if="errors.tgsp">
-                            <div class="flex flex-col items-center justify-center py-12 text-center">
-                                <div class="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center mb-4">
-                                    <i data-lucide="alert-triangle" class="w-6 h-6 text-red-400"></i>
-                                </div>
-                                <p class="text-white/60 text-sm">Failed to load security profiles</p>
-                                <p class="text-white/30 text-xs mt-1" x-text="errors.tgsp"></p>
-                                <button @click="fetchTGSP()"
-                                    class="mt-4 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-xs transition-colors">
-                                    Retry
-                                </button>
-                            </div>
-                        </template>
-
-                        <!-- Loading Skeleton -->
-                        <template x-if="loading.tgsp && !errors.tgsp">
-                            <div class="space-y-4">
-                                <template x-for="i in 3">
-                                    <div class="flex items-center gap-4">
-                                        <div class="skeleton h-4 w-32"></div>
-                                        <div class="skeleton h-4 w-24"></div>
-                                        <div class="skeleton h-4 w-40"></div>
-                                        <div class="skeleton h-4 w-24"></div>
-                                        <div class="skeleton h-4 w-16"></div>
-                                    </div>
-                                </template>
-                            </div>
-                        </template>
-
-                        <!-- Empty State -->
-                        <template x-if="!loading.tgsp && !errors.tgsp && tgspPackages.length === 0">
-                            <div class="flex flex-col items-center justify-center py-12 text-center">
-                                <div class="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-4">
-                                    <i data-lucide="package" class="w-6 h-6 text-white/20"></i>
-                                </div>
-                                <p class="text-white/40 text-sm">No security profiles registered</p>
-                            </div>
-                        </template>
-
-                        <!-- Data Table -->
-                        <template x-if="!loading.tgsp && !errors.tgsp && tgspPackages.length > 0">
+                        <template x-if="!loading.tgsp && tgspPackages.length > 0">
                             <table class="w-full text-left text-sm">
                                 <thead>
                                     <tr class="text-white/40 border-b border-white/5">
@@ -633,9 +1160,9 @@
                                 </thead>
                                 <tbody class="divide-y divide-white/5">
                                     <template x-for="pkg in tgspPackages" :key="pkg.id">
-                                        <tr class="hover:bg-white/[0.02] transition-all hover-lift">
+                                        <tr class="hover:bg-white/[0.02] transition-all">
                                             <td class="py-4 font-mono text-xs text-white/80"
-                                                x-text="pkg.id.substring(0,12)"></td>
+                                                x-text="pkg.id?.substring(0,12)"></td>
                                             <td class="py-4 text-xs text-white/60" x-text="pkg.producer_id"></td>
                                             <td class="py-4">
                                                 <div class="flex flex-col">
@@ -648,8 +1175,7 @@
                                             <td class="py-4 text-white/40 text-xs"
                                                 x-text="new Date(pkg.created_at).toLocaleDateString()"></td>
                                             <td class="py-4">
-                                                <span
-                                                    :class="getStatusBg(pkg.status) + ' ' + getStatusColor(pkg.status)"
+                                                <span :class="getStatusBg(pkg.status) + ' ' + getStatusColor(pkg.status)"
                                                     class="px-2 py-1 rounded-full text-[10px] font-medium"
                                                     x-text="pkg.status"></span>
                                             </td>
@@ -661,125 +1187,14 @@
                     </div>
                 </div>
 
-                <!-- Key Vault Tab -->
-                <div x-show="activeTab === 'vault'" x-transition x-cloak>
-                    <h3 class="text-lg font-semibold mb-6 flex items-center gap-2">
-                        <i data-lucide="key" class="text-sky-500 w-5 h-5"></i> Machine Identity Vault
-                        <template x-if="loading.inventory">
-                            <span class="ml-2 text-xs text-white/30 animate-pulse">Loading...</span>
-                        </template>
-                    </h3>
-
-                    <div class="plm-card">
-                        <!-- Error State -->
-                        <template x-if="errors.inventory">
-                            <div class="flex flex-col items-center justify-center py-12 text-center">
-                                <div class="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center mb-4">
-                                    <i data-lucide="alert-triangle" class="w-6 h-6 text-red-400"></i>
-                                </div>
-                                <p class="text-white/60 text-sm">Failed to load identity vault</p>
-                                <p class="text-white/30 text-xs mt-1" x-text="errors.inventory"></p>
-                                <button @click="fetchInventory()"
-                                    class="mt-4 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-xs transition-colors">
-                                    Retry
-                                </button>
-                            </div>
-                        </template>
-
-                        <!-- Loading Skeleton -->
-                        <template x-if="loading.inventory && !errors.inventory">
-                            <div class="space-y-4">
-                                <template x-for="i in 5">
-                                    <div class="flex items-center gap-4">
-                                        <div class="skeleton h-4 w-40"></div>
-                                        <div class="skeleton h-4 w-32"></div>
-                                        <div class="skeleton h-4 w-32"></div>
-                                        <div class="skeleton h-4 w-24"></div>
-                                    </div>
-                                </template>
-                            </div>
-                        </template>
-
-                        <!-- Empty State -->
-                        <template x-if="!loading.inventory && !errors.inventory && certificates.length === 0">
-                            <div class="flex flex-col items-center justify-center py-12 text-center">
-                                <div class="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-4">
-                                    <i data-lucide="key" class="w-6 h-6 text-white/20"></i>
-                                </div>
-                                <p class="text-white/40 text-sm">Vault empty</p>
-                                <p class="text-white/20 text-xs mt-1">No machine identities found</p>
-                            </div>
-                        </template>
-
-                        <!-- Data Table -->
-                        <template x-if="!loading.inventory && !errors.inventory && certificates.length > 0">
-                            <table class="w-full text-left text-sm">
-                                <thead>
-                                    <tr class="text-white/40 border-b border-white/5">
-                                        <th class="pb-3 font-medium">Subject DN</th>
-                                        <th class="pb-3 font-medium">Issuer</th>
-                                        <th class="pb-3 font-medium">Conf</th>
-                                        <th class="pb-3 font-medium">Expires</th>
-                                        <th class="pb-3 font-medium">Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-white/5">
-                                    <template x-for="cert in certificates" :key="cert.id">
-                                        <tr class="hover:bg-white/[0.02] transition-all hover-lift">
-                                            <td class="py-4 text-xs font-mono text-white/80" x-text="cert.subject"></td>
-                                            <td class="py-4 text-xs text-white/50" x-text="cert.issuer"></td>
-                                            <td class="py-4">
-                                                <template x-if="cert.has_eku_conflict">
-                                                    <div class="w-4 h-4 text-red-400" title="EKU Split Required">
-                                                        <i data-lucide="alert-triangle" class="w-4 h-4"></i>
-                                                    </div>
-                                                </template>
-                                                <template x-if="!cert.has_eku_conflict">
-                                                    <i data-lucide="check" class="text-emerald-400/30 w-4 h-4"></i>
-                                                </template>
-                                            </td>
-                                            <td class="py-4 text-xs text-white/50"
-                                                x-text="new Date(cert.not_after).toLocaleDateString()"></td>
-                                            <td class="py-4">
-                                                <span :class="getCertExpiryClass(cert.days_to_expiry)"
-                                                    class="px-2 py-1 rounded-full text-[10px] font-bold"
-                                                    x-text="cert.days_to_expiry + ' days'"></span>
-                                            </td>
-                                        </tr>
-                                    </template>
-                                </tbody>
-                            </table>
-                        </template>
-                    </div>
-                </div>
-
-                <!-- Audit Tab -->
+                <!-- Audit Trail Tab -->
                 <div x-show="activeTab === 'audit'" x-transition x-cloak>
                     <h3 class="text-lg font-semibold mb-6 flex items-center gap-2">
                         <i data-lucide="clipboard-list" class="text-sky-500 w-5 h-5"></i> Tamper-Proof Audit Trail
-                        <template x-if="loading.audit">
-                            <span class="ml-2 text-xs text-white/30 animate-pulse">Loading...</span>
-                        </template>
                     </h3>
 
                     <div class="plm-card">
-                        <!-- Error State -->
-                        <template x-if="errors.audit">
-                            <div class="flex flex-col items-center justify-center py-12 text-center">
-                                <div class="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center mb-4">
-                                    <i data-lucide="alert-triangle" class="w-6 h-6 text-red-400"></i>
-                                </div>
-                                <p class="text-white/60 text-sm">Failed to load audit logs</p>
-                                <p class="text-white/30 text-xs mt-1" x-text="errors.audit"></p>
-                                <button @click="fetchAudit()"
-                                    class="mt-4 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-xs transition-colors">
-                                    Retry
-                                </button>
-                            </div>
-                        </template>
-
-                        <!-- Loading Skeleton -->
-                        <template x-if="loading.audit && !errors.audit">
+                        <template x-if="loading.audit">
                             <div class="space-y-4">
                                 <template x-for="i in 8">
                                     <div class="flex items-center gap-4">
@@ -793,19 +1208,16 @@
                             </div>
                         </template>
 
-                        <!-- Empty State -->
-                        <template x-if="!loading.audit && !errors.audit && auditLogs.length === 0">
+                        <template x-if="!loading.audit && auditLogs.length === 0">
                             <div class="flex flex-col items-center justify-center py-12 text-center">
                                 <div class="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-4">
                                     <i data-lucide="clipboard-list" class="w-6 h-6 text-white/20"></i>
                                 </div>
                                 <p class="text-white/40 text-sm">Audit trail empty</p>
-                                <p class="text-white/20 text-xs mt-1">Security events will appear here</p>
                             </div>
                         </template>
 
-                        <!-- Data Table -->
-                        <template x-if="!loading.audit && !errors.audit && auditLogs.length > 0">
+                        <template x-if="!loading.audit && auditLogs.length > 0">
                             <table class="w-full text-left text-sm">
                                 <thead>
                                     <tr class="text-white/40 border-b border-white/5">
@@ -818,7 +1230,7 @@
                                 </thead>
                                 <tbody class="divide-y divide-white/5">
                                     <template x-for="log in auditLogs" :key="log.id">
-                                        <tr class="hover:bg-white/[0.02] transition-all hover-lift">
+                                        <tr class="hover:bg-white/[0.02] transition-all">
                                             <td class="py-4 text-xs text-white/40" x-text="formatDate(log.timestamp)">
                                             </td>
                                             <td class="py-4">
@@ -850,12 +1262,9 @@
 
     <script src="app.js"></script>
     <script>
-        // Re-initialize icons after Alpine renders
         document.addEventListener('alpine:initialized', () => {
             lucide.createIcons();
         });
-
-        // Re-run icons when tabs change
         window.addEventListener('tab-changed', () => {
             lucide.createIcons();
         });
