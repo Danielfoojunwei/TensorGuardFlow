@@ -11,7 +11,10 @@ This module implements the production-grade features for TensorGuard:
 - SRE observability
 
 Based on the TensorGuard Production Blueprint.
+Updated with Workflow Architect Hardening (v2.1).
 """
+
+from enum import Enum, auto
 
 import hashlib
 import json
@@ -1035,6 +1038,112 @@ class ResilientAggregator:
 
         return {c.client_id: c.weight / total_weight for c in self.contributions}
 
+
+# ============================================================================
+# 9. Unified Pipeline Workflow Management (v2.1)
+# ============================================================================
+
+class PipelineStage(Enum):
+    """The 7-stage TensorGuard workflow Formalized."""
+    CAPTURE = "capture"   # Raw telemetry ingest
+    EMBED   = "embed"     # Feature extraction
+    GATE    = "gate"      # Expert routing (IOSP)
+    PEFT    = "peft"      # LoRA update calculation
+    SHIELD  = "shield"    # N2HE + Skellam DP
+    SYNC    = "sync"      # Federated Aggregation
+    PULL    = "pull"      # Global consensus update
+
+@dataclass
+class StageResult:
+    """Telemetric record of a single pipeline stage execution."""
+    stage: PipelineStage
+    status: str  # "ok", "error", "degraded"
+    latency_ms: float
+    error_message: Optional[str] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+class BoundaryGuard:
+    """Validates data integrity between pipeline stages to prevent malformed updates."""
+    
+    @staticmethod
+    def validate_stage_input(stage: PipelineStage, data: Any):
+        """Pre-execution check for each stage."""
+        if stage == PipelineStage.SHIELD:
+            if not isinstance(data, dict) or not all(isinstance(v, np.ndarray) for v in data.values()):
+                raise ValidationError(f"Invalid input to SHIELD: Expected gradient dict, got {type(data)}")
+        
+        elif stage == PipelineStage.SYNC:
+            if not hasattr(data, 'serialize'):
+                raise ValidationError(f"Invalid input to SYNC: Expected UpdatePackage, got {type(data)}")
+                
+        # Additional guards can be expanded here for 'Enterprise' precision
+        logger.debug(f"[BoundaryGuard] Stage {stage.value} input validated.")
+
+class UnifiedPipelineManager:
+    """
+    Orchestrates the 7-stage TensorGuard workflow with surgical hardening.
+    
+    Implements:
+    - Circuit Breakers: Immediate stop if critical security fails.
+    - Graceful Degradation: Reverts to 'Safe Mode' policies on non-critical errors.
+    - Observability: Full telemetry for the 'Command Center' UI.
+    """
+    
+    def __init__(self, fleet_id: str, observability: ObservabilityCollector):
+        self.fleet_id = fleet_id
+        self.obs = observability
+        self.history: List[StageResult] = []
+        self.safe_mode_active = False
+
+    def run_stage(self, stage: PipelineStage, func: callable, *args, **kwargs) -> Any:
+        """Executes a stage with guard-rails and timing."""
+        start_time = time.time()
+        try:
+            # 1. Pre-Execution Guard
+            BoundaryGuard.validate_stage_input(stage, args[0] if args else None)
+            
+            # 2. Execution
+            result = func(*args, **kwargs)
+            
+            # 3. Success Logging
+            latency = (time.time() - start_time) * 1000
+            self.history.append(StageResult(stage, "ok", latency))
+            return result
+            
+        except Exception as e:
+            latency = (time.time() - start_time) * 1000
+            error_msg = str(e)
+            
+            # 4. Graceful Degradation / Circuit Breaker Logic
+            if stage in [PipelineStage.SHIELD, PipelineStage.GATE]:
+                # Critical security stages - Activate Circuit Breaker
+                logger.critical(f"Circuit Breaker TRIPPED at {stage.value}: {error_msg}")
+                self.history.append(StageResult(stage, "error", latency, error_msg))
+                self.safe_mode_active = True
+                raise RuntimeError(f"Workflow Halted: Security Fault in {stage.value}")
+            else:
+                # Non-critical stages - Degradation
+                logger.warning(f"Stage {stage.value} degraded: {error_msg}. Falling back to Safe Default.")
+                self.history.append(StageResult(stage, "degraded", latency, error_msg))
+                return self._get_safe_fallback(stage)
+
+    def _get_safe_fallback(self, stage: PipelineStage) -> Any:
+        """Returns non-breaking default results for degraded stages."""
+        if stage == PipelineStage.EMBED:
+            return np.zeros((1, 128)) # Empty embedding
+        if stage == PipelineStage.PEFT:
+            return {} # No update
+        return None
+
+    def export_telemetry(self) -> str:
+        """Export JSON trace for the Platform UI."""
+        trace = {
+            "fleet_id": self.fleet_id,
+            "timestamp": datetime.utcnow().isoformat(),
+            "safe_mode": self.safe_mode_active,
+            "workflow": [asdict(r) for r in self.history]
+        }
+        return json.dumps(trace, default=numpy_json_serializer)
 
 # ============================================================================
 # Production Blueprint Summary

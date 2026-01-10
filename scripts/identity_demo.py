@@ -21,7 +21,7 @@ from datetime import datetime, timedelta
 # Configuration
 BASE_URL = os.environ.get("TG_API_URL", "http://localhost:8000/api/v1")
 ADMIN_EMAIL = "admin@demo.tensorguard.io"
-ADMIN_PASS = "demo-password-123"
+ADMIN_PASS = "Demo-Password-123!"
 TENANT_NAME = "TensorGuard Demo"
 FLEET_NAME = "production-k8s"
 
@@ -48,15 +48,15 @@ def api_call(method: str, path: str, token: str = None, data: dict = None):
         raise ValueError(f"Unsupported method: {method}")
     
     if not response.ok:
-        print(f"  ❌ Error: {response.status_code} - {response.text}")
+        print(f"  [ERROR] Status: {response.status_code} - {response.text}")
         return None
     
     return response.json()
 
 def main():
-    print("\n" + "🔐 "*20)
+    print("\n" + "* "*20)
     print("TensorGuard Machine Identity Guard - Demo")
-    print("🔐 "*20)
+    print("* "*20)
     
     token = None
     
@@ -69,9 +69,9 @@ def main():
     )
     
     if result:
-        print(f"  ✅ Tenant created: {result.get('name')} (ID: {result.get('id')})")
+        print(f"  [OK] Tenant created: {result.get('name')} (ID: {result.get('id')})")
     else:
-        print("  ⚠️  Tenant may already exist, trying login...")
+        print("  [WARN] Tenant may already exist, trying login...")
     
     # Step 2: Login
     print_step(2, "Authenticate")
@@ -83,9 +83,9 @@ def main():
     
     if result:
         token = result.get("access_token")
-        print(f"  ✅ Logged in successfully")
+        print(f"  [OK] Logged in successfully")
     else:
-        print("  ❌ Login failed")
+        print("  [ERROR] Login failed")
         return 1
     
     # Step 3: Create Fleet
@@ -96,12 +96,12 @@ def main():
     if result:
         fleet_id = result.get("id")
         fleet_api_key = result.get("api_key")
-        print(f"  ✅ Fleet created: {result.get('name')}")
-        print(f"  📋 Fleet ID: {fleet_id}")
-        print(f"  🔑 API Key: {fleet_api_key}")
-        print(f"  ⚠️  Save this API key - it will not be shown again!")
+        print(f"  [OK] Fleet created: {result.get('name')}")
+        print(f"  [INFO] Fleet ID: {fleet_id}")
+        print(f"  [INFO] API Key: {fleet_api_key}")
+        print(f"  [WARN] Save this API key - it will not be shown again!")
     else:
-        print("  ❌ Fleet creation failed")
+        print("  [ERROR] Fleet creation failed")
         return 1
     
     # Step 4: Create Endpoint
@@ -122,10 +122,10 @@ def main():
     
     if result:
         endpoint_id = result.get("id")
-        print(f"  ✅ Endpoint registered: {result.get('name')}")
-        print(f"  📋 Endpoint ID: {endpoint_id}")
+        print(f"  [OK] Endpoint registered: {result.get('name')}")
+        print(f"  [INFO] Endpoint ID: {endpoint_id}")
     else:
-        print("  ❌ Endpoint registration failed")
+        print("  [ERROR] Endpoint registration failed")
         return 1
     
     # Step 5: Create Policy (200-day preset)
@@ -138,12 +138,12 @@ def main():
     
     if result:
         policy_id = result.get("id")
-        print(f"  ✅ Policy created: {result.get('name')}")
-        print(f"  📋 Policy ID: {policy_id}")
-        print(f"  📅 Max validity: 200 days")
-        print(f"  🔄 Renewal window: 30 days before expiry")
+        print(f"  [OK] Policy created: {result.get('name')}")
+        print(f"  [INFO] Policy ID: {policy_id}")
+        print(f"  [INFO] Max validity: 200 days")
+        print(f"  [INFO] Renewal window: 30 days before expiry")
     else:
-        print("  ❌ Policy creation failed")
+        print("  [ERROR] Policy creation failed")
         return 1
     
     # Step 6: Register Agent
@@ -160,10 +160,10 @@ def main():
     
     if result:
         agent_id = result.get("agent_id")
-        print(f"  ✅ Agent registered: {result.get('name')}")
-        print(f"  📋 Agent ID: {agent_id}")
+        print(f"  [OK] Agent registered: {result.get('name')}")
+        print(f"  [INFO] Agent ID: {agent_id}")
     else:
-        print("  ❌ Agent registration failed")
+        print("  [ERROR] Agent registration failed")
         return 1
     
     # Step 7: Request Scan
@@ -172,10 +172,10 @@ def main():
     result = api_call("POST", f"/identity/scan/request?fleet_id={fleet_id}", token=token)
     
     if result:
-        print(f"  ✅ Scan requested: {result.get('scan_id')}")
-        print(f"  📊 Status: {result.get('status')}")
+        print(f"  [OK] Scan requested: {result.get('scan_id')}")
+        print(f"  [INFO] Status: {result.get('status')}")
     else:
-        print("  ❌ Scan request failed")
+        print("  [ERROR] Scan request failed")
     
     # Step 8: Schedule Renewal
     print_step(8, "Schedule Renewal Job")
@@ -189,13 +189,13 @@ def main():
         jobs = result.get("jobs", [])
         if jobs:
             job_id = jobs[0].get("job_id")
-            print(f"  ✅ Renewal scheduled: {len(jobs)} job(s)")
-            print(f"  📋 Job ID: {job_id}")
-            print(f"  📊 Status: {jobs[0].get('status')}")
+            print(f"  [OK] Renewal scheduled: {len(jobs)} job(s)")
+            print(f"  [INFO] Job ID: {job_id}")
+            print(f"  [INFO] Status: {jobs[0].get('status')}")
         else:
-            print("  ⚠️  No jobs scheduled")
+            print("  [WARN] No jobs scheduled")
     else:
-        print("  ❌ Renewal scheduling failed")
+        print("  [ERROR] Renewal scheduling failed")
     
     # Step 9: Check Inventory
     print_step(9, "View Inventory")
@@ -203,9 +203,9 @@ def main():
     result = api_call("GET", "/identity/inventory", token=token)
     
     if result:
-        print(f"  📊 Endpoints: {len(result.get('endpoints', []))}")
-        print(f"  📊 Certificates: {len(result.get('certificates', []))}")
-        print(f"  📊 Expiry Summary: {json.dumps(result.get('expiry_summary', {}))}")
+        print(f"  [INFO] Endpoints: {len(result.get('endpoints', []))}")
+        print(f"  [INFO] Certificates: {len(result.get('certificates', []))}")
+        print(f"  [INFO] Expiry Summary: {json.dumps(result.get('expiry_summary', {}))}")
     
     # Step 10: Check EKU Conflicts
     print_step(10, "Check EKU Migration")
@@ -213,8 +213,8 @@ def main():
     result = api_call("POST", "/identity/migrations/eku-split", token=token)
     
     if result:
-        print(f"  📊 Violations found: {result.get('violations_found', 0)}")
-        print(f"  📅 Chrome deadline: {result.get('chrome_deadline')}")
+        print(f"  [INFO] Violations found: {result.get('violations_found', 0)}")
+        print(f"  [INFO] Chrome deadline: {result.get('chrome_deadline')}")
         if result.get('violations'):
             for v in result['violations']:
                 print(f"    - {v.get('subject')}: {v.get('recommendation')}")
@@ -225,7 +225,7 @@ def main():
     result = api_call("GET", "/identity/audit?limit=10", token=token)
     
     if result:
-        print(f"  📜 Recent audit entries:")
+        print(f"  [INFO] Recent audit entries:")
         for entry in result[:5]:
             print(f"    [{entry.get('timestamp')}] {entry.get('action')} by {entry.get('actor_type')}")
     
@@ -236,13 +236,13 @@ def main():
     
     if result:
         if result.get("is_valid"):
-            print(f"  ✅ Audit chain verified: {result.get('total_entries')} entries")
+            print(f"  [OK] Audit chain verified: {result.get('total_entries')} entries")
         else:
-            print(f"  ❌ Audit chain INVALID: {result.get('error_message')}")
+            print(f"  [ERROR] Audit chain INVALID: {result.get('error_message')}")
     
     # Summary
     print("\n" + "="*60)
-    print("🎉 Demo Complete!")
+    print("Demo Complete!")
     print("="*60)
     print(f"""
 Summary:

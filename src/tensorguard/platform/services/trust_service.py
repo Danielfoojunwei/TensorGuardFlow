@@ -1,8 +1,8 @@
 from sqlmodel import Session, select
 from typing import Dict, Any, List
-from .models.identity_models import IdentityCertificate, IdentityRenewalJob, RenewalJobStatus
-from .models.core import Fleet, AuditLog
-from .inventory_service import InventoryService
+from ..models.identity_models import IdentityCertificate, IdentityRenewalJob, RenewalJobStatus
+from ..models.core import Fleet, AuditLog
+from ...identity.inventory import InventoryService
 from ...core.keys import vault, KeyScope
 import hashlib
 from datetime import datetime, UTC

@@ -5,7 +5,8 @@ from fastapi.middleware.gzip import GZipMiddleware
 from .database import init_db
 import os
 
-# Initialize database schema immediately to avoid OperationalErrors during import
+# Initialize database schema
+# In dev mode, we ensure the schema is up to date
 init_db()
 
 from .api import endpoints
@@ -114,6 +115,10 @@ app.include_router(runs_endpoints.router, prefix="/api/v1", tags=["runs"])
 from .api import community_tgsp
 app.include_router(community_tgsp.router, prefix="/api/community/tgsp", tags=["community-tgsp"])
 
+# PEFT Studio
+from .api import peft_endpoints
+app.include_router(peft_endpoints.router, prefix="/api/v1/peft", tags=["peft"])
+
 # Enterprise Stubs (Proprietary Boundary)
 try:
     from .enterprise import check_entitlement, log_audit_event
@@ -123,7 +128,27 @@ except ImportError:
     def log_audit_event(ev): pass
 
 # Serve UI
-app.mount("/", StaticFiles(directory="public", html=True), name="static")
+# Single Page Application (SPA) catch-all
+from fastapi.responses import FileResponse
+
+# Use absolute path for public directory
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+PUBLIC_DIR = os.path.join(BASE_DIR, "public")
+
+@app.get("/{full_path:path}")
+async def serve_spa(full_path: str):
+    # Skip API routes (though definition order should handle this)
+    if full_path.startswith("api/v1"):
+        return None 
+        
+    file_path = os.path.join(PUBLIC_DIR, full_path)
+    if os.path.isfile(file_path):
+        return FileResponse(file_path)
+    # Default to index.html for SPA
+    return FileResponse(os.path.join(PUBLIC_DIR, "index.html"))
+
+# StaticFiles mounting for structured assets if needed
+app.mount("/static", StaticFiles(directory=PUBLIC_DIR), name="static")
 
 if __name__ == "__main__":
     import uvicorn

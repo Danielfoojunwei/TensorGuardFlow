@@ -25,54 +25,37 @@ function app() {
         auditLogs: [],
         identityJobs: [],
 
-        // New System Data
-        systemHealth: {
-            status: 'healthy',
-            healthy_count: 0,
-            degraded_count: 0,
-            unhealthy_count: 0,
-            total_count: 0,
-            components: {}
-        },
-        systemMetrics: {
-            cpu_usage_percent: 0,
-            memory_usage_percent: 0,
-            disk_usage_percent: 0,
-            thread_count: 0,
-            active_connections: 0,
-            network_bytes_sent: 0,
-            network_bytes_recv: 0
-        },
+        // System Data (Hardening)
+        systemHealth: { status: 'healthy', healthy_count: 0, degraded_count: 0, unhealthy_count: 0, total_count: 0, components: {} },
+        systemMetrics: { cpu_usage_percent: 0, memory_usage_percent: 0, disk_usage_percent: 0, thread_count: 0, active_connections: 0, network_bytes_sent: 0, network_bytes_recv: 0 },
         pipelines: [],
         circuits: [],
         openCircuits: [],
         keys: [],
         errors: [],
         errorSummary: { by_level: {}, by_component: {}, total_24h: 0 },
-        degradation: {
-            level: 'normal',
-            reason: 'System operating normally',
-            enabled_features: [],
-            disabled_features: []
-        },
+        degradation: { level: 'normal', reason: 'System operating normally', enabled_features: [], disabled_features: [] },
         versionInfo: {},
         modelLineage: { current_version: '', lineage: [] },
 
-        // Computed values
-        get pipelineErrors() {
-            return this.pipelines.reduce((sum, p) =>
-                sum + p.stages.reduce((s, stage) => s + stage.error_count, 0), 0);
-        },
-        get errorCount() {
-            return (this.errorSummary.by_level?.error || 0) + (this.errorSummary.by_level?.warning || 0);
-        },
-        get keysNeedingRotation() {
-            return this.keys.filter(k => k.rotation_due).length;
+        // Robotics VLA & Unification State
+        pipelineWorkflow: [],
+        keyRotation: { pqc_days_remaining: 0, n2he_hours_remaining: 0, last_rotation: '-' },
+        trustPosture: { compliance_health: 0, threat_environment: 'CALIBRATING', at_risk_fleets: 0 },
+        fleets: [
+            { id: 'f-us-east', name: 'US-East-1 Cluster', region: 'us-east-1', status: 'Healthy', devices_total: 450, devices_online: 442, trust_score: 99.2 },
+            { id: 'f-eu-west', name: 'Berlin Gigafactory', region: 'eu-central-1', status: 'Degraded', devices_total: 120, devices_online: 89, trust_score: 84.5 }
+        ],
+        settings: {
+            kms: { provider: 'local', resource_id: '' },
+            rtpl: { mode: 'front', profile: 'collaborative' }
         },
 
-        // Error filtering
+        // Computed values
+        get pipelineErrors() { return this.pipelines.reduce((sum, p) => sum + p.stages.reduce((s, stage) => s + stage.error_count, 0), 0); },
+        get errorCount() { return (this.errorSummary.by_level?.error || 0) + (this.errorSummary.by_level?.warning || 0); },
+        get keysNeedingRotation() { return this.keys.filter(k => k.rotation_due).length; },
         errorFilter: { level: '', component: '' },
-        selectedError: null,
         get filteredErrors() {
             return this.errors.filter(e => {
                 if (this.errorFilter.level && e.level !== this.errorFilter.level) return false;
@@ -81,225 +64,43 @@ function app() {
             });
         },
 
-        // Loading & Error States
-        loading: {
-            stats: true,
-            jobs: true,
-            tgsp: true,
-            runs: true,
-            inventory: true,
-            audit: true,
-            identity: true,
-            health: true,
-            pipelines: true,
-            keys: true,
-            errors: true
-        },
-        fetchErrors: {
-            stats: null,
-            jobs: null,
-            tgsp: null,
-            runs: null,
-            inventory: null,
-            audit: null,
-            identity: null
-        },
-
-        // Charts
-        privacyChart: null,
-
         // Initialize
         init() {
             this.updateTime();
             setInterval(() => this.updateTime(), 1000);
 
-            // Initial data fetch
+            // Fetch Data (Combined)
             this.fetchAll();
+            this.fetchPipelineTelemetry(); // From Robotics
 
-            // Poll every 10s for real-time updates
-            setInterval(() => this.fetchAll(), 10000);
+            // Initial Graph Render (Robotics)
+            setTimeout(() => {
+                if (this.renderN8nGraph) this.renderN8nGraph();
+            }, 100);
 
-            // Re-run icons when tab changes
-            this.$watch('activeTab', () => {
-                setTimeout(() => {
-                    lucide.createIcons();
-                    this.initCharts();
-                }, 100);
-            });
-
-            // Initialize charts after first data load
-            setTimeout(() => this.initCharts(), 500);
-        },
-
-        // Fetch all data
-        fetchAll() {
-            this.fetchStats();
-            this.fetchJobs();
-            this.fetchTGSP();
-            this.fetchRuns();
-            this.fetchInventory();
-            this.fetchAudit();
-            this.fetchIdentityJobs();
-            this.fetchSystemHealth();
-            this.fetchPipelines();
-            this.fetchCircuits();
-            this.fetchKeys();
-            this.fetchErrors();
-            this.fetchDegradation();
-            this.fetchVersions();
-            this.fetchLineage();
-            this.fetchTelemetry();
-        },
-
-        // Manual refresh
-        refreshAll() {
-            this.fetchAll();
-        },
-
-        updateTime() {
-            const now = new Date();
-            this.currentTime = now.toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
-        },
-
-        initCharts() {
-            this.initPrivacyChart();
-        },
-
-        initPrivacyChart() {
-            const ctx = document.getElementById('privacyChart');
-            if (!ctx) return;
-
-            if (this.privacyChart) {
-                this.privacyChart.destroy();
-            }
-
-            const consumed = this.stats.privacy_consumed || 1.6;
-            const remaining = (this.stats.privacy_cap || 10) - consumed;
-
-            this.privacyChart = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Consumed', 'Remaining'],
-                    datasets: [{
-                        data: [consumed, remaining],
-                        backgroundColor: ['#f59e0b', '#10b981'],
-                        borderWidth: 0,
-                        cutout: '75%'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false }
-                    }
+            // Poll every 10s
+            setInterval(() => {
+                this.fetchAll();
+                this.fetchPipelineTelemetry().then(() => {
+                    if (this.renderN8nGraph) this.renderN8nGraph();
+                });
+                if (this.peftStudio.run.status === 'running') {
+                    this.peftStudio.actions.pollRun();
                 }
-            });
-        },
+            }, 10000);
 
-        // === DATA FETCHING ===
-
-        async fetchStats() {
-            this.loading.stats = true;
+            // PEFT Init
             try {
-                const res = await fetch('/api/v1/enablement/stats');
-                if (res.ok) {
-                    this.stats = await res.json();
-                }
-            } catch (e) {
-                console.error("Stats fetch failed", e);
-            } finally {
-                this.loading.stats = false;
-            }
+                this.fetchPeftConnectors();
+                this.fetchPeftProfiles();
+            } catch (e) { console.error("Initial PEFT load error", e); }
         },
 
-        async fetchJobs() {
-            this.loading.jobs = true;
-            try {
-                const res = await fetch('/api/v1/enablement/jobs?limit=20');
-                if (res.ok) {
-                    this.jobs = await res.json();
-                }
-            } catch (e) {
-                console.error("Jobs fetch failed", e);
-            } finally {
-                this.loading.jobs = false;
-            }
+        // Execute EKU Migration
+        async executeEKUMigration() {
+            if (!confirm("Proceed with EKU Split Migration for all conflicting certificates? This will trigger automated dual-renewal jobs.")) return;
+            // Implementation...
         },
-
-        async fetchTGSP() {
-            this.loading.tgsp = true;
-            try {
-                const res = await fetch('/api/community/tgsp/packages');
-                if (res.ok) {
-                    this.tgspPackages = await res.json();
-                }
-            } catch (e) {
-                console.error("TGSP fetch failed", e);
-            } finally {
-                this.loading.tgsp = false;
-            }
-        },
-
-        async fetchRuns() {
-            this.loading.runs = true;
-            try {
-                const res = await fetch('/api/v1/runs');
-                if (res.ok) {
-                    this.runs = await res.json();
-                }
-            } catch (e) {
-                console.error("Runs fetch failed", e);
-            } finally {
-                this.loading.runs = false;
-            }
-        },
-
-        async fetchInventory() {
-            this.loading.inventory = true;
-            try {
-                const res = await fetch('/api/v1/identity/inventory');
-                if (res.ok) {
-                    const data = await res.json();
-                    this.certificates = data.certificates || [];
-                    this.endpoints = data.endpoints || [];
-                }
-            } catch (e) {
-                console.error("Inventory fetch failed", e);
-            } finally {
-                this.loading.inventory = false;
-            }
-        },
-
-        async fetchAudit() {
-            this.loading.audit = true;
-            try {
-                const res = await fetch('/api/v1/identity/audit?limit=50');
-                if (res.ok) {
-                    this.auditLogs = await res.json();
-                }
-            } catch (e) {
-                console.error("Audit fetch failed", e);
-            } finally {
-                this.loading.audit = false;
-            }
-        },
-
-        async fetchIdentityJobs() {
-            this.loading.identity = true;
-            try {
-                const res = await fetch('/api/v1/identity/renewals');
-                if (res.ok) {
-                    this.identityJobs = await res.json();
-                }
-            } catch (e) {
-                console.error("Identity jobs fetch failed", e);
-            } finally {
-                this.loading.identity = false;
-            }
-        },
-
-        // === NEW HARDENING DATA FETCHING ===
 
         async fetchSystemHealth() {
             this.loading.health = true;
@@ -619,6 +420,7 @@ function app() {
         },
 
         getStatusColor(status) {
+<<<<<<< HEAD
             const colors = {
                 'completed': 'text-emerald-400',
                 'evaluated': 'text-sky-400',
@@ -656,12 +458,119 @@ function app() {
                 'degraded': 'bg-amber-500/20'
             };
             return colors[status?.toLowerCase()] || 'bg-white/10';
+=======
+            const s = status?.toLowerCase();
+            if (['failed', 'error', 'revoked'].includes(s)) return 'text-orange-500 font-bold';
+            if (['running', 'active', 'validating'].includes(s)) return 'text-orange-300 animate-pulse';
+            if (['completed', 'succeeded', 'registered'].includes(s)) return 'text-white font-medium';
+            return 'text-[#666]';
+        },
+
+        getStatusBg(status) {
+            const s = status?.toLowerCase();
+            if (['failed', 'error', 'revoked'].includes(s)) return 'bg-orange-500/20';
+            if (['running', 'active', 'validating'].includes(s)) return 'bg-orange-500/10';
+            if (['completed', 'succeeded', 'registered'].includes(s)) return 'bg-white/10';
+            return 'bg-[#222]';
+>>>>>>> 5a99ad8 (feat: realign N8n, Eval Arena, and PEFT for Robotics VLA workflows)
         },
 
         getCertExpiryClass(daysToExpiry) {
-            if (daysToExpiry <= 7) return 'text-red-400 bg-red-500/20';
-            if (daysToExpiry <= 30) return 'text-amber-400 bg-amber-500/20';
-            return 'text-emerald-400 bg-emerald-500/20';
+            if (daysToExpiry <= 7) return 'text-orange-500 bg-orange-500/20 font-bold';
+            if (daysToExpiry <= 30) return 'text-orange-300 bg-orange-500/10';
+            return 'text-white bg-white/10';
+        },
+
+        renderN8nGraph() {
+            const canvas = document.getElementById('n8n-canvas');
+            if (!canvas) return;
+
+            // Clear existing nodes (keep SVG layer)
+            const htmlNodes = canvas.querySelectorAll('.graph-node');
+            htmlNodes.forEach(n => n.remove());
+
+            const svgLayer = canvas.querySelector('.connector-layer');
+            svgLayer.innerHTML = ''; // Clear paths
+
+            // Telemetry Data (or Fallback)
+            const data = this.pipelineWorkflow || {
+                nodes: [
+                    { id: 'edge', label: 'Pi0 Edge Device', type: 'source', status: 'active', x: 50, y: 150, metrics: { cpu: '45%', ram: '1.2GB', fps: '30' } },
+                    { id: 'agg', label: 'Aggregation Server', type: 'process', status: 'active', x: 350, y: 150, metrics: { clients: 12, round: 42, latency: '12ms' } },
+                    { id: 'cloud', label: 'Cloud Backend', type: 'target', status: 'active', x: 650, y: 150, metrics: { uptime: '99.9%', cost: '$0.42/h', model: 'Llama-3' } }
+                ]
+            };
+
+            // 1. Render Nodes
+            data.nodes.forEach(node => {
+                const el = document.createElement('div');
+                el.className = `graph-node ${node.status === 'stopped' ? 'opacity-50 grayscale' : ''}`;
+                el.style.left = node.x + 'px';
+                el.style.top = node.y + 'px';
+                el.style.cursor = 'pointer';
+
+                // Add click handler for Modal
+                el.onclick = () => {
+                    this.modal.node = node;
+                    this.modal.open = true;
+                };
+
+                el.innerHTML = `
+                    <div class="node-header">
+                        <span>${node.label}</span>
+                        <i data-lucide="${node.type === 'source' ? 'cpu' : (node.type === 'target' ? 'cloud' : 'layers')}" class="w-3 h-3"></i>
+                    </div>
+                    <div class="node-body">
+                        ${Object.entries(node.metrics).map(([k, v]) => `
+                            <div class="node-metric">
+                                <span class="uppercase opacity-50">${k}</span>
+                                <span>${v}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                    ${node.status === 'stopped' ? '<div class="absolute inset-0 flex items-center justify-center bg-black/50 text-red-500 font-bold uppercase tracking-widest text-xs">STOPPED</div>' : ''}
+                `;
+                canvas.appendChild(el);
+            });
+
+            // 2. Render Connections (Bezier)
+            const nodes = data.nodes;
+            for (let i = 0; i < nodes.length - 1; i++) {
+                const src = nodes[i];
+                const tgt = nodes[i + 1];
+
+                // Calculate anchor points (Right of Src -> Left of Tgt)
+                const x1 = src.x + 160;
+                const y1 = src.y + 40;
+                const x2 = tgt.x;
+                const y2 = tgt.y + 40;
+
+                // Bezier Control Points
+                const cp1x = x1 + (x2 - x1) / 2;
+                const cp2x = x2 - (x2 - x1) / 2;
+
+                const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                path.setAttribute("d", `M ${x1} ${y1} C ${cp1x} ${y1}, ${cp2x} ${y2}, ${x2} ${y2}`);
+                path.setAttribute("class", "connector-path active");
+                svgLayer.appendChild(path);
+            }
+
+            // Re-init Icons for new nodes
+            if (window.lucide) window.lucide.createIcons();
+        },
+
+        async fetchPeftConnectors() {
+            try {
+                const res = await fetch('/api/v1/peft/connectors');
+                if (res.ok) this.peftStudio.connectors = await res.json();
+            } catch (e) { }
+        },
+
+        async fetchPeftProfiles() {
+            try {
+                const res = await fetch('/api/v1/peft/profiles');
+                if (res.ok) this.peftStudio.profiles = await res.json();
+            } catch (e) { }
         }
     }
 }
