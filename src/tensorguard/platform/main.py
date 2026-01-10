@@ -132,8 +132,10 @@ except ImportError:
 from fastapi.responses import FileResponse
 
 # Use absolute path for public directory
+
+# Use absolute path for public directory (Vue Build)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-PUBLIC_DIR = os.path.join(BASE_DIR, "public")
+PUBLIC_DIR = os.path.join(BASE_DIR, "frontend", "dist")
 
 @app.get("/{full_path:path}")
 async def serve_spa(full_path: str):
