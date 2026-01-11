@@ -2,12 +2,34 @@
 import { ref } from 'vue'
 import { GitBranch, GitCommit, Play, Clock, Rocket, RotateCcw } from 'lucide-vue-next'
 
-const commits = ref([
-  { id: 'c1', hash: 'e7f2b1', message: 'Improve context window size', author: 'Daniel Foo', time: '10m ago', status: 'deployed', tag: 'v2.1.0' },
-  { id: 'c2', hash: 'a8d9c4', message: 'Merge PR #42: PQC Integration', author: 'System', time: '2h ago', status: 'verified', tag: 'v2.0.5' },
-  { id: 'c3', hash: 'b3e5f6', message: 'Optimize inference latency', author: 'Daniel Foo', time: '5h ago', status: 'archived', tag: 'v2.0.4' },
-  { id: 'c4', hash: 'd4f5g6', message: 'Initial commit', author: 'Daniel Foo', time: '1d ago', status: 'archived', tag: 'v1.0.0' },
-])
+const commits = ref([])
+const loading = ref(true)
+
+const fetchRuns = async () => {
+  try {
+    const res = await fetch('/api/v1/runs?limit=5')
+    const data = await res.json()
+    commits.value = data.map(run => ({
+      id: run.run_id,
+      hash: run.run_id.substring(0, 7),
+      message: `Training Run: ${run.run_id.substring(0, 8)}`,
+      author: 'Automated Agent',
+      time: new Date(run.created_at).toLocaleString(),
+      status: run.status === 'evaluated' ? 'verified' : 'archived',
+      tag: `v${run.sdk_version}`,
+      metrics: JSON.parse(run.metrics_json)
+    }))
+    // Set the first one as active for demo
+    if (commits.value.length > 0) commits.value[0].status = 'deployed'
+  } catch (e) {
+    console.error("Failed to fetch model lineage", e)
+  } finally {
+    loading.value = false
+  }
+}
+
+import { onMounted } from 'vue'
+onMounted(fetchRuns)
 
 const deploy = (id) => {
   commits.value.forEach(c => {

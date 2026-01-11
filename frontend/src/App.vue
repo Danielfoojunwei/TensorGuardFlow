@@ -29,15 +29,15 @@ const activeTab = ref('canvas') // Default to Canvas
     <div class="flex-1 flex flex-col ml-64 transition-all duration-300">
       <Header />
 
-      <main class="flex-1 overflow-y-auto p-0 relative">
+      <main class="flex-1 overflow-hidden relative">
         <!-- Content Switcher -->
         <transition name="fade" mode="out-in">
-          <!-- Canvas takes full height/width, no padding -->
-          <div v-if="activeTab === 'canvas'" class="h-full w-full">
+          <!-- Canvas takes full height/width with absolute positioning -->
+          <div v-if="activeTab === 'canvas'" class="absolute inset-0">
              <NodeCanvas @navigate="t => activeTab = t" />
           </div>
 
-          <div v-else-if="activeTab === 'performance'" class="p-6">
+          <div v-else-if="activeTab === 'performance'" class="h-full overflow-y-auto p-6">
              <PerformanceDissect />
           </div>
 

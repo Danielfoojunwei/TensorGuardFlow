@@ -1,10 +1,17 @@
 <script setup>
 import { Server, Radio, MoreVertical, Plus } from 'lucide-vue-next'
+import { useSimulationStore } from '../stores/simulation'
 
+const store = useSimulationStore()
+
+// Mock fleets for display, but devices come from store
 const fleets = [
-  { id: 'f1', name: 'US-East-1 Cluster', region: 'us-east-1', status: 'Healthy', devices_total: 450, devices_online: 442, trust: 99.2 },
-  { id: 'f2', name: 'Berlin Gigafactory', region: 'eu-central-1', status: 'Degraded', devices_total: 120, devices_online: 89, trust: 84.5 },
+  { id: 'f1', name: 'US-East-1 Cluster', region: 'us-east-1', status: 'Healthy', trust: 99.2 },
+  { id: 'f2', name: 'Berlin Gigafactory', region: 'eu-central-1', status: 'Degraded', trust: 84.5 },
 ]
+
+const getDeviceCount = (fleetId) => store.devices.filter(d => d.fleet === fleetId).length
+const getOnlineCount = (fleetId) => store.devices.filter(d => d.fleet === fleetId && d.status !== 'offline').length
 </script>
 
 <template>
@@ -14,9 +21,15 @@ const fleets = [
          <h2 class="text-2xl font-bold">Fleets & Devices</h2>
          <span class="text-xs text-gray-500">Edge Node Orchestration</span>
        </div>
-       <button class="btn btn-primary">
-          <Plus class="w-4 h-4 mr-2" /> Enroll New Device
-       </button>
+       <div class="flex gap-2">
+         <button @click="store.startRound()" class="btn bg-gray-700 hover:bg-gray-600 text-white" :disabled="store.roundStatus !== 'idle'">
+             <Radio class="w-4 h-4 mr-2" :class="store.roundStatus !== 'idle' ? 'animate-spin' : ''" /> 
+             {{ store.roundStatus === 'idle' ? 'Start Training Round' : 'Round Active...' }}
+         </button>
+         <button @click="store.enrollDevice()" class="btn btn-primary">
+            <Plus class="w-4 h-4 mr-2" /> Enroll Device
+         </button>
+       </div>
     </div>
 
     <div class="grid grid-cols-1 gap-4">
@@ -45,11 +58,11 @@ const fleets = [
           <div class="grid grid-cols-2 gap-4">
              <div class="bg-[#161b22] p-3 rounded border border-[#30363d] flex items-center justify-between">
                  <span class="text-sm text-gray-400">Total Devices</span>
-                 <span class="font-mono font-bold">{{ fleet.devices_total }}</span>
+                 <span class="font-mono font-bold">{{ getDeviceCount(fleet.id) }}</span>
              </div>
              <div class="bg-[#161b22] p-3 rounded border border-[#30363d] flex items-center justify-between">
                  <span class="text-sm text-gray-400">Online</span>
-                 <span class="font-mono font-bold text-green-500">{{ fleet.devices_online }}</span>
+                 <span class="font-mono font-bold text-green-500">{{ getOnlineCount(fleet.id) }}</span>
              </div>
           </div>
        </div>

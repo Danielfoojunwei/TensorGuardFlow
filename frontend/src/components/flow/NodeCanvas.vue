@@ -1,215 +1,146 @@
 <script setup>
-import { ref, onMounted } from 'vue'
-import { VueFlow, useVueFlow, Handle, Position } from '@vue-flow/core'
+import { ref, computed, onMounted } from 'vue'
+import { VueFlow, useVueFlow } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
-import { Controls } from '@vue-flow/controls'
-import { MiniMap } from '@vue-flow/minimap'
-import { Play, Server, Cloud, Cpu, Plus, Rocket, Activity, AlertTriangle, Link as LinkIcon, Trash2 } from 'lucide-vue-next'
+import { Rocket, Play, Activity, Monitor } from 'lucide-vue-next'
+import { useSimulationStore } from '../../stores/simulation'
+import PipelineNode from './PipelineNode.vue'
 import NodeInspector from '../modals/NodeInspector.vue'
-import LinkInspector from '../modals/LinkInspector.vue'
 
-// Initial Nodes
-const initialNodes = [
-  { 
-    id: 'edge-1', 
-    type: 'custom', 
-    label: 'UR5e (Pick & Place)', 
-    position: { x: 100, y: 150 }, 
-    data: { role: 'edge', status: 'online', gpu: 'Orin NX', metrics: { loss: 0.04 }, version: 'v2.1' } 
-  },
-  { 
-    id: 'edge-2', 
-    type: 'custom', 
-    label: 'Franka Emika (Assembly)', 
-    position: { x: 100, y: 350 }, 
-    data: { role: 'edge', status: 'training', gpu: 'AGX Orin', metrics: { loss: 0.12 }, drift: 'Severe Oscillation' } 
-  },
-  { 
-    id: 'agg-1', 
-    type: 'custom', 
-    label: 'Fleet Aggregator (FedAvg)', 
-    position: { x: 500, y: 250 }, 
-    data: { role: 'aggregator', status: 'idle', region: 'us-east-1', version: 'v2.1' } 
-  },
-  { 
-    id: 'cloud-1', 
-    type: 'custom', 
-    label: 'Global Model Registry', 
-    position: { x: 900, y: 250 }, 
-    data: { role: 'cloud', status: 'active', version: 'v2.1' } 
-  },
-]
+const store = useSimulationStore()
+const { fitView } = useVueFlow()
 
-// Connections
-const initialEdges = [
-  { id: 'e1-agg', source: 'edge-1', target: 'agg-1', animated: true, style: { stroke: '#ff5722' } },
-]
-
-const nodes = ref(initialNodes)
-const edges = ref(initialEdges)
-
-const { onNodeClick, onEdgeClick: onVueFlowEdgeClick, addEdges, fitView, addNodes } = useVueFlow()
 const selectedNode = ref(null)
-const selectedEdge = ref(null)
-const deploying = ref(false)
 
-// Center graph on load
+// Nodes are purely computed from the store state
+const nodes = computed(() => store.graphNodes)
+const edges = computed(() => store.graphEdges)
+
 onMounted(() => {
-    setTimeout(() => {
-        fitView({ padding: 0.2 })
-    }, 100)
+  // Lock view after initial fit
+  setTimeout(() => fitView({ padding: 0.1 }), 200)
 })
 
-const onConnect = (params) => {
-    addEdges([params])
-}
-
-const triggerTraining = (nodeId) => {
-  const node = nodes.value.find(n => n.id === nodeId)
-  if (node) {
-     node.data.status = 'training'
-     setTimeout(() => { node.data.status = 'online' }, 3000)
-  }
-}
-
-const addRandomNode = () => {
-    const id = `edge-${Math.floor(Math.random() * 1000)}`
-    const newNode = {
-        id,
-        type: 'custom',
-        label: 'New Robot Node',
-        position: { x: 100, y: Math.random() * 400 },
-        data: { role: 'edge', status: 'idle', gpu: 'Jetson Nano', metrics: { loss: 0.00 } }
-    }
-    addNodes([newNode])
-}
-
-const deployFleet = async () => {
-    deploying.value = true
-    setTimeout(() => {
-        deploying.value = false
-        alert("Deployment initialized: Update package sent to 4 active nodes.")
-    }, 1500)
+const handleNodeClick = (e) => {
+  selectedNode.value = e.node
 }
 </script>
 
 <template>
-  <div class="h-full w-full relative bg-[#000000] text-white">
-    <!-- Cloud/Edge Swimlanes -->
-    <div class="absolute inset-0 pointer-events-none flex">
-       <div class="w-1/2 border-r border-[#333] h-full relative">
-           <div class="absolute top-4 left-4 font-bold text-[#333] text-4xl uppercase select-none opacity-20">Edge Fleet</div>
-       </div>
-       <div class="w-1/2 h-full relative">
-           <div class="absolute top-4 right-4 font-bold text-[#333] text-4xl uppercase select-none opacity-20 text-right">Cloud Aggregation</div>
-       </div>
-    </div>
+  <div class="vue-flow-wrapper">
+    <!-- SCADA Overlay Grid -->
+    <div class="absolute inset-0 z-0 pointer-events-none grid-overlay"></div>
 
-    <!-- Vue Flow Canvas -->
-    <VueFlow v-model="nodes" 
-             :edges="edges" 
-             class="h-full w-full" 
-             :min-zoom="0.5" 
-             :max-zoom="2"
-             @connect="onConnect"
-             @node-click="(e) => selectedNode = e.node"
-             @edge-click="(e) => selectedEdge = e.edge">
-       
-       <Background pattern-color="#333" :gap="20" />
-       <Controls class="bg-[#111] border border-[#333] !fill-white" />
-       
-       <!-- Custom Node Template -->
-       <template #node-custom="{ data, label, id }">
-          <div class="w-64 bg-[#111] border rounded-lg shadow-xl transition-all duration-200 group relative"
-               :class="data.status === 'training' ? 'border-primary ring-1 ring-primary' : 'border-[#333] hover:border-gray-500'">
-             
-             <!-- Handles for Connectivity -->
-             <Handle v-if="data.role !== 'edge'" type="target" :position="Position.Left" class="!bg-primary !w-3 !h-3 !border-2 !border-black" />
-             <Handle v-if="data.role !== 'cloud'" type="source" :position="Position.Right" class="!bg-primary !w-3 !h-3 !border-2 !border-black" />
-
-             <!-- Header -->
-             <div class="px-4 py-2 border-b border-[#333] bg-[#161616] rounded-t-lg flex items-center justify-between">
-                <div class="flex items-center gap-2">
-                   <component :is="data.role === 'edge' ? Cpu : (data.role === 'aggregator' ? Server : Cloud)" 
-                              class="w-4 h-4 text-primary" />
-                   <span class="font-bold font-sans text-sm">{{ label }}</span>
-                </div>
-                <!-- Action Button -->
-                <button v-if="data.role === 'edge'" @click.stop="triggerTraining(id)" 
-                        class="p-1 rounded hover:bg-[#333] transition-colors" title="Execute Training">
-                   <Play class="w-3 h-3 text-white" :class="data.status === 'training' ? 'fill-primary text-primary' : ''" />
-                </button>
-             </div>
-
-             <!-- Body -->
-             <div class="p-4 space-y-2">
-                <div class="flex justify-between items-center text-xs">
-                   <span class="text-gray-500 uppercase">Status</span>
-                   <span class="font-mono" :class="data.status === 'training' ? 'text-primary animate-pulse' : 'text-green-500'">
-                      {{ data.status.toUpperCase() }}
-                   </span>
-                </div>
-                
-                <div v-if="data.role === 'edge'" class="flex justify-between items-center text-xs">
-                   <span class="text-gray-500 uppercase">Hardware</span>
-                   <span class="font-mono text-gray-300">{{ data.gpu }}</span>
-                </div>
-                
-                <!-- Behavioral Drift Alert (VLA Specific) -->
-                <div v-if="data.drift" class="mt-2 bg-red-900/20 border border-red-900 rounded p-1 text-center animate-pulse">
-                    <div class="text-[10px] text-red-500 font-bold uppercase flex items-center justify-center gap-1">
-                        <AlertTriangle class="w-3 h-3" /> {{ data.drift }}
-                    </div>
-                </div>
-
-                <div v-if="data.metrics" class="mt-2 pt-2 border-t border-[#333]">
-                   <div class="flex justify-between items-center text-xs">
-                      <span class="text-gray-500">Current Loss</span>
-                      <span class="font-mono text-primary">{{ data.metrics.loss }}</span>
-                   </div>
-                   <!-- Mini Sparkline Simulation -->
-                   <div class="h-1 w-full bg-[#333] mt-1 rounded overflow-hidden">
-                      <div class="h-full bg-primary/50" style="width: 65%"></div>
-                   </div>
-                </div>
-             </div>
-          </div>
-       </template>
+    <VueFlow 
+      :nodes="nodes" 
+      :edges="edges"
+      :default-viewport="{ x: 0, y: 0, zoom: 0.8 }"
+      :min-zoom="0.1" 
+      :max-zoom="2"
+      :nodes-draggable="false"
+      :nodes-connectable="false"
+      :elements-selectable="true"
+      :pan-on-scroll="false"
+      :zoom-on-scroll="false"
+      :zoom-on-double-click="false"
+      :zoom-on-pinch="false"
+      :pan-on-drag="false"
+      @node-click="handleNodeClick"
+      @pane-click="selectedNode = null"
+    >
+      <!-- Technical Grid Background -->
+      <Background :variant="'lines'" :size="40" :gap="40" pattern-color="#1f2428" class="bg-[#050505]" />
+      
+      <template #node-pipeline="props">
+        <PipelineNode v-bind="props" />
+      </template>
 
     </VueFlow>
 
-    <!-- Global Operations Toolbar -->
-    <div class="absolute bottom-8 left-1/2 transform -translate-x-1/2 bg-[#111] border border-[#333] rounded-full px-6 py-3 flex items-center gap-6 shadow-2xl z-20">
-        <button @click="addRandomNode" class="flex items-center gap-2 text-gray-400 hover:text-white transition-colors text-sm font-bold">
-            <Plus class="w-4 h-4" /> ADD NODE
-        </button>
-        <div class="w-[1px] h-4 bg-[#333]"></div>
-        <button class="flex items-center gap-2 text-gray-400 hover:text-white transition-colors text-sm font-bold">
-            <Activity class="w-4 h-4" /> AUTO-SCALE
-        </button>
-        <div class="w-[1px] h-4 bg-[#333]"></div>
-        <button @click="deployFleet" class="flex items-center gap-2 transition-colors text-sm font-bold" 
-                :class="deploying ? 'text-yellow-500' : 'text-primary hover:text-orange-300'">
-            <Rocket class="w-4 h-4" :class="deploying ? 'animate-bounce' : ''" /> 
-            {{ deploying ? 'DEPLOYING...' : 'DEPLOY ALL' }}
-        </button>
+    <!-- System Header -->
+    <div class="absolute top-0 left-0 right-0 h-16 bg-[#0d1117]/80 backdrop-blur border-b border-[#30363d] flex items-center justify-between px-6 z-20">
+      <div class="flex items-center gap-4">
+         <div class="p-2 bg-blue-500/10 rounded border border-blue-500/20">
+            <Monitor class="w-5 h-5 text-blue-500" />
+         </div>
+         <div>
+            <h1 class="font-bold text-white text-lg tracking-tight">SYSTEM MONITOR <span class="text-xs text-gray-500 font-mono ml-2">US-EAST-1</span></h1>
+            <div class="text-[10px] text-gray-500 font-mono uppercase tracking-widest">TensorGuard Federation Protocol v2.4</div>
+         </div>
+      </div>
+      
+      <!-- Global Stats -->
+      <div class="flex gap-8">
+         <div class="text-right">
+             <div class="text-[10px] text-gray-500 uppercase font-bold">Latency</div>
+             <div class="text-sm font-mono font-bold text-green-400">14ms</div>
+         </div>
+         <div class="text-right">
+             <div class="text-[10px] text-gray-500 uppercase font-bold">Throughput</div>
+             <div class="text-sm font-mono font-bold text-blue-400">4.2 GB/s</div>
+         </div>
+         <div class="text-right">
+             <div class="text-[10px] text-gray-500 uppercase font-bold">Active Nodes</div>
+             <div class="text-sm font-mono font-bold text-white">452</div>
+         </div>
+      </div>
     </div>
 
-    <!-- Modals -->
+    <!-- Simulation Footer -->
+    <div class="absolute bottom-0 left-0 right-0 h-12 bg-[#0d1117] border-t border-[#30363d] flex items-center px-6 z-20 justify-between">
+       <div class="flex items-center gap-2">
+          <div class="w-2 h-2 rounded-full" :class="store.roundStatus !== 'idle' ? 'bg-orange-500 animate-pulse' : 'bg-gray-600'"></div>
+          <span class="text-xs font-mono text-gray-400 uppercase">{{ store.roundStatus !== 'idle' ? 'Live Training Sequence Active' : 'System Idle' }}</span>
+       </div>
+       <div class="text-xs font-mono text-gray-600">
+          Uptime: 14d 02h 12m
+       </div>
+    </div>
+
+    <!-- Inspector -->
     <NodeInspector v-if="selectedNode" :node="selectedNode" @close="selectedNode = null" />
-    <LinkInspector v-if="selectedEdge" :edge="selectedEdge" @close="selectedEdge = null" />
   </div>
 </template>
 
+<style scoped>
+.vue-flow-wrapper {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  background: #050505;
+  overflow: hidden; /* Lock overflow */
+}
+
+/* Subtle Grid Overlay Vignette */
+.grid-overlay {
+  background: radial-gradient(circle at center, transparent 0%, #000000 120%);
+}
+</style>
+
 <style>
-.vue-flow__node-custom {
-  @apply select-none;
-}
+/* Global VueFlow Overrides for SCADA Theme */
 .vue-flow__edge-path {
+  stroke: #1f2428;
   stroke-width: 2;
-  stroke: #666;
+  transition: stroke 0.3s;
 }
-.vue-flow__edge.selected .vue-flow__edge-path {
-  stroke: #ff5722;
+
+/* PCB Trace Animation */
+.vue-flow__edge.animated .vue-flow__edge-path {
+  stroke: #ff6d5a;
+  stroke-width: 2;
+  stroke-dasharray: 20;
+  animation: flowAnimation 2s linear infinite;
+  filter: drop-shadow(0 0 4px rgba(255, 109, 90, 0.5));
+}
+
+@keyframes flowAnimation {
+  from { stroke-dashoffset: 40; }
+  to { stroke-dashoffset: 0; }
+}
+
+/* Hide Default UI */
+.vue-flow__controls, .vue-flow__minimap {
+  display: none !important;
 }
 </style>
