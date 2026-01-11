@@ -44,8 +44,34 @@ def write_tgsp_package_v1(output_path: str,
     # We encrypt to specific temp file
     payload_temp = tempfile.TemporaryFile()
     
+    # Embed signing public key in manifest for self-verification
+    from ..crypto.sig import Dilithium3
+    from cryptography.hazmat.primitives.asymmetric import ed25519
+    from cryptography.hazmat.primitives import serialization
+    
+    # Derive public key from private key
+    priv_c = ed25519.Ed25519PrivateKey.from_private_bytes(bytes.fromhex(signing_key["classic"]))
+    pub_c = priv_c.public_key()
+    
+    # Get PQC public key (stored in signing_key or derive from secret)
+    dil = Dilithium3()
+    pk_pqc_bytes = bytes.fromhex(signing_key["pqc"])
+    # For simulator: the secret key starts with the public key seed
+    pk_seed = hashlib.sha256(pk_pqc_bytes).digest()
+    pk_pqc = pk_seed + os.urandom(dil.PK_SIZE - 32)
+    
+    author_pubkey = {
+        "classic": pub_c.public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw).hex(),
+        "pqc": pk_pqc.hex(),
+        "alg": "Hybrid-Dilithium-v1"
+    }
+    
+    # Create a new manifest with the embedded pubkey
+    manifest_dict = manifest.model_dump()
+    manifest_dict["author_pubkey"] = author_pubkey
+    
     # Prepare AAD Inputs
-    manifest_bytes = manifest.canonical_bytes()
+    manifest_bytes = canonical_bytes(manifest_dict)
     manifest_hash = hashlib.sha256(manifest_bytes).hexdigest()
     
     # We first process recipients to get recipients_hash

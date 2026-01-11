@@ -49,7 +49,7 @@ class WorkerConfig:
     sparsity: float = 0.5
     compression_ratio: float = 4.0
     key_path: str = "keys/tensorguard.key"
-    security_level: int = 2
+    security_level: int = 128
 
 class TrainingWorker(fl.client.NumPyClient if 'fl' in globals() else object):
     """
@@ -117,6 +117,15 @@ class TrainingWorker(fl.client.NumPyClient if 'fl' in globals() else object):
             logger.error("No adapter configured")
             return None
 
+        # --- DP ENFORCEMENT ---
+        # Fixed step decomposition - in a real system, this would be computed by an RDP Accountant
+        # based on the noise multiplier and gradient clipping.
+        round_epsilon = 0.5 
+        if not self.dp_profile.consume_epsilon(round_epsilon):
+            logger.critical(f"FATAL: DP Epsilon Budget Exhausted. Privacy Guard enforced. Aborting round.")
+            return None
+        # ----------------------
+
         self._current_round += 1
         latency = RoundLatencyBreakdown()
         train_start = time.time()
@@ -136,8 +145,10 @@ class TrainingWorker(fl.client.NumPyClient if 'fl' in globals() else object):
                         for k, v in gated.items():
                             combined_grads[k] = combined_grads.get(k, 0) + v
                     else:
-                        # Fallback
+                        # Fallback for simple dict return {expert_name: {param: grad}}
                         for exp_name, grads in res.items():
+                            # If it's a known expert but missing from our local routing, 
+                            # we still want to aggregate its contributions if possible
                             for k, v in grads.items():
                                 combined_grads[k] = combined_grads.get(k, 0) + v
                                 
@@ -178,10 +189,11 @@ class TrainingWorker(fl.client.NumPyClient if 'fl' in globals() else object):
                 logger.info("[POLICY] Enforcing Global 2:4 Sparsity Strategy on Edge Node")
                 
                 # Apply to the adapter's model if available, otherwise just log (simulated)
-                if self._adapter and hasattr(self._adapter, 'model'):
+                if self._adapter and hasattr(self._adapter, 'model') and not isinstance(self._adapter.model, dict):
                     pruner.apply_2_4_sparsity(self._adapter.model)
                 else:
                     # Simulation / Stub
+                    logger.info("[POLICY] Skipping structured pruning on mock model dict")
                     pruner.apply_2_4_sparsity(None)
             except ImportError:
                 logger.warning("PruningManager not found, skipping optimization.")

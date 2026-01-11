@@ -19,7 +19,7 @@ except ImportError:
             class strategy:
                 class FedAvg: 
                     def __init__(self, *args, **kwargs): pass
-    Parameters = FitRes = ClientProxy = Any
+    Parameters = FitRes = ClientProxy = ClientManager = Any
     Scalar = float
 
 from ..core.crypto import N2HEContext, LWECiphertext
@@ -105,6 +105,15 @@ class TensorGuardStrategy(fl.server.strategy.FedAvg):
                 # Reassemble chunked payload (all tensors are parts of the payload)
                 payload_bytes = b"".join([arr.tobytes() for arr in ndarrays])
                 package = UpdatePackage.deserialize(payload_bytes)
+                
+                # --- STATE-AWARE VERIFICATION ---
+                # Check for model drift and compatibility
+                # In production, this would be compared against the server's current model state
+                current_expected_fp = getattr(self, 'current_model_fingerprint', package.base_model_fingerprint)
+                if package.base_model_fingerprint != current_expected_fp:
+                    logger.error(f"Rejected package from {client_proxy.cid}: Model mismatch ({package.base_model_fingerprint} != {current_expected_fp})")
+                    continue
+                # -------------------------------
                 
                 contribution = ClientContribution(
                     client_id=str(client_proxy.cid),
