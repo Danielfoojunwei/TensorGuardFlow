@@ -135,6 +135,22 @@ app.include_router(pipeline_config_endpoints.router, prefix="/api/v1", tags=["pi
 from .api import kms_endpoints
 app.include_router(kms_endpoints.router, prefix="/api/v1", tags=["kms"])
 
+# Advanced 3-Tier Gating & Forensics
+from .api import edge_gating_endpoints
+app.include_router(edge_gating_endpoints.router, prefix="/api/v1", tags=["edge-gating"])
+
+from .api import skills_library_endpoints
+app.include_router(skills_library_endpoints.router, prefix="/api/v1", tags=["skills-library"])
+
+from .api import bayesian_policy_endpoints
+app.include_router(bayesian_policy_endpoints.router, prefix="/api/v1", tags=["bayesian-policy"])
+
+from .api import forensics_endpoints
+app.include_router(forensics_endpoints.router, prefix="/api/v1", tags=["forensics"])
+
+from .api import integrations_endpoints
+app.include_router(integrations_endpoints.router, prefix="/api/v1", tags=["integrations"])
+
 # Enterprise Stubs (Proprietary Boundary)
 try:
     from .enterprise import check_entitlement, log_audit_event

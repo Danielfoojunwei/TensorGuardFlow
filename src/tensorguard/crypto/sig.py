@@ -43,6 +43,7 @@ def sign_hybrid(hybrid_priv: Dict, message: bytes) -> Dict:
     }
 
 def verify_hybrid(hybrid_pub: Dict, message: bytes, signature: Dict) -> bool:
+    import hashlib
     try:
         # 1. Classical
         pub_bytes = bytes.fromhex(hybrid_pub["classic"])
@@ -54,9 +55,10 @@ def verify_hybrid(hybrid_pub: Dict, message: bytes, signature: Dict) -> bool:
         pqc = Dilithium3()
         pk_pqc = bytes.fromhex(hybrid_pub["pqc"])
         sig_pqc = bytes.fromhex(signature["sig_pqc"])
+        
         if not pqc.verify(pk_pqc, message, sig_pqc):
             return False
             
         return True
-    except Exception:
+    except Exception as e:
         return False

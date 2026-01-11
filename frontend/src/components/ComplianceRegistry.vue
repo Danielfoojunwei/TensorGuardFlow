@@ -1,11 +1,26 @@
 <script setup>
-import { ShieldCheck, FileCheck, CheckCircle, AlertTriangle } from 'lucide-vue-next'
+import { ShieldCheck, FileCheck, CheckCircle, AlertTriangle, Play } from 'lucide-vue-next'
+import { ref } from 'vue'
 
 const profiles = [
   { id: 'tgsp-1', name: 'finance-v2-hardened', version: '2.1.0', status: 'verified', checksum: 'sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855' },
   { id: 'tgsp-2', name: 'health-hipaa-compliant', version: '1.0.5', status: 'verified', checksum: 'sha256:8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4' },
   { id: 'tgsp-3', name: 'dev-experimental', version: '0.9.0-beta', status: 'warning', checksum: 'sha256:ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb' },
 ]
+
+const verifying = ref(false)
+const qaResult = ref(null)
+
+const runFullQA = async () => {
+    verifying.value = true
+    try {
+        const res = await fetch('/api/v1/forensics/verify-compliance', { method: 'POST' })
+        qaResult.value = await res.json()
+    } catch (e) {
+        console.error("QA failed", e)
+    }
+    verifying.value = false
+}
 </script>
 
 <template>
@@ -15,6 +30,24 @@ const profiles = [
          <h2 class="text-2xl font-bold">Compliance Registry</h2>
          <span class="text-xs text-gray-500">TGSP Profiles & Provenance</span>
        </div>
+       <button @click="runFullQA" :disabled="verifying" class="btn btn-primary flex items-center gap-2">
+           <Play v-if="!verifying" class="w-4 h-4" />
+           <div v-else class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+           {{ verifying ? 'Running System QA...' : 'Run Full QA Check' }}
+       </button>
+    </div>
+
+    <!-- QA Result Banner -->
+    <div v-if="qaResult" :class="['p-4 rounded border flex items-center justify-between animate-fade-in', qaResult.status === 'COMPLIANT' ? 'bg-green-900/20 border-green-900' : 'bg-red-900/20 border-red-900']">
+        <div>
+            <div :class="['font-bold text-lg', qaResult.status === 'COMPLIANT' ? 'text-green-500' : 'text-red-500']">
+                System Status: {{ qaResult.status }}
+            </div>
+            <div class="text-xs text-gray-400">Score: {{ qaResult.compliance_score.toFixed(1) }}% | Auditor: {{ qaResult.auditor }}</div>
+        </div>
+        <div class="text-right text-xs text-gray-500">
+            {{ qaResult.timestamp }}
+        </div>
     </div>
 
     <!-- Stats -->
@@ -73,3 +106,19 @@ const profiles = [
     </div>
   </div>
 </template>
+
+<style scoped>
+.btn {
+  @apply px-4 py-2 rounded font-medium transition-colors duration-200 inline-flex;
+}
+.btn-primary {
+  @apply bg-orange-600 text-white hover:bg-orange-700;
+}
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+</style>

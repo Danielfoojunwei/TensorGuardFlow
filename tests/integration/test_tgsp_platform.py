@@ -8,6 +8,12 @@ import json
 
 client = TestClient(app)
 
+# Bypass Fleet Auth for tests
+from tensorguard.platform.api.identity_endpoints import verify_fleet_auth
+from tensorguard.platform.models.core import Fleet
+mock_fleet = Fleet(id="fleet_1", tenant_id="tenant_1", name="test_fleet", api_key_hash="hash")
+app.dependency_overrides[verify_fleet_auth] = lambda: mock_fleet
+
 def test_attestation_verify():
     payload = {
         "agent_id": "agent_1",

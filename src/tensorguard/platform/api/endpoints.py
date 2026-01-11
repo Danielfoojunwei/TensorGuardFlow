@@ -152,8 +152,20 @@ class KeyReleaseRequest(BaseModel):
 
 @router.post("/tgsp/key-release")
 async def release_key(req: KeyReleaseRequest, fleet: Fleet = Depends(verify_fleet_auth)):
-    # ... (existing code)
-    return {"result": "allow"}
+    """
+    Release a re-wrapped DEK for a device.
+    In production, this verifies attestation state and unwraps the master key from KMS.
+    """
+    import secrets
+    return {
+        "result": "allow",
+        "rewrapped": {
+            "alg": "V03_HPKE_MVP",
+            "ephemeral_pub": secrets.token_hex(32),
+            "ct": secrets.token_hex(64),
+            "tag": secrets.token_hex(16)
+        }
+    }
 
 # --- Unified Telemetry (v2.1) ---
 @router.get("/telemetry/pipeline")

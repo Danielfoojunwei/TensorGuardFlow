@@ -2,6 +2,7 @@
 import pytest
 import os
 import shutil
+import json
 from cryptography.hazmat.primitives.asymmetric import ed25519, x25519
 from cryptography.hazmat.primitives import serialization
 from tensorguard.tgsp.service import TGSPService
@@ -16,23 +17,23 @@ OUT_DIR = "tests/output"
 def setup_keys():
     os.makedirs(TEST_KEYS_DIR, exist_ok=True)
     
-    # Producer Signing Keys (Ed25519)
-    sign_priv = ed25519.Ed25519PrivateKey.generate()
-    sign_pub = sign_priv.public_key()
+    # Producer Signing Keys (Hybrid PQC JSON)
+    from tensorguard.crypto.sig import generate_hybrid_sig_keypair
+    pub_sign, priv_sign = generate_hybrid_sig_keypair()
     
-    with open(f"{TEST_KEYS_DIR}/sign.priv", "wb") as f:
-        f.write(sign_priv.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()))
-    with open(f"{TEST_KEYS_DIR}/sign.pub", "wb") as f:
-        f.write(sign_pub.public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo))
+    with open(f"{TEST_KEYS_DIR}/sign.priv", "w") as f:
+        json.dump(priv_sign, f)
+    with open(f"{TEST_KEYS_DIR}/sign.pub", "w") as f:
+        json.dump(pub_sign, f)
 
-    # Recipient Encryption Keys (X25519)
-    rec_priv = x25519.X25519PrivateKey.generate()
-    rec_pub = rec_priv.public_key()
+    # Recipient Encryption Keys (Hybrid PQC JSON)
+    from tensorguard.crypto.kem import generate_hybrid_keypair
+    pub_enc, priv_enc = generate_hybrid_keypair()
     
-    with open(f"{TEST_KEYS_DIR}/recipient.priv", "wb") as f:
-        f.write(rec_priv.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()))
-    with open(f"{TEST_KEYS_DIR}/recipient.pub", "wb") as f:
-        f.write(rec_pub.public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo))
+    with open(f"{TEST_KEYS_DIR}/recipient.priv", "w") as f:
+        json.dump(priv_enc, f)
+    with open(f"{TEST_KEYS_DIR}/recipient.pub", "w") as f:
+        json.dump(pub_enc, f)
         
     yield
     # Cleanup done via global cleanup or manual
@@ -72,7 +73,9 @@ class TestTGSPCore:
         assert os.path.exists(pkg_path)
         
         # 3. Verify Package
-        ok, msg = TGSPService.verify_package(pkg_path)
+        with open(f"{TEST_KEYS_DIR}/sign.pub", "r") as f:
+            pub_sign = json.load(f)
+        ok, msg = TGSPService.verify_package(pkg_path, public_key=pub_sign)
         assert ok, f"Verification failed: {msg}"
         
         # 4. Decrypt
@@ -123,7 +126,9 @@ class TestTGSPCore:
             f.write(data)
             
         # 3. Verify should fail
-        ok, msg = TGSPService.verify_package(pkg_path)
+        with open(f"{TEST_KEYS_DIR}/sign.pub", "r") as f:
+            pub_sign = json.load(f)
+        ok, msg = TGSPService.verify_package(pkg_path, public_key=pub_sign)
         assert not ok
 
     def test_tgsp_wrong_recipient_cannot_decrypt(self, setup_keys, clean_dirs):
@@ -133,21 +138,22 @@ class TestTGSPCore:
         
         TGSPService.create_package(
             out_path=pkg_path,
+            signing_key_path=f"{TEST_KEYS_DIR}/sign.priv",
             payloads=[f"s1:secret:{payload_path}"],
             recipients=[f"valid-user:{TEST_KEYS_DIR}/recipient.pub"]
         )
         
-        # Generate random other key
-        bad_priv = x25519.X25519PrivateKey.generate()
+        # Generate random other key (Hybrid PQC)
+        from tensorguard.crypto.kem import generate_hybrid_keypair
+        _, bad_priv = generate_hybrid_keypair()
         bad_key_path = f"{TEST_KEYS_DIR}/bad.priv"
-        with open(bad_key_path, "wb") as f:
-            f.write(bad_priv.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()))
+        with open(bad_key_path, "w") as f:
+            json.dump(bad_priv, f)
 
-        with pytest.raises(Exception): # Crypto error or "Recipient not found" if using wrong ID
+        with pytest.raises(Exception): # Crypto error
              TGSPService.decrypt_package(
                 path=pkg_path,
-                recipient_id="valid-user", # ID matches but key is wrong -> KEK derive fail -> Wrap fail check? 
-                # Actually X25519 derive just produces garbage KEK, subsequent UNWRAP or DECRYPT fails integrity.
+                recipient_id="valid-user",
                 priv_key_path=bad_key_path,
                 out_dir=f"{OUT_DIR}/bad_decrypt"
             )

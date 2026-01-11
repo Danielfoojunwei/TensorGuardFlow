@@ -57,13 +57,20 @@ def run_build(args):
     
     if args.recipients:
         for r_str in args.recipients:
-            # format: path_to_pub_json
-            if os.path.exists(r_str):
-                with open(r_str, "r") as f:
+            # format: [optional_label:]path_to_pub_json
+            path = r_str
+            if ":" in r_str:
+                path = r_str.split(":")[-1] # handle C:\ paths or labels
+                # If the whole thing exists, use it (maybe no label)
+                if not os.path.exists(path) and os.path.exists(r_str):
+                    path = r_str
+            
+            if os.path.exists(path):
+                with open(path, "r") as f:
                     pk = json.load(f)
                     recipients_public_keys.append(pk)
             else:
-                logger.warning(f"Recipient key not found: {r_str}")
+                logger.warning(f"Recipient key not found: {r_str} (resolved to {path})")
          
     # 3. Payload Stream (Tar)
     with tempfile.NamedTemporaryFile(delete=False) as tf:
@@ -122,8 +129,7 @@ def run_open(args):
             continue
             
     if not dek:
-        print("Failed to decrypt (No matching recipient or invalid key)")
-        return
+        raise ValueError("Failed to decrypt (No matching recipient or invalid key)")
         
     h = data["header"]
     nonce_base = bytes.fromhex(h["crypto"]["nonce_base"])

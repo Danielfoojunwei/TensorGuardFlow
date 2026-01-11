@@ -56,6 +56,7 @@ class EvidenceStore:
 
     def _load_chain(self) -> dict:
         """Load the chain file."""
+        self._ensure_chain_file()
         with open(self._chain_path, "r") as f:
             return json.load(f)
 

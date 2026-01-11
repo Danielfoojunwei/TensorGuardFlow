@@ -29,7 +29,7 @@ def test_full_flow_v02(tgsp_test_env):
     with patch("sys.argv", ["tgsp", "keygen", "--type", "signing", "--out", str(keys_dir)]):
         main()
         
-    with patch("sys.argv", ["tgsp", "keygen", "--type", "x25519", "--out", str(keys_dir / "fleet1")]):
+    with patch("sys.argv", ["tgsp", "keygen", "--type", "encryption", "--out", str(keys_dir / "fleet1")]):
         main()
         
     signing_key = str(keys_dir / "signing.priv")
@@ -44,7 +44,6 @@ def test_full_flow_v02(tgsp_test_env):
         "tgsp", "build",
         "--input-dir", str(input_dir),
         "--out", tgsp_file,
-        "--tgsp-version", "0.2",
         "--model-name", "robot-v1",
         "--recipients", f"fleet:f1:{fleet_pub}",
         "--signing-key", signing_key
@@ -65,7 +64,6 @@ def test_full_flow_v02(tgsp_test_env):
     open_cmd = [
         "tgsp", "open",
         "--file", tgsp_file,
-        "--recipient-id", "fleet:f1",
         "--key", fleet_priv,
         "--out-dir", str(extract_dir)
     ]
@@ -83,8 +81,10 @@ def test_full_flow_v02(tgsp_test_env):
 def test_full_flow_v03_hpke(tgsp_test_env):
     input_dir, out_dir, keys_dir = tgsp_test_env
     
-    # 1. Keygen (HPKE uses X25519 keys for MVP)
-    with patch("sys.argv", ["tgsp", "keygen", "--type", "x25519", "--out", str(keys_dir / "fleet_hpke")]):
+    # 1. Keygen
+    with patch("sys.argv", ["tgsp", "keygen", "--type", "signing", "--out", str(keys_dir)]):
+        main()
+    with patch("sys.argv", ["tgsp", "keygen", "--type", "encryption", "--out", str(keys_dir / "fleet_hpke")]):
         main()
 
     fleet_pub = str(keys_dir / "fleet_hpke" / "encryption.pub")
@@ -97,8 +97,8 @@ def test_full_flow_v03_hpke(tgsp_test_env):
         "tgsp", "build",
         "--input-dir", str(input_dir),
         "--out", tgsp_file,
-        "--tgsp-version", "0.3",
-        "--recipients", f"fleet:hpke:{fleet_pub}"
+        "--recipients", f"fleet:hpke:{fleet_pub}",
+        "--signing-key", str(keys_dir / "signing.priv") # HPKE flow still needs signing key in v1 logic
     ]
     with patch("sys.argv", cmd):
         main()
@@ -111,7 +111,6 @@ def test_full_flow_v03_hpke(tgsp_test_env):
     open_cmd = [
         "tgsp", "open",
         "--file", tgsp_file,
-        "--recipient-id", "fleet:hpke",
         "--key", fleet_priv,
         "--out-dir", str(extract_dir)
     ]

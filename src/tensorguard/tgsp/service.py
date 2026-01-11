@@ -21,26 +21,31 @@ class TGSPService:
             if policy_path:
                 shutil.copy(policy_path, os.path.join(tmp_in, "policy.yaml"))
             
+            # Extract paths from recipients (format: id:path)
+            recipient_paths = []
+            if recipients:
+                for r in recipients:
+                    if ":" in r:
+                        recipient_paths.append(r.split(":", 1)[1])
+                    else:
+                        recipient_paths.append(r)
+
             new_args = Namespace(
                 input_dir=tmp_in,
                 out=out_path,
-                tgsp_version="0.2",
                 model_name="tgsp-service-package",
                 model_version="0.0.1",
-                recipients=[],
+                recipients=recipient_paths,
                 signing_key=signing_key_path
             )
-            if recipients:
-                # recipient format: id:key_path
-                new_args.recipients = [f"legacy:{r}" for r in recipients]
             
             run_build(new_args)
             return "legacy-pkg-id"
 
     @staticmethod
-    def verify_package(path):
+    def verify_package(path, public_key=None):
         from .format import verify_tgsp_container
-        if verify_tgsp_container(path):
+        if verify_tgsp_container(path, public_key):
             return True, "OK"
         else:
             return False, "Signature invalid or container corrupted"
@@ -49,7 +54,6 @@ class TGSPService:
     def decrypt_package(path, recipient_id, priv_key_path, out_dir):
         new_args = Namespace(
             file=path,
-            recipient_id=f"legacy:{recipient_id}",
             key=priv_key_path,
             out_dir=out_dir
         )

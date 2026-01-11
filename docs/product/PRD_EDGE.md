@@ -1,45 +1,39 @@
 # Product Requirement Document: TensorGuard Edge Agent
 
 ## 1. Executive Summary
-The Edge Agent (`tensorguard-agent`) is the lightweight, secure runtime that lives on end devices (servers, robots, IoT gateways). It is responsible for establishing trust with the platform, securely pulling/decrypting TGSP packages, and enforcing privacy policies on network traffic.
+The Edge Agent is the lightweight, secure runtime that lives on robotic end-devices (Jetson, AgX, Windows IoT). It is responsible for Local Training, Model Inference, and enforcing Security Policy.
 
-## 2. Target Persona
--   **Embedded Engineer:** Cares about resource usage (RAM/CPU) and stability.
--   **Security Engineer:** Cares about root-of-trust and attack surface.
+## 2. Core Features
 
-## 3. Core Features (Must Haves)
+### 2.1 Secure Runtime
+- **Requirement**: Run untrusted models securely.
+- **Spec**:
+    - **TEE Integration**: Execute within TrustZone/SGX where available.
+    - **Memory Protection**: Decrypt weights only to ephemeral RAM, never disk.
 
-### 3.1 Establishing Trust (Identity)
--   **Requirement:** Prove the device's identity and integrity to the Platform.
--   **Spec:**
-    -   **Bootstrapping:** CSR-based enrollment using a registration token.
-    -   **Automatic Renewal:** Rotates mTLS certificates automatically before expiry (short-lived certs, e.g., 24h).
-    -   **Attestation:** (Future) Integration with TPM 2.0 / TEE for hardware-backed identity.
+### 2.2 Global Policy Enforcement (V2.3)
+- **Requirement**: Mandatory fleet-wide optimization.
+- **Spec**:
+    - **Policy Check**: On startup, query `VLA_OPTIMIZATION_POLICY`.
+    - **Enforcement**:
+        - IF `policy == FORCE_OPTIMIZATION`:
+            - Apply **2:4 Structured Sparsity** to all weights.
+            - Compile local **TensorRT Engine**.
+        - IF `policy == FAILED`:
+            - Abort training; do not connect to Aggregator.
 
-### 3.2 Secure Runtime (The "Guardian")
--   **Requirement:** Managing the model lifecycle securely.
--   **Spec:**
-    -   **TGSP Handling:** Download -> Verify Signature -> Verify Policy -> Decrypt in memory (never to disk if possible) -> Load into Inference Engine.
-    -   **Key Storage:** Secure local storage of identity keys (encrypted at rest).
+### 2.3 Efficient Telemetry
+- **Requirement**: Minimal bandwidth usage.
+- **Spec**:
+    - **Rand-K Sparsity**: Drop 99% of gradients; send only random 1%.
+    - **Quantization**: Compress float32 -> int8.
 
-### 3.3 Network Guardian (RTPL Enforcer)
--   **Requirement:** Intercept and shape traffic.
--   **Spec:**
-    -   Transparent proxy for outbound ML traffic.
-    -   Applies padding and dummy traffic as configured by the Platform policy.
+## 3. Supported Hardware
+- **NVIDIA Jetson** (Orin, Xavier) - Tier 1
+- **x86_64 Linux/Windows** (with RTX GPU) - Tier 1
+- **Raspberry Pi 5** (CPU-only Mode) - Tier 2
 
-### 3.4 Resilience & Self-Healing
--   **Requirement:** Must not crash the host device; must recover from network partitions.
--   **Spec:**
-    -   Offline mode (cache latest valid policy).
-    -   Resource limits (cgroups/Docker limits).
-    -   Watchdog process to restart daemon.
-
-## 4. Technical Constraints
--   **Footprint:** < 100MB RAM usage when idle.
--   **Binary Size:** < 50MB.
--   **OS Support:** Linux (Ubuntu 20.04+, Yocto), Windows 10/11.
-
-## 5. Success Metrics
--   **Stability:** 99.9% uptime on devices.
--   **Security:** 0 privilege escalations.
+## 4. Success Metrics
+- **Idle Memory Footprint**: < 200MB.
+- **Inference Latency**: < 10ms (on Orin NX with TensorRT).
+- **Cold Start**: < 2s to load encrypted model.

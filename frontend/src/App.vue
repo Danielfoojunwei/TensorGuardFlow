@@ -12,6 +12,8 @@ import AuditTrail from './components/AuditTrail.vue'
 import FleetsDevices from './components/FleetsDevices.vue'
 import GlobalSettings from './components/GlobalSettings.vue'
 import PolicyGating from './components/PolicyGating.vue'
+import SkillsLibrary from './components/SkillsLibrary.vue'
+import ForensicsPanel from './components/ForensicsPanel.vue'
 
 import EvalArena from './components/EvalArena.vue'
 
@@ -32,7 +34,7 @@ const activeTab = ref('canvas') // Default to Canvas
         <transition name="fade" mode="out-in">
           <!-- Canvas takes full height/width, no padding -->
           <div v-if="activeTab === 'canvas'" class="h-full w-full">
-             <NodeCanvas />
+             <NodeCanvas @navigate="t => activeTab = t" />
           </div>
 
           <div v-else-if="activeTab === 'performance'" class="p-6">
@@ -45,6 +47,14 @@ const activeTab = ref('canvas') // Default to Canvas
 
           <div v-else-if="activeTab === 'policy'" class="p-6">
              <PolicyGating />
+          </div>
+
+          <div v-else-if="activeTab === 'skills'" class="p-6">
+             <SkillsLibrary />
+          </div>
+
+          <div v-else-if="activeTab === 'forensics'" class="p-6">
+             <ForensicsPanel />
           </div>
 
           <div v-else class="p-6">

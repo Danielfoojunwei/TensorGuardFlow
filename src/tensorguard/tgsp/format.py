@@ -18,6 +18,15 @@ from ..crypto.kem import encap_hybrid, decap_hybrid
 # TGSP v1.0 Constants
 MAGIC_V1 = b"TGSP\x01\x00"  # TGSP v1.0
 
+def canonical_json(data: Any) -> bytes:
+    """Canonical JSON serialization that DOES NOT strip fields."""
+    return json.dumps(
+        data,
+        sort_keys=True,
+        separators=(',', ':'),
+        ensure_ascii=False
+    ).encode('utf-8')
+
 def write_tgsp_package_v1(output_path: str,
                           manifest: PackageManifest,
                           payload_stream: IO[bytes],
@@ -69,7 +78,7 @@ def write_tgsp_package_v1(output_path: str,
             "wrapper": {"nonce": nonce.hex(), "ct": ct_dek.hex()}
         })
         
-    recipients_bytes = canonical_bytes(recipients_block)
+    recipients_bytes = canonical_json(recipients_block)
     recipients_hash = hashlib.sha256(recipients_bytes).hexdigest()
     
     # 3. Encrypt Payload Content
@@ -100,7 +109,7 @@ def write_tgsp_package_v1(output_path: str,
             "sig": "Hybrid-Dilithium-v1"
         }
     }
-    header_bytes = canonical_bytes(header)
+    header_bytes = canonical_json(header)
     
     # 6. Sign
     signed_area = header_bytes + manifest_bytes + recipients_bytes
@@ -110,7 +119,7 @@ def write_tgsp_package_v1(output_path: str,
         "key_id": signing_key_id,
         "signature": signature
     }
-    sig_bytes = canonical_bytes(sig_block)
+    sig_bytes = canonical_json(sig_block)
     
     # 7. Write to Disk
     with open(output_path, "wb") as f:
@@ -191,5 +200,25 @@ def read_tgsp_header(path: str) -> Dict:
             "payload_len": p_len
         }
 
-# Shim for backward compat if needed (but refactor said remove redundancy)
+def verify_tgsp_container(path: str, public_key: Dict = None) -> bool:
+    """
+    Verify TGSP v1.0 Container signature.
+    If public_key is not provided, we might attempt to load it from a trusted store 
+    or the manifest (if self-signed/trust-on-first-use, though less secure).
+    For now, we require the public_key for verification.
+    """
+    try:
+        data = read_tgsp_header(path)
+        if public_key is None:
+            # Fallback: check if pubkey is in manifest (some internal flows might do this)
+            if "author_pubkey" in data["manifest"]:
+                public_key = data["manifest"]["author_pubkey"]
+            else:
+                return False
+        
+        return verify_hybrid(public_key, data["signed_area"], data["signature_block"]["signature"])
+    except Exception:
+        return False
+
+# Shim for backward compat if needed
 create_tgsp = write_tgsp_package_v1

@@ -1,23 +1,37 @@
-# TensorGuard Integrations
+# TensorGuard Integrations Ecosystem
 
-The MOAI Inference Service includes pre-built adapters for standard robotic fleet management protocols.
+TensorGuardFlow is designed to sit at the center of your MLOps and Robotics stack.
 
-## Open-RMF
-The **RmfAdapter** (`src/tensorguard/integrations/rmf/`) acts as a task dispatch interceptor.
-- It listens for RMF Task assignments.
-- It queries the MOAI service to resolve the high-level task into policy parameters.
-- It forwards the result to the robot via standard RMF topics.
+## 1. Robotics Middleware
 
-## VDA5050
-The **Vda5050Bridge** (`src/tensorguard/integrations/vda5050/`) connects to your MQTT broker.
-- Subscribes to `uagv/v2/{id}/order`.
-- On receiving an order, triggers an encrypted inference check (e.g., for secure path planning validation).
-- Publishes state updates to `uagv/v2/{id}/state`.
+### ROS 2 (Humble/Iron)
+- **Type**: Native `rclpy` Node.
+- **Function**: Subscribes to `/camera/image_raw` and `/joint_states`. Publishes encrypted updates to `/tensorguard/update`.
+- **Setup**:
+    ```bash
+    ros2 run tensorguard_ros bridge
+    ```
 
-## Proprietary Connectors
-Interfaces are provided in `connectors.py` for:
-- **Formant**
-- **InOrbit**
-- **RoboRunner**
+### Formant.io
+- **Type**: Cloud Observability Connector.
+- **Function**: Visualizes the **System Health** and **Trust Score** directly in your Formant dashboard.
+- **Config**: Add the "TensorGuard Plugin" from the Formant catalog.
 
-Implement these interfaces to bind MOAI inference to vendor-specific telemetry streams.
+## 2. Simulation Environments
+
+### NVIDIA Isaac Lab (Omniverse)
+- **Type**: Sim-to-Real Connector.
+- **Function**:
+    - **Data Gen**: Stream synthetic replicator data directly to `DataConnector`.
+    - **Validation**: Run the **Evaluation Gate** inside Isaac Sim to verify physics compliance before deploying to real robots.
+- **VLA Studio**: Use the "Sim-to-Real" wizard in PEFT Studio to auto-configure domain randomization.
+
+## 3. Deployment Targets
+
+### NVIDIA Jetson (Edge)
+- **Optimization**: Native TensorRT integration.
+- **Protection**: TrustZone TEE support (Orin Series).
+
+### Kubernetes (Cloud)
+- **Chart**: Helm charts available for the Aggregation Server.
+- **Scaling**: Horizontal Pod Autoscaling (HPA) based on CPU and Bandwidth metrics.

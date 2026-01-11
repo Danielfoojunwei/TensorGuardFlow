@@ -75,13 +75,17 @@ class TestBenchEvidence:
         run1_data.pop("timestamp", None)
         run1_data.pop("run_id", None)
         run1_data.pop("artifacts_hashes", None)
-        
+    
         run2_data.pop("timestamp", None)
         run2_data.pop("run_id", None)
         run2_data.pop("artifacts_hashes", None)
         
-        # Verify details determinism (sorting might be needed if stable order not guaranteed)
-        # But for now assume order is stable given same inputs
+        # Verify details determinism
+        # Sort metrics list if present to handle file system ordering differences
+        if "metrics" in run1_data and isinstance(run1_data["metrics"], list):
+            run1_data["metrics"].sort(key=lambda x: str(x))
+        if "metrics" in run2_data and isinstance(run2_data["metrics"], list):
+            run2_data["metrics"].sort(key=lambda x: str(x))
         
         assert run1_data == run2_data, "Report generation must be deterministic given same inputs"
 

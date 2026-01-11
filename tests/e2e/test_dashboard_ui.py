@@ -9,8 +9,8 @@ class TestDashboardE2E:
         """Verify dashboard homepage loads (StaticFiles)."""
         response = requests.get(f"{api_server}/")
         assert response.status_code == 200
-        assert "TensorGuard" in response.text
-        assert "Loading..." in response.text or "Dashboard" in response.text
+        assert "TensorGuard Enterprise PLM" in response.text
+        assert '<div id="app">' in response.text
 
     def test_static_assets(self, api_server):
         """Verify CSS and JS load."""

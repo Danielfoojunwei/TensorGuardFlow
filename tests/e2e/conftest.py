@@ -9,7 +9,7 @@ import signal
 
 # Define server configuration
 HOST = "127.0.0.1"
-PORT = 8000
+PORT = 8001
 BASE_URL = f"http://{HOST}:{PORT}"
 
 @pytest.fixture(scope="session")

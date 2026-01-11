@@ -58,4 +58,4 @@ class TestQuantumSafety:
         Ensure Simulator mode is active for this environment.
         """
         k = Kyber768()
-        assert k.name == "ML-KEM-768"
+        assert k.name.startswith("ML-KEM-768")

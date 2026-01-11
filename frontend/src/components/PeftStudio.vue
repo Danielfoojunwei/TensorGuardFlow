@@ -1,7 +1,7 @@
 <script setup>
 import { ref } from 'vue'
 import { usePeftStore } from '../stores/peft'
-import { Zap, Play, RotateCcw, CheckCircle, FileJson } from 'lucide-vue-next'
+import { Zap, Play, RotateCcw, CheckCircle, FileJson, Server, Activity, Database, Box } from 'lucide-vue-next'
 
 const store = usePeftStore()
 const steps = [
@@ -13,6 +13,29 @@ const steps = [
     'Governance', 
     'Launch'
 ]
+
+// Mock Integration States
+const integrations = ref({
+    isaac: { active: true, status: 'connected', latency: '12ms' },
+    ros2: { active: false, status: 'disconnected', latency: '-' },
+    formant: { active: true, status: 'streaming', latency: '45ms' },
+    hf: { active: true, status: 'authenticated', user: 'tensorguard-ent' }
+})
+
+const vlaInput = ref({
+    modelId: 'openvla/openvla-7b',
+    datasetPath: 's3://tg-teleop-data/pick-place-v2',
+    validating: false,
+    validated: false
+})
+
+const validateVLA = () => {
+    vlaInput.value.validating = true
+    setTimeout(() => {
+        vlaInput.value.validating = false
+        vlaInput.value.validated = true
+    }, 1500)
+}
 </script>
 
 <template>
@@ -63,7 +86,7 @@ const steps = [
                  :class="store.config.backend === 'isaac' ? 'border-primary bg-primary/10' : 'border-[#333] hover:border-gray-500'"
                  @click="store.config.backend = 'isaac'">
                <div class="flex justify-between items-start mb-2">
-                   <div class="font-bold">NVIDIA Isaac Sim</div>
+                   <div class="font-bold flex items-center gap-2"><Server class="w-4 h-4"/> NVIDIA Isaac Sim</div>
                    <span class="text-[10px] bg-[#333] px-2 py-0.5 rounded font-mono text-gray-300">CONNECTED</span>
                </div>
                <div class="text-xs text-gray-400">High-fidelity photorealistic rendering for domain randomization.</div>
@@ -72,24 +95,64 @@ const steps = [
                  :class="store.config.backend === 'mujoco' ? 'border-primary bg-primary/10' : 'border-[#333] hover:border-gray-500'"
                  @click="store.config.backend = 'mujoco'">
                <div class="flex justify-between items-start mb-2">
-                   <div class="font-bold">MuJoCo (DeepMind)</div>
+                   <div class="font-bold flex items-center gap-2"><Box class="w-4 h-4"/> MuJoCo (DeepMind)</div>
                    <span class="text-[10px] bg-red-900/30 text-red-400 px-2 py-0.5 rounded font-mono border border-red-900/50">MISSING</span>
                </div>
                <div class="text-xs text-gray-400">Fast physics engine for contact-rich manipulation tasks.</div>
             </div>
           </div>
-          <div class="mt-6">
-              <label class="block text-xs text-gray-500 mb-2 uppercase font-bold">Method</label>
-              <select class="w-full bg-black border border-[#333] p-2 rounded text-sm text-gray-300 focus:border-primary outline-none">
-                  <option>LoRA (Ranked Adaptation)</option>
-                  <option>QLoRA (Quantized)</option>
-              </select>
-          </div>
         </div>
 
-        <!-- Step 4: Hyperparams -->
+        <!-- Step 2: VLA Model (New) -->
+        <div v-else-if="store.step === 2" class="space-y-6">
+            <h3 class="text-lg font-bold border-b border-[#333] pb-2">VLA Model Source</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">Hugging Face Model ID</label>
+                    <div class="flex gap-2">
+                        <input type="text" v-model="vlaInput.modelId" class="flex-1 bg-black border border-[#333] p-2 rounded text-sm font-mono focus:border-primary outline-none text-white">
+                        <button @click="validateVLA" class="btn btn-secondary text-xs">
+                            {{ vlaInput.validating ? 'Validating...' : 'Validate' }}
+                        </button>
+                    </div>
+                    <div v-if="vlaInput.validated" class="mt-2 text-xs text-green-500 flex items-center gap-1">
+                        <CheckCircle class="w-3 h-3" /> Model found: OpenVLA-7B (4-bit Quantized)
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 3: Teleop Dataset (New) -->
+        <div v-else-if="store.step === 3" class="space-y-6">
+            <h3 class="text-lg font-bold border-b border-[#333] pb-2">Teleoperation Data</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">Dataset Path / URL</label>
+                    <div class="flex gap-2">
+                         <input type="text" v-model="vlaInput.datasetPath" class="flex-1 bg-black border border-[#333] p-2 rounded text-sm font-mono focus:border-primary outline-none text-white">
+                         <button class="btn btn-secondary text-xs"><Database class="w-3 h-3"/></button>
+                    </div>
+                </div>
+                <div class="bg-[#111] p-4 rounded border border-[#333] grid grid-cols-3 gap-4 text-center">
+                    <div>
+                        <div class="text-xl font-bold text-white">4.2k</div>
+                        <div class="text-[10px] text-gray-500 uppercase">Episodes</div>
+                    </div>
+                    <div>
+                        <div class="text-xl font-bold text-white">128GB</div>
+                        <div class="text-[10px] text-gray-500 uppercase">Size</div>
+                    </div>
+                    <div>
+                        <div class="text-xl font-bold text-white">UR5e</div>
+                        <div class="text-[10px] text-gray-500 uppercase">Robot</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 4: Hyperparams (LoRA) -->
         <div v-else-if="store.step === 4" class="space-y-6">
-            <h3 class="text-lg font-bold border-b border-[#333] pb-2">Hyperparameters</h3>
+            <h3 class="text-lg font-bold border-b border-[#333] pb-2">Hyperparameters (LoRA)</h3>
             <div class="grid grid-cols-2 gap-6">
                 <div>
                     <label class="block text-xs text-gray-500 mb-1">Learning Rate</label>
@@ -99,39 +162,57 @@ const steps = [
                     <label class="block text-xs text-gray-500 mb-1">Batch Size</label>
                     <input type="number" value="4" class="w-full bg-black border border-[#333] p-2 rounded text-sm font-mono focus:border-primary outline-none text-white">
                 </div>
-                <div>
-                    <label class="block text-xs text-gray-500 mb-1">Max Steps</label>
-                    <input type="number" value="100" class="w-full bg-black border border-[#333] p-2 rounded text-sm font-mono focus:border-primary outline-none text-white">
-                </div>
-                <div>
-                    <label class="block text-xs text-gray-500 mb-1">Seed</label>
-                    <input type="number" value="42" class="w-full bg-black border border-[#333] p-2 rounded text-sm font-mono focus:border-primary outline-none text-white">
-                </div>
+                <!-- ... other params ... -->
             </div>
         </div>
 
-        <!-- Step 5: Integrations -->
+        <!-- Step 5: Integrations (New) -->
         <div v-else-if="store.step === 5" class="space-y-6">
-            <h3 class="text-lg font-bold border-b border-[#333] pb-2">Integrations</h3>
+            <h3 class="text-lg font-bold border-b border-[#333] pb-2">External Integrations</h3>
             <div class="space-y-4">
+                
+                <!-- Isaac Lab -->
                 <div class="flex items-center justify-between p-4 border border-[#333] rounded bg-[#111]">
-                    <div>
-                        <div class="font-bold">MLFlow</div>
-                        <div class="text-xs text-gray-500">Log metrics and artifacts</div>
+                    <div class="flex items-center gap-4">
+                        <div class="w-10 h-10 bg-black rounded flex items-center justify-center border border-[#333]"><Server class="text-green-500" /></div>
+                        <div>
+                            <div class="font-bold">NVIDIA Isaac Lab</div>
+                            <div class="text-xs text-gray-500">Omniverse Nucleus Connection</div>
+                        </div>
                     </div>
-                    <div class="w-10 h-5 bg-[#333] rounded-full relative cursor-pointer">
-                        <div class="w-5 h-5 bg-gray-500 rounded-full shadow-md transform scale-110"></div>
+                    <div>
+                         <span class="text-xs font-mono text-green-500 bg-green-900/20 px-2 py-1 rounded border border-green-900/50">CONNECTED ({{integrations.isaac.latency}})</span>
                     </div>
                 </div>
-                <div class="flex items-center justify-between p-4 border border-[#333] rounded bg-[#111]">
-                    <div>
-                        <div class="font-bold">W&B</div>
-                        <div class="text-xs text-gray-500">Experiment tracking</div>
+
+                <!-- ROS2 -->
+                <div class="flex items-center justify-between p-4 border border-[#333] rounded bg-[#111] opacity-60">
+                    <div class="flex items-center gap-4">
+                         <div class="w-10 h-10 bg-black rounded flex items-center justify-center border border-[#333]"><Activity class="text-white" /></div>
+                        <div>
+                            <div class="font-bold">ROS2 / RobOps</div>
+                            <div class="text-xs text-gray-500">Fleet DDS Bridge</div>
+                        </div>
                     </div>
-                    <div class="w-10 h-5 bg-[#333] rounded-full relative cursor-pointer">
-                        <div class="w-5 h-5 bg-gray-500 rounded-full shadow-md transform scale-110"></div>
+                    <div>
+                         <button class="text-xs bg-primary text-black px-3 py-1 rounded font-bold hover:bg-orange-500 transition-colors">CONNECT</button>
                     </div>
                 </div>
+
+                <!-- Formant -->
+                <div class="flex items-center justify-between p-4 border border-[#333] rounded bg-[#111]">
+                    <div class="flex items-center gap-4">
+                         <div class="w-10 h-10 bg-black rounded flex items-center justify-center border border-[#333]"><Activity class="text-blue-500" /></div>
+                        <div>
+                            <div class="font-bold">Formant.io</div>
+                            <div class="text-xs text-gray-500">Telemetry Stream</div>
+                        </div>
+                    </div>
+                    <div>
+                         <span class="text-xs font-mono text-blue-500 bg-blue-900/20 px-2 py-1 rounded border border-blue-900/50">STREAMING ({{integrations.formant.latency}})</span>
+                    </div>
+                </div>
+
             </div>
         </div>
 
@@ -149,14 +230,6 @@ const steps = [
              </div>
         </div>
 
-
-        <!-- Step 2-3: Placeholders (Still simple for now) -->
-        <div v-else-if="store.step < 7" class="flex flex-col items-center justify-center h-full text-gray-500">
-           <Zap class="w-12 h-12 mb-4 opacity-20" />
-           <p>Configuration for {{ steps[store.step - 1] }}</p>
-           <button class="mt-4 btn btn-primary" @click="store.step++">Next</button>
-        </div>
-
         <!-- Step 7: Launch -->
         <div v-else class="space-y-6">
            <h3 class="text-lg font-bold border-b border-[#333] pb-2">Launch Training Run</h3>
@@ -166,7 +239,10 @@ const steps = [
                  <span>Backend:</span> <span class="text-primary">{{ store.config.backend }}</span>
               </div>
               <div class="flex justify-between border-b border-[#333] pb-1 mb-1">
-                 <span>Learning Rate:</span> <span class="text-white">5e-5</span>
+                 <span>Base Model:</span> <span class="text-white">{{ vlaInput.modelId }}</span>
+              </div>
+               <div class="flex justify-between border-b border-[#333] pb-1 mb-1">
+                 <span>Dataset:</span> <span class="text-white">.../pick-place-v2</span>
               </div>
               <div class="flex justify-between">
                  <span>Privacy:</span> <span class="text-green-500">DP-SGD Enabled</span>

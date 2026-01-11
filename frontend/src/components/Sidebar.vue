@@ -1,7 +1,8 @@
 <script setup>
 import { 
   LayoutGrid, Activity, GitBranch, ShieldCheck, Lock, 
-  ClipboardList, Server, Settings, Database, Scale, Sliders 
+  ClipboardList, Server, Settings, Database, Scale, Sliders,
+  BookOpen, Search
 } from 'lucide-vue-next'
 import { ref } from 'vue'
 
@@ -11,7 +12,9 @@ const emit = defineEmits(['update:activeTab'])
 const navItems = [
   { id: 'canvas', label: 'Pipeline Canvas', icon: LayoutGrid }, // N8n Style
   { id: 'performance', label: 'Mission Control', icon: Activity }, // Observability
-  { id: 'policy', label: 'Policy Gating', icon: Sliders }, // NEW
+  { id: 'policy', label: 'Policy Gating', icon: Sliders }, // Tier 3
+  { id: 'skills', label: 'Skills Library', icon: BookOpen }, // Tier 2
+  { id: 'forensics', label: 'Forensics & CISO', icon: Search }, // Tier 4
   { id: 'peft-studio', label: 'PEFT Studio', icon: Database },
   { id: 'eval', label: 'Eval Arena', icon: Scale },
   { id: 'lineage', label: 'Model Lineage', icon: GitBranch },

@@ -28,6 +28,9 @@ class TestSecurityHardening:
                         
                         match = re.search(pattern, content, re.IGNORECASE)
                         if match:
+                            # Check if it's a known non-secret like "N/A"
+                            if '"N/A"' in match.group(0):
+                                continue
                             pytest.fail(f"Potential secret found in {path}: {match.group(0)}")
 
     def test_dependency_vulnerabilities(self):

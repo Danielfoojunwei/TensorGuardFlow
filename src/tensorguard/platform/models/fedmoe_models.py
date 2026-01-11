@@ -13,6 +13,7 @@ class FedMoEExpert(SQLModel, table=True):
     tenant_id: str = Field(index=True)
     name: str # e.g. "manipulation_grasp_v2"
     base_model: str # e.g. "openvla-7b"
+    version: str = Field(default="1.0.0") # Semantic versioning for rollback
     
     status: str = Field(default="adapting") # adapting, validated, deployed, archived
     accuracy_score: Optional[float] = None
