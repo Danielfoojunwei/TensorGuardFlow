@@ -31,12 +31,47 @@ from tensorguard.core.production import (
 from tensorguard.schemas.common import Demonstration
 
 # Flower compatibility
+# Provides stubs for Flower (flwr) types when the library is not installed.
+# This allows the code to be imported and type-checked without flwr dependency.
 try:
     import flwr as fl
+    from flwr.common import FitIns, FitRes, Parameters
+    FLWR_AVAILABLE = True
 except ImportError:
+    FLWR_AVAILABLE = False
+
+    # Stub classes for when Flower is not installed
+    class Parameters:
+        """Stub for flwr.common.Parameters."""
+        def __init__(self, tensors=None, tensor_type=""):
+            self.tensors = tensors or []
+            self.tensor_type = tensor_type
+
+    class FitIns:
+        """Stub for flwr.common.FitIns."""
+        def __init__(self, parameters=None, config=None):
+            self.parameters = parameters or Parameters()
+            self.config = config or {}
+
+    class FitRes:
+        """Stub for flwr.common.FitRes."""
+        def __init__(self, status=None, parameters=None, num_examples=0, metrics=None):
+            self.status = status
+            self.parameters = parameters or Parameters()
+            self.num_examples = num_examples
+            self.metrics = metrics or {}
+
     class fl:
+        """Stub for flwr module."""
         class client:
-            class NumPyClient: pass
+            class NumPyClient:
+                """Stub for flwr.client.NumPyClient."""
+                pass
+
+        class common:
+            Parameters = Parameters
+            FitIns = FitIns
+            FitRes = FitRes
 
 logger = logging.getLogger(__name__)
 
@@ -118,9 +153,35 @@ class TrainingWorker(fl.client.NumPyClient if 'fl' in globals() else object):
             return None
 
         # --- DP ENFORCEMENT ---
-        # Fixed step decomposition - in a real system, this would be computed by an RDP Accountant
-        # based on the noise multiplier and gradient clipping.
-        round_epsilon = 0.5 
+        # WARNING: This is a SIMPLIFIED DP implementation for demonstration.
+        # A production DP system requires:
+        # 1. Rényi Differential Privacy (RDP) accountant for tight composition
+        # 2. Calibrated Gaussian noise based on sensitivity and privacy budget
+        # 3. Per-sample gradient clipping with known sensitivity bounds
+        # 4. Subsampling amplification tracking
+        #
+        # Current implementation uses fixed epsilon consumption as a placeholder.
+        # For production, integrate: opacus, tensorflow-privacy, or dp-accounting
+        #
+        # TODO(security): Implement proper RDP accountant before production
+        # See: https://arxiv.org/abs/1702.07476 (Rényi DP)
+        # See: https://github.com/pytorch/opacus (Reference implementation)
+
+        # Compute epsilon for this round based on noise multiplier and sampling rate
+        # In a real implementation: epsilon = rdp_accountant.get_epsilon(delta, steps)
+        noise_multiplier = getattr(self.dp_profile, 'noise_multiplier', 1.0)
+        sample_rate = min(len(self._current_round_demos) / 1000.0, 1.0)  # Assume 1000 total
+
+        # Simplified epsilon estimation (NOT production-ready)
+        # Real formula involves RDP→(ε,δ)-DP conversion
+        round_epsilon = 2.0 * sample_rate / (noise_multiplier ** 2) if noise_multiplier > 0 else float('inf')
+        round_epsilon = max(0.1, min(round_epsilon, 1.0))  # Clamp for stability
+
+        logger.warning(
+            f"DP NOTICE: Using simplified epsilon estimation (ε={round_epsilon:.3f}). "
+            f"Production requires RDP accountant integration."
+        )
+
         if not self.dp_profile.consume_epsilon(round_epsilon):
             logger.critical(f"FATAL: DP Epsilon Budget Exhausted. Privacy Guard enforced. Aborting round.")
             return None

@@ -201,21 +201,27 @@ async def get_current_user(
         HTTPException: 401 if authentication fails
     """
     # --- DEMO MODE BYPASS ---
-    # If no token is provided, return a demo user for development convenience.
-    # This should be disabled in production via TG_DEMO_MODE=false.
-    DEMO_MODE = os.getenv("TG_DEMO_MODE", "true").lower() == "true"
-    if DEMO_MODE and not token:
-        logger.info("DEMO MODE: Returning demo user (no token required)")
-        # Return a synthetic user object
-        demo_user = User(
-            id="demo-user-001",
-            email="demo@tensorguard.local",
-            name="Demo User",
-            role=UserRole.ORG_ADMIN,
-            tenant_id="fceac734-e672-4a0c-863b-c7bb8e28b88e", # Default seeded tenant
-            hashed_password="N/A"
-        )
-        return demo_user
+    # SECURITY: Demo mode is OFF by default. Set TG_DEMO_MODE=true ONLY in dev/test.
+    # In production, this should NEVER be enabled.
+    DEMO_MODE = os.getenv("TG_DEMO_MODE", "false").lower() == "true"
+    if DEMO_MODE:
+        if os.getenv("TG_ENVIRONMENT", "development") == "production":
+            logger.critical("SECURITY VIOLATION: TG_DEMO_MODE=true in production environment!")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Demo mode is not allowed in production"
+            )
+        if not token:
+            logger.warning("DEMO MODE: Returning demo user (no token required) - NOT FOR PRODUCTION")
+            demo_user = User(
+                id="demo-user-001",
+                email="demo@tensorguard.local",
+                name="Demo User",
+                role=UserRole.ORG_ADMIN,
+                tenant_id="fceac734-e672-4a0c-863b-c7bb8e28b88e",
+                hashed_password="N/A"
+            )
+            return demo_user
     # --- END DEMO MODE ---
     
     credentials_exception = HTTPException(
