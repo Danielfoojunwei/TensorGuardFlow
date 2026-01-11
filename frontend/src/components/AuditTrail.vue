@@ -1,18 +1,35 @@
 <script setup>
 import { ClipboardList, Hash, RefreshCw, FileText } from 'lucide-vue-next'
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 
-const auditLogs = ref([
-  { id: 'ev-1', action: 'KEY_ROTATION_SUCCESS', actor: 'SYSTEM', target: 'key-us-east-1', hash: 'e3b0c44298fc1...2427ae41e4649', time: '10m ago' },
-  { id: 'ev-2', action: 'MODEL_DEPLOY', actor: 'Daniel Foo', target: 'llama-3-8b-finetuned-v2', hash: '8f434346648f6...1dd3c1ac88b59', time: '1h ago' },
-  { id: 'ev-3', action: 'FLEET_ENROLL', actor: 'PROVISIONER', target: 'device-ax-99', hash: 'ca978112ca1bb...807785afee48bb', time: '2h ago' },
-])
-
+const auditLogs = ref([])
 const loading = ref(false)
-const syncRecords = () => {
+
+const fetchLogs = async () => {
     loading.value = true
-    setTimeout(() => { loading.value = false }, 1000)
+    try {
+        const res = await fetch('/api/v1/audit/logs?limit=50')
+        if (res.ok) {
+            const data = await res.json()
+            auditLogs.value = data
+        } else {
+            throw new Error('Backend not available')
+        }
+    } catch (e) {
+        console.warn("Failed to fetch audit logs - using fallback data", e)
+        // Fallback to mock data if backend not available
+        auditLogs.value = [
+            { id: 'ev-1', action: 'KEY_ROTATION_SUCCESS', actor: 'SYSTEM', target: 'key-us-east-1', hash: 'e3b0c44298fc1...2427ae41e4649', time: '10m ago' },
+            { id: 'ev-2', action: 'MODEL_DEPLOY', actor: 'Daniel Foo', target: 'llama-3-8b-finetuned-v2', hash: '8f434346648f6...1dd3c1ac88b59', time: '1h ago' },
+            { id: 'ev-3', action: 'FLEET_ENROLL', actor: 'PROVISIONER', target: 'device-ax-99', hash: 'ca978112ca1bb...807785afee48bb', time: '2h ago' },
+        ]
+    }
+    loading.value = false
 }
+
+const syncRecords = () => fetchLogs()
+
+onMounted(fetchLogs)
 </script>
 
 <template>

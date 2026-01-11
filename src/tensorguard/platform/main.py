@@ -151,6 +151,10 @@ app.include_router(forensics_endpoints.router, prefix="/api/v1", tags=["forensic
 from .api import integrations_endpoints
 app.include_router(integrations_endpoints.router, prefix="/api/v1", tags=["integrations"])
 
+# Model Lineage (Version Control)
+from .api import lineage_endpoints
+app.include_router(lineage_endpoints.router, prefix="/api/v1", tags=["lineage"])
+
 # Enterprise Stubs (Proprietary Boundary)
 try:
     from .enterprise import check_entitlement, log_audit_event

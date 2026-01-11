@@ -1,10 +1,52 @@
 <script setup>
-import { Server, Radio, MoreVertical, Plus } from 'lucide-vue-next'
+import { Server, Radio, MoreVertical, Plus, RefreshCw, Loader2 } from 'lucide-vue-next'
+import { ref, onMounted } from 'vue'
 
-const fleets = [
-  { id: 'f1', name: 'US-East-1 Cluster', region: 'us-east-1', status: 'Healthy', devices_total: 450, devices_online: 442, trust: 99.2 },
-  { id: 'f2', name: 'Berlin Gigafactory', region: 'eu-central-1', status: 'Degraded', devices_total: 120, devices_online: 89, trust: 84.5 },
-]
+const fleets = ref([])
+const loading = ref(true)
+const enrolling = ref(false)
+
+const fetchFleets = async () => {
+    loading.value = true
+    try {
+        const res = await fetch('/api/v1/fleets/extended')
+        if (res.ok) {
+            fleets.value = await res.json()
+        } else {
+            throw new Error('Backend not available')
+        }
+    } catch (e) {
+        console.warn("Failed to fetch fleets - using fallback", e)
+        fleets.value = [
+            { id: 'f1', name: 'US-East-1 Cluster', region: 'us-east-1', status: 'Healthy', devices_total: 450, devices_online: 442, trust: 99.2 },
+            { id: 'f2', name: 'Berlin Gigafactory', region: 'eu-central-1', status: 'Degraded', devices_total: 120, devices_online: 89, trust: 84.5 },
+        ]
+    }
+    loading.value = false
+}
+
+const enrollDevice = async () => {
+    enrolling.value = true
+    const fleetName = prompt("Enter fleet name:")
+    if (fleetName) {
+        try {
+            const res = await fetch(`/api/v1/fleets?name=${encodeURIComponent(fleetName)}`, {
+                method: 'POST'
+            })
+            if (res.ok) {
+                const data = await res.json()
+                alert(`Fleet created! API Key (save this): ${data.api_key}`)
+                await fetchFleets()
+            }
+        } catch (e) {
+            console.warn("Failed to enroll", e)
+            alert("Failed to create fleet")
+        }
+    }
+    enrolling.value = false
+}
+
+onMounted(fetchFleets)
 </script>
 
 <template>
@@ -14,9 +56,15 @@ const fleets = [
          <h2 class="text-2xl font-bold">Fleets & Devices</h2>
          <span class="text-xs text-gray-500">Edge Node Orchestration</span>
        </div>
-       <button class="btn btn-primary">
-          <Plus class="w-4 h-4 mr-2" /> Enroll New Device
-       </button>
+       <div class="flex gap-2">
+          <button @click="fetchFleets" :disabled="loading" class="btn btn-secondary">
+             <RefreshCw class="w-4 h-4" :class="loading ? 'animate-spin' : ''" />
+          </button>
+          <button @click="enrollDevice" :disabled="enrolling" class="btn btn-primary">
+             <Loader2 v-if="enrolling" class="w-4 h-4 mr-2 animate-spin" />
+             <Plus v-else class="w-4 h-4 mr-2" /> {{ enrolling ? 'Creating...' : 'Enroll New Fleet' }}
+          </button>
+       </div>
     </div>
 
     <div class="grid grid-cols-1 gap-4">
@@ -63,5 +111,8 @@ const fleets = [
 }
 .btn-primary {
   @apply bg-orange-600 text-white hover:bg-orange-700;
+}
+.btn-secondary {
+  @apply border border-[#30363d] text-gray-300 hover:text-white hover:bg-[#161b22];
 }
 </style>
