@@ -12,7 +12,12 @@ It produces empirical metrics for comparison.
 import numpy as np
 import time
 import logging
+import sys
+import os
 from typing import Dict, List
+
+# Add src to path
+sys.path.append(os.path.join(os.getcwd(), "src"))
 
 from tensorguard.agent.ml.worker import TrainingWorker, WorkerConfig
 from tensorguard.core.adapters import MoEAdapter
@@ -38,18 +43,24 @@ def run_peft_benchmark():
     worker = TrainingWorker(config, cid="bench-worker")
     
     # Use MoE Adapter (Expert-Driven)
+    # Default experts: ["visual_primary", "visual_aux", "language_semantic", "manipulation_grasp"]
     adapter = MoEAdapter()
     worker.set_adapter(adapter)
     
     # === 2. Generate Synthetic Data ===
     print("[Data] Generating synthetic robot demonstrations...")
     demos = []
-    tasks = ["Pick up the red apple", "Move forward", "Grasp the handle"]
+    # Keywords adapted to trigger specific experts:
+    # "geometric" -> visual_primary
+    # "command" -> language_semantic
+    # "pick" -> manipulation_grasp
+    tasks = ["Verify geometric shapes", "Instruction command goal", "Pick up the blue block"]
     
     for i in range(10):
         demos.append(Demonstration(
             id=f"demo_{i}",
             task_id=tasks[i % len(tasks)], # Mix of tasks
+            instruction=tasks[i % len(tasks)], # Required for IOSP gating
             data={"obs": np.random.rand(10, 256), "act": np.random.rand(10, 6)}
         ))
         worker.add_demonstration(demos[-1])

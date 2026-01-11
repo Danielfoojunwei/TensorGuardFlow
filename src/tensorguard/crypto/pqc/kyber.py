@@ -77,6 +77,13 @@ class Kyber768(PostQuantumKEM):
                 self._use_liboqs = False
 
         if not self._use_liboqs:
+            from ...utils.config import settings
+            if settings.ENVIRONMENT == "production":
+                raise ImportError(
+                    "Kyber768: liboqs not available in PRODUCTION environment. "
+                    "Fail-closed policy enforced. Install liboqs-python or change TENSORGUARD_ENVIRONMENT."
+                )
+            
             warnings.warn(
                 "Kyber768: Using SIMULATOR mode - NO CRYPTOGRAPHIC SECURITY. "
                 "Install liboqs-python for production use.",

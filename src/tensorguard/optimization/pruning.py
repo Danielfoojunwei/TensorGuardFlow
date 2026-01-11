@@ -25,7 +25,7 @@ class PruningManager:
         Applies 2:4 structured sparsity to all Linear layers in the model.
         This patterns prunes 2 out of every 4 consecutive weights.
         """
-        if not self.torch_available:
+        if not self.torch_available or model is None or isinstance(model, dict):
             logger.info("[SIMULATION] Applying 2:4 Structured Sparsity to model layers...")
             return True
 

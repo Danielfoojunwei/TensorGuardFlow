@@ -113,17 +113,18 @@ class MoEAdapter(VLAAdapter):
         raw_grads = self.compute_gradients(demo)
         
         expert_grads = {expert: {} for expert in self.experts}
-        # Simplified routing for simulation
-        routing = {
+        # Simplified routing for simulation mapping blocks to experts
+        routing_map = {
             "visual_primary": [0, 1, 2, 3],
             "visual_aux": [4, 5],
             "language_semantic": [6, 7],
             "manipulation_grasp": [8, 9]
         }
         
-        for expert, blocks in routing.items():
-            weight = gate_weights[expert]
+        for expert in self.experts:
+            weight = gate_weights.get(expert, 0.0)
             if weight > 0.15: # Sparsity Gating (EDA)
+                blocks = routing_map.get(expert, [])
                 for b_idx in blocks:
                     param = f"block_{b_idx}.param"
                     if param in raw_grads:

@@ -1,9 +1,9 @@
 {
   "schema": "tensorguard.artifact.run.v1",
-  "run_id": "0b3851d1-8aeb-4844-9d29-f4e77c046c23",
-  "timestamp": "2026-01-10T19:01:45.878668",
+  "run_id": "975e8ed5-322a-4eb9-8d38-b35065749571",
+  "timestamp": "2026-01-11T18:05:50.611040",
   "sdk_version": "2.1.0",
-  "git_commit": "47d7f51b1feb37fa51407e92a595b3b3acc62515",
+  "git_commit": "527fc441f32a5595d8a441dac31b1c32a7162a2f",
   "environment": {
     "os": "Windows",
     "release": "11",
@@ -33,6 +33,6 @@
     "robustness": {}
   },
   "artifacts_hashes": {
-    "report.html": "aca45f4581c9b00f735b619d03c3917b9af5def1f28a33e19c1a47b1980e166d"
+    "report.html": "0e5d991d0008989a34e1fdca92b133bde7cdee7e89ae57029e7a1501cb181923"
   }
 }

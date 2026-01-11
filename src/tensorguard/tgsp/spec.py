@@ -18,8 +18,8 @@ POLICY_PATH = f"{POLICY_DIR}/policy.yaml"
 POLICY_HASH_PATH = f"{POLICY_DIR}/policy.hash"
 RECIPIENTS_PATH = f"{KEYS_DIR}/recipients.cbor"
 
-# Algorithms
-DEFAULT_CIPHER = "AES-256-GCM"
+# Algorithms (Aligned with RFC 9180 HPKE suite)
+DEFAULT_CIPHER = "ChaCha20-Poly1305"
 DEFAULT_SIGNATURE = "Ed25519"
 DEFAULT_KEM = "X25519+HKDF-SHA256"
 DEFAULT_HASH = "SHA-256"

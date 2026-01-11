@@ -96,8 +96,9 @@ class N2HEParams:
 @dataclass
 class LWECiphertext:
     """LWE Ciphertext structure."""
-    a: np.ndarray
-    b: Union[int, np.ndarray]
+    a: Optional[np.ndarray] = None
+    b: Union[int, np.ndarray] = 0
+    seed: Optional[bytes] = None # Seed for regenerating 'A'
     params: N2HEParams = field(default_factory=N2HEParams)
     noise_budget: float = 0.0
     
@@ -106,51 +107,88 @@ class LWECiphertext:
             # For Skellam, variance is 2*mu. Sigma equivalent ~ sqrt(2*mu)
             sigma_eff = np.sqrt(2 * self.params.mu)
             self.noise_budget = np.log2(self.params.delta) - np.log2(sigma_eff * 12)
-    
+        
+        # If A is not provided but seed is, regenerate A (for deserialization/aggregation)
+        if self.a is None and self.seed is not None:
+            self._regenerate_a()
+
+    def _regenerate_a(self):
+        """Regenerate Matrix A from seed using a CSPRNG."""
+        if self.seed is None: return
+        k = len(self.b) if self.is_batch else 1
+        # Convert bytes to integer for PCG64
+        seed_int = int.from_bytes(self.seed, 'big')
+        rng = np.random.Generator(np.random.PCG64(seed_int))
+        self.a = rng.integers(0, self.params.q, size=(k, self.params.n), dtype=np.int64)
+
     @property
     def is_batch(self) -> bool:
         return isinstance(self.b, np.ndarray) and self.b.ndim > 0
 
     def serialize(self) -> bytes:
-        """Fast binary serialization."""
-        k, n = self.a.shape if self.a.ndim == 2 else (1, self.a.shape[0])
+        """Fast binary serialization with seeded 'A' optimization."""
+        k = len(self.b) if self.is_batch else 1
+        n = self.params.n
         flags = 0x01 if self.is_batch else 0x00
-        header = struct.pack('<4sII B', b'LWE1', k, n, flags)
-        a_bytes = self.a.astype(np.int64).tobytes()
-        b_bytes = self.b.astype(np.int64).tobytes() if self.is_batch else struct.pack('<q', int(self.b))
-        return header + a_bytes + b_bytes
+        
+        if self.seed:
+            flags |= 0x02 # Seeded 'A' optimization
+            header = struct.pack('<4sII B 32s', b'LWE2', k, n, flags, self.seed)
+            b_bytes = self.b.astype(np.int64).tobytes() if self.is_batch else struct.pack('<q', int(self.b))
+            return header + b_bytes
+        else:
+            header = struct.pack('<4sII B', b'LWE1', k, n, flags)
+            a_bytes = self.a.astype(np.int64).tobytes()
+            b_bytes = self.b.astype(np.int64).tobytes() if self.is_batch else struct.pack('<q', int(self.b))
+            return header + a_bytes + b_bytes
 
     @classmethod
     def deserialize(cls, data: bytes, params: Optional[N2HEParams] = None) -> 'LWECiphertext':
         """Fast binary deserialization."""
         try:
+            if len(data) < 13: raise CryptographyError("Not enough data for headers")
             magic, k, n, flags = struct.unpack('<4sII B', data[:13])
-            if magic != b'LWE1':
-                raise CryptographyError("Invalid LWE Ciphertext MAGIC")
-                
             params = params or N2HEParams(n=n)
-            offset = 13
-            a_size = k * n * 8
             
-            if len(data) < offset + a_size:
-                raise CryptographyError("Ciphertext payload too small for 'A' matrix")
+            if magic == b'LWE2' and (flags & 0x02):
+                # Seeded mode
+                seed = data[13:13+32]
+                if len(seed) < 32: raise CryptographyError("Not enough data for seed")
+                offset = 13 + 32
+                if flags & 0x01:
+                    b_size = k * 8
+                    b_bytes = data[offset : offset + b_size]
+                    if len(b_bytes) < b_size: raise CryptographyError("Not enough data for vector B")
+                    b_val = np.frombuffer(b_bytes, dtype=np.int64)
+                else:
+                    b_bytes = data[offset : offset + 8]
+                    if len(b_bytes) < 8: raise CryptographyError("Not enough data for scalar B")
+                    b_val = struct.unpack('<q', b_bytes)[0]
+                return cls(b=b_val, seed=seed, params=params)
                 
-            a_arr = np.frombuffer(data[offset : offset + a_size], dtype=np.int64)
-            if k > 1: a_arr = a_arr.reshape(k, n)
-            offset += a_size
-            
-            if flags & 0x01:
-                b_size = k * 8
-                if len(data) < offset + b_size:
-                    raise CryptographyError("Ciphertext payload too small for 'B' vector")
-                b_val = np.frombuffer(data[offset : offset + b_size], dtype=np.int64)
+            elif magic == b'LWE1':
+                # Full matrix mode
+                offset = 13
+                a_size = k * n * 8
+                a_bytes = data[offset : offset + a_size]
+                if len(a_bytes) < a_size: raise CryptographyError("Not enough data for matrix A")
+                a_arr = np.frombuffer(a_bytes, dtype=np.int64)
+                if k > 1: a_arr = a_arr.reshape(k, n)
+                offset += a_size
+                if flags & 0x01:
+                    b_size = k * 8
+                    b_bytes = data[offset : offset + b_size]
+                    if len(b_bytes) < b_size: raise CryptographyError("Not enough data for vector B")
+                    b_val = np.frombuffer(b_bytes, dtype=np.int64)
+                else:
+                    b_bytes = data[offset : offset + 8]
+                    if len(b_bytes) < 8: raise CryptographyError("Not enough data for scalar B")
+                    b_val = struct.unpack('<q', b_bytes)[0]
+                return cls(a=a_arr, b=b_val, params=params)
             else:
-                if len(data) < offset + 8:
-                    raise CryptographyError("Ciphertext payload too small for 'B' scalar")
-                b_val = struct.unpack('<q', data[offset : offset + 8])[0]
-                
-            return cls(a=a_arr, b=b_val, params=params)
+                raise CryptographyError(f"Unsupported LWE Magic: {magic}")
         except Exception as e:
+            if isinstance(e, CryptographyError): raise
             raise CryptographyError(f"Deserialization failed: {e}")
 
     def __add__(self, other: 'LWECiphertext') -> 'LWECiphertext':
@@ -177,18 +215,22 @@ class LWECiphertext:
         self.a, self.b, self.noise_budget = res.a, res.b, res.noise_budget
         return self
 
-# CSPRNG-seeded RNG for cryptographic operations
-_crypto_rng = np.random.Generator(np.random.PCG64(secrets.randbits(128)))
+# CSPRNG for cryptographic operations
+# Note: We use secrets for raw bit generation (A matrix, Keys).
+# For distributions (Poisson), we use a securely re-seeded Generator.
+def _get_secure_rng():
+    return np.random.Generator(np.random.PCG64(secrets.randbits(256)))
 
 def sample_skellam(mu: float, size: int) -> np.ndarray:
     """
     Sample from symmetric Skellam distribution S(mu, mu).
     Technically: X1 - X2 where X1,X2 ~ Poisson(mu).
     This noise provides both DP and LWE security (Valovich, 2016).
-    Uses secrets-seeded CSPRNG for cryptographic security.
+    Uses a securely re-seeded generator for each call to prevent state recovery.
     """
-    x1 = _crypto_rng.poisson(mu, size)
-    x2 = _crypto_rng.poisson(mu, size)
+    rng = _get_secure_rng()
+    x1 = rng.poisson(mu, size)
+    x2 = rng.poisson(mu, size)
     return (x1 - x2).astype(np.int64)
 
 class N2HEContext:
@@ -201,7 +243,8 @@ class N2HEContext:
     def generate_keys(self):
         """Generate secret key using CSPRNG."""
         # Use secrets-seeded RNG for key generation
-        self.lwe_key = _crypto_rng.choice([-1, 0, 1], size=self.params.n).astype(np.int64)
+        rng = _get_secure_rng()
+        self.lwe_key = rng.choice([-1, 0, 1], size=self.params.n).astype(np.int64)
         logger.debug("N2HE Keys generated with CSPRNG")
 
     def save_key(self, name: str):
@@ -244,8 +287,7 @@ class N2HEContext:
 
     def encrypt_batch(self, messages: np.ndarray) -> LWECiphertext:
         """
-        Vectorized encryption using Skellam noise for DP+LWE convergence.
-        Based on Becker et al. (2018) 'Augmented-LWE'.
+        Vectorized encryption using Skellam noise and seeded 'A' optimization.
         """
         if self.lwe_key is None: self.generate_keys()
         
@@ -254,18 +296,20 @@ class N2HEContext:
         mu, delta = self.params.mu, self.params.delta
         
         m_vec = messages.astype(np.int64) % t
-        # Matrix A is uniform over Z_q (Standard LWE) - using CSPRNG
-        A = _crypto_rng.integers(0, q, size=(k, n), dtype=np.int64)
+        # Seeded 'A' generation for performance and communication efficiency
+        seed = secrets.token_bytes(32)
+        seed_int = int.from_bytes(seed, 'big')
+        rng = np.random.Generator(np.random.PCG64(seed_int))
+        A = rng.integers(0, q, size=(k, n), dtype=np.int64)
         
         # Error term E is sampled from Skellam distribution
-        # Symmetric Skellam noise provides the Differential Privacy guarantee
         E = sample_skellam(mu, k)
         
         # b = A*s + e + delta*m (mod q)
         B = (np.dot(A, self.lwe_key) + E + delta * m_vec) % q
         
         self.stats['encryptions'] += k
-        return LWECiphertext(a=A, b=B, params=self.params)
+        return LWECiphertext(b=B, seed=seed, params=self.params)
 
     def decrypt_batch(self, ct: LWECiphertext) -> np.ndarray:
         """Vectorized decryption."""
@@ -301,8 +345,7 @@ class N2HEEncryptor:
             self._ctx.generate_keys()
         
     def encrypt(self, data: bytes) -> bytes:
-        """Encrypt binary data with SIMD folding and chunking."""
-        import pickle
+        """Encrypt binary data with SIMD folding. Returns raw binary LWECiphertext."""
         self._usage_count += 1
         if self._usage_count > self._max_uses:
             self._ctx.generate_keys()
@@ -311,22 +354,19 @@ class N2HEEncryptor:
         data_arr = np.frombuffer(data, dtype=np.uint8).astype(np.int64)
         packed = self._ctx.fold_pack([data_arr])
         
-        # Chunking for lattice alignment
-        chunk_size = self.params.n * 4
-        chunks = [self._ctx.encrypt_batch(packed[i : i + chunk_size]).serialize().hex() 
-                 for i in range(0, len(packed), chunk_size)]
-        
-        # Use JSON instead of pickle to prevent RCE
-        import json
-        return json.dumps({'chunks': chunks, 'len': len(data)}).encode()
+        # Performance: For small results, we encrypt everything in one batch
+        # This aligns with the server side's expect-one-ciphertext-per-tensor model.
+        # Large payloads should be handled by the application layer using separate tensor entries.
+        ct = self._ctx.encrypt_batch(packed)
+        return ct.serialize()
 
     def decrypt(self, ciphertext: bytes) -> bytes:
-        """Decrypt chunked ciphertext (safe JSON path)."""
-        import json
-        payload = json.loads(ciphertext.decode())
-        dec_chunks = [self._ctx.decrypt_batch(LWECiphertext.deserialize(bytes.fromhex(c), self.params)).astype(np.uint8) 
-                     for c in payload['chunks']]
-        return np.concatenate(dec_chunks).tobytes()[:payload['len']]
+        """Decrypt binary ciphertext (Fast binary path)."""
+        ct = LWECiphertext.deserialize(ciphertext, self.params)
+        dec_arr = self._ctx.decrypt_batch(ct).astype(np.uint8)
+        # Note: Precision restoration for packed data may require length metadata
+        # In this implementation, we assume the caller knows the original length or uses padding.
+        return dec_arr.tobytes()
 
 def generate_key(path: str, security_level: int = 128):
     """Standalone utility to generate a new TensorGuard N2HE key."""

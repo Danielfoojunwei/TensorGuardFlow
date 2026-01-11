@@ -2,6 +2,7 @@ import unittest
 import os
 import shutil
 import base64
+import json
 from cryptography.hazmat.primitives.asymmetric import ed25519, x25519
 from tensorguard.tgsp import manifest, crypto, cli, spec
 
@@ -10,19 +11,24 @@ class TestTGSP(unittest.TestCase):
         self.test_dir = "tmp_tgsp_test"
         os.makedirs(self.test_dir, exist_ok=True)
         
-        # Keys
-        self.signing_key = ed25519.Ed25519PrivateKey.generate()
+        # Use Hybrid PQC Keys for v1.0 compatibility
+        from tensorguard.crypto.sig import generate_hybrid_sig_keypair
+        from tensorguard.crypto.kem import generate_hybrid_keypair
+        
+        # Signing Key (Hybrid Dilithium)
+        pub_sig, priv_sig = generate_hybrid_sig_keypair()
         self.signing_key_path = os.path.join(self.test_dir, "producer.priv")
-        with open(self.signing_key_path, 'wb') as f:
-            f.write(self.signing_key.private_bytes_raw())
+        with open(self.signing_key_path, 'w') as f:
+            json.dump(priv_sig, f)
             
-        self.recipient_key = x25519.X25519PrivateKey.generate()
+        # Recipient Key (Hybrid Kyber)
+        pub_kem, priv_kem = generate_hybrid_keypair()
         self.recipient_priv_path = os.path.join(self.test_dir, "recipient.priv")
         self.recipient_pub_path = os.path.join(self.test_dir, "recipient.pub")
-        with open(self.recipient_priv_path, 'wb') as f:
-            f.write(self.recipient_key.private_bytes_raw())
-        with open(self.recipient_pub_path, 'wb') as f:
-            f.write(self.recipient_key.public_key().public_bytes_raw())
+        with open(self.recipient_priv_path, 'w') as f:
+            json.dump(priv_kem, f)
+        with open(self.recipient_pub_path, 'w') as f:
+            json.dump(pub_kem, f)
             
         # Dummy assets
         self.adapter_path = os.path.join(self.test_dir, "adapter.bin")

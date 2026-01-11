@@ -1,3 +1,4 @@
+<script setup>
 import { Server, Radio, MoreVertical, Plus, RefreshCw, Loader2 } from 'lucide-vue-next'
 import { ref, onMounted } from 'vue'
 import { useSimulationStore } from '../stores/simulation'
