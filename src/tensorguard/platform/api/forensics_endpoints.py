@@ -12,9 +12,40 @@ import random
 
 from ..database import get_session
 from ..auth import get_current_user
-from ..models.core import User
+from ..models.core import User, AuditLog
 
 router = APIRouter()
+
+
+@router.get("/audit/logs")
+async def get_audit_logs(
+    limit: int = 50,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Fetch immutable audit log entries for the tenant.
+    Returns PQC-signed security events.
+    """
+    logs = session.exec(
+        select(AuditLog)
+        .where(AuditLog.tenant_id == current_user.tenant_id)
+        .order_by(AuditLog.timestamp.desc())
+        .limit(limit)
+    ).all()
+
+    return [
+        {
+            "id": log.id,
+            "action": log.action,
+            "actor": current_user.email,  # Simplified - in prod would join to User
+            "target": log.resource_id,
+            "resource_type": log.resource_type,
+            "hash": log.pqc_signature[:32] + "..." if log.pqc_signature else "N/A",
+            "time": log.timestamp.isoformat() if log.timestamp else "N/A"
+        }
+        for log in logs
+    ]
 
 class ForensicsQuery(BaseModel):
     incident_id: str

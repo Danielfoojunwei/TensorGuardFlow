@@ -29,9 +29,28 @@ const runCompliance = async () => {
     verifying.value = false
 }
 
+const analysisResult = ref(null)
+const analyzing = ref(false)
+
 const analyzeIncident = async (id) => {
-    // Navigate to explicit analysis view or open modal (mock for now)
-    alert(`Analyzing incident ${id} root cause...`)
+    analyzing.value = true
+    analysisResult.value = null
+    try {
+        const res = await fetch('/api/v1/forensics/analyze', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ incident_id: id, time_window_hours: 24 })
+        })
+        if (res.ok) {
+            analysisResult.value = await res.json()
+        } else {
+            alert(`Failed to analyze incident ${id}`)
+        }
+    } catch (e) {
+        console.error("Analysis failed", e)
+        alert(`Analysis error for incident ${id}`)
+    }
+    analyzing.value = false
 }
 
 onMounted(fetchIncidents)

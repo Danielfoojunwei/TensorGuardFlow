@@ -1,11 +1,50 @@
 <script setup>
-import { Settings, Shield, Lock, Globe } from 'lucide-vue-next'
-import { ref } from 'vue'
+import { Settings, Shield, Lock, Globe, Check, Loader2 } from 'lucide-vue-next'
+import { ref, onMounted } from 'vue'
 
 const config = ref({
     kms: { provider: 'local', resource_id: '' },
     rtpl: { mode: 'front', profile: 'collaborative' }
 })
+
+const saving = ref(false)
+const saved = ref(false)
+const loading = ref(true)
+
+// Load settings from backend on mount
+onMounted(async () => {
+    try {
+        const res = await fetch('/api/v1/settings')
+        const data = await res.json()
+        if (data.kms_provider) config.value.kms.provider = data.kms_provider
+        if (data.rtpl_mode) config.value.rtpl.mode = data.rtpl_mode
+    } catch (e) {
+        console.warn("Failed to load settings", e)
+    }
+    loading.value = false
+})
+
+// Save settings to backend
+const saveSettings = async () => {
+    saving.value = true
+    saved.value = false
+    try {
+        await fetch('/api/v1/settings/bulk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify([
+                { key: 'kms_provider', value: config.value.kms.provider },
+                { key: 'rtpl_mode', value: config.value.rtpl.mode }
+            ])
+        })
+        saved.value = true
+        setTimeout(() => { saved.value = false }, 2000)
+    } catch (e) {
+        console.error("Failed to save settings", e)
+        alert("Failed to save settings")
+    }
+    saving.value = false
+}
 </script>
 
 <template>
@@ -15,8 +54,10 @@ const config = ref({
          <h2 class="text-2xl font-bold">Global Settings</h2>
          <span class="text-xs text-gray-500">System Configuration & Policy</span>
        </div>
-       <button class="btn btn-primary">
-          Save Changes
+       <button @click="saveSettings" :disabled="saving" class="btn btn-primary flex items-center gap-2">
+          <Loader2 v-if="saving" class="w-4 h-4 animate-spin" />
+          <Check v-else-if="saved" class="w-4 h-4" />
+          {{ saving ? 'Saving...' : (saved ? 'Saved!' : 'Save Changes') }}
        </button>
     </div>
 
