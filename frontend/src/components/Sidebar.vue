@@ -1,125 +1,126 @@
 <script setup>
+/**
+ * Sidebar - Simplified Navigation
+ *
+ * Streamlined to 5 main sections based on engineering workflows:
+ * - Command Center (Dashboard)
+ * - Models (Lifecycle management)
+ * - Operations (Fleet & Training)
+ * - Security (Identity, Keys, Compliance)
+ * - Settings
+ */
 import {
-  LayoutGrid, Activity, GitBranch, ShieldCheck, Lock,
-  ClipboardList, Server, Settings, Database, Scale, Sliders,
-  BookOpen, Search, Bot, FileKey, Link, Package, Radio
+    LayoutDashboard, Bot, Server, Shield, Settings,
+    ChevronRight
 } from 'lucide-vue-next'
 
 const props = defineProps(['activeTab'])
 const emit = defineEmits(['update:activeTab'])
 
-const navSections = [
-  {
-    title: 'Core',
-    items: [
-      { id: 'canvas', label: 'Pipeline Canvas', icon: LayoutGrid },
-      { id: 'monitor', label: 'Training Monitor', icon: Radio },
-      { id: 'performance', label: 'Mission Control', icon: Activity },
-    ]
-  },
-  {
-    title: 'Models & Training',
-    items: [
-      { id: 'vla-registry', label: 'VLA Registry', icon: Bot },
-      { id: 'peft-studio', label: 'PEFT Studio', icon: Database },
-      { id: 'eval', label: 'Eval Arena', icon: Scale },
-      { id: 'skills', label: 'Skills Library', icon: BookOpen },
-    ]
-  },
-  {
-    title: 'Security & Identity',
-    items: [
-      { id: 'identity', label: 'Identity Manager', icon: FileKey },
-      { id: 'vault', label: 'Key Vault', icon: Lock },
-      { id: 'policy', label: 'Policy Gating', icon: Sliders },
-      { id: 'forensics', label: 'Forensics & CISO', icon: Search },
-    ]
-  },
-  {
-    title: 'Deployment & Ops',
-    items: [
-      { id: 'tgsp-marketplace', label: 'TGSP Marketplace', icon: Package },
-      { id: 'integrations', label: 'Integrations Hub', icon: Link },
-      { id: 'fleets', label: 'Fleets & Devices', icon: Server },
-      { id: 'lineage', label: 'Model Lineage', icon: GitBranch },
-    ]
-  },
-  {
-    title: 'Compliance',
-    items: [
-      { id: 'compliance', label: 'Compliance Registry', icon: ShieldCheck },
-      { id: 'audit', label: 'Audit Trail', icon: ClipboardList },
-      { id: 'settings', label: 'Global Settings', icon: Settings },
-    ]
-  }
+const navItems = [
+    {
+        id: 'dashboard',
+        label: 'Command Center',
+        icon: LayoutDashboard,
+        description: 'System overview'
+    },
+    {
+        id: 'models',
+        label: 'Models',
+        icon: Bot,
+        description: 'VLA registry, training, evaluation'
+    },
+    {
+        id: 'operations',
+        label: 'Operations',
+        icon: Server,
+        description: 'Fleet, monitoring, deployments'
+    },
+    {
+        id: 'security',
+        label: 'Security',
+        icon: Shield,
+        description: 'Identity, keys, compliance'
+    },
+    {
+        id: 'settings',
+        label: 'Settings',
+        icon: Settings,
+        description: 'Configuration'
+    }
 ]
 </script>
 
 <template>
-  <aside class="w-64 bg-[#000000] border-r border-[#333] fixed h-full z-20 flex flex-col overflow-hidden">
+  <aside class="w-64 bg-[#0d1117] border-r border-[#30363d] fixed h-full z-20 flex flex-col">
     <!-- Logo Area -->
-    <div class="h-16 flex items-center px-6 border-b border-[#333] flex-shrink-0">
-       <div class="w-8 h-8 bg-primary rounded mr-3 flex items-center justify-center font-bold text-black">TG</div>
-       <span class="font-bold text-lg tracking-tight">TensorGuard</span>
+    <div class="h-16 flex items-center px-5 border-b border-[#30363d] flex-shrink-0">
+      <div class="w-9 h-9 bg-gradient-to-br from-primary to-orange-700 rounded-lg mr-3 flex items-center justify-center font-bold text-white text-sm shadow-lg">
+        TG
+      </div>
+      <div>
+        <span class="font-bold text-white text-sm">TensorGuard</span>
+        <div class="text-[10px] text-gray-500">Flow v2.1</div>
+      </div>
     </div>
 
     <!-- Navigation -->
-    <nav class="flex-1 px-3 py-4 overflow-y-auto">
-      <template v-for="(section, sIdx) in navSections" :key="section.title">
-        <!-- Section Header -->
-        <div v-if="sIdx > 0" class="mt-4 mb-2 px-3">
-          <span class="text-[10px] font-bold text-gray-600 uppercase tracking-wider">{{ section.title }}</span>
-        </div>
-        <div v-else class="mb-2 px-3">
-          <span class="text-[10px] font-bold text-gray-600 uppercase tracking-wider">{{ section.title }}</span>
-        </div>
-
-        <!-- Section Items -->
-        <div class="space-y-0.5">
-          <button
-            v-for="item in section.items"
-            :key="item.id"
-            @click="emit('update:activeTab', item.id)"
-            class="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors duration-200"
-            :class="activeTab === item.id
-              ? 'text-white font-medium bg-[#1f2428] border-l-2 border-[#f78166]'
-              : 'text-gray-400 hover:text-white hover:bg-[#161b22]'"
-          >
-            <component :is="item.icon" class="w-4 h-4 flex-shrink-0" />
-            <span class="truncate">{{ item.label }}</span>
-          </button>
-        </div>
-      </template>
+    <nav class="flex-1 px-3 py-4">
+      <div class="space-y-1">
+        <button
+          v-for="item in navItems"
+          :key="item.id"
+          @click="emit('update:activeTab', item.id)"
+          :class="[
+            'w-full flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-200 group',
+            activeTab === item.id
+              ? 'bg-[#1f2428] border-l-2 border-primary text-white'
+              : 'text-gray-400 hover:text-white hover:bg-[#161b22]'
+          ]"
+        >
+          <component
+            :is="item.icon"
+            :class="[
+              'w-5 h-5 flex-shrink-0 transition-colors',
+              activeTab === item.id ? 'text-primary' : 'text-gray-500 group-hover:text-gray-400'
+            ]"
+          />
+          <div class="flex-1 text-left">
+            <div class="text-sm font-medium">{{ item.label }}</div>
+            <div v-if="activeTab !== item.id" class="text-[10px] text-gray-600 group-hover:text-gray-500">
+              {{ item.description }}
+            </div>
+          </div>
+          <ChevronRight
+            v-if="activeTab === item.id"
+            class="w-4 h-4 text-primary"
+          />
+        </button>
+      </div>
     </nav>
 
+    <!-- System Status -->
+    <div class="px-4 py-3 border-t border-[#30363d] flex-shrink-0">
+      <div class="flex items-center gap-2 mb-2">
+        <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+        <span class="text-[10px] text-gray-500 uppercase">System Healthy</span>
+      </div>
+      <div class="text-[10px] text-gray-600">
+        12 fleets • 847 devices online
+      </div>
+    </div>
+
     <!-- User Profile -->
-    <div class="p-4 border-t border-[#333] flex-shrink-0">
+    <div class="p-4 border-t border-[#30363d] flex-shrink-0">
       <div class="flex items-center gap-3">
-        <div class="w-8 h-8 rounded-full bg-[#238636] flex items-center justify-center text-white text-xs font-bold shadow-md">
+        <div class="w-9 h-9 rounded-full bg-gradient-to-br from-green-600 to-green-800 flex items-center justify-center text-white text-xs font-bold shadow-md">
           DF
         </div>
-        <div class="flex flex-col">
-          <span class="text-xs font-bold text-white">Daniel Foo</span>
-          <span class="text-[10px] text-gray-500">ORG_ADMIN</span>
+        <div class="flex-1">
+          <div class="text-sm font-medium text-white">Daniel Foo</div>
+          <div class="text-[10px] text-gray-500">Organization Admin</div>
         </div>
       </div>
     </div>
   </aside>
 </template>
-
-<style scoped>
-/* Custom scrollbar for sidebar */
-nav::-webkit-scrollbar {
-  width: 4px;
-}
-nav::-webkit-scrollbar-track {
-  background: transparent;
-}
-nav::-webkit-scrollbar-thumb {
-  background: #333;
-  border-radius: 2px;
-}
-nav::-webkit-scrollbar-thumb:hover {
-  background: #444;
-}
-</style>
