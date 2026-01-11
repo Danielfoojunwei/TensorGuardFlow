@@ -55,13 +55,63 @@ from ..utils.logging import get_logger
 from ..utils.exceptions import CryptographyError
 from .keys import vault, KeyScope
 
-# Emit security warning on module import
-warnings.warn(
-    "tensorguard.core.crypto: N2HE is a RESEARCH PROTOTYPE. "
-    "NOT AUDITED for production use. See module docstring for details.",
-    category=UserWarning,
-    stacklevel=2
-)
+# =============================================================================
+# PRODUCTION SAFETY GATE
+# =============================================================================
+# This module contains EXPERIMENTAL cryptography that is NOT production-ready.
+# In production environments, usage is blocked unless explicitly enabled.
+#
+# Configuration:
+#   TG_ENABLE_EXPERIMENTAL_CRYPTO=false (default): Block in production
+#   TG_ENABLE_EXPERIMENTAL_CRYPTO=true: Allow with prominent warnings
+# =============================================================================
+
+import os
+
+_ENVIRONMENT = os.getenv("TG_ENVIRONMENT", "development").lower()
+_ENABLE_EXPERIMENTAL = os.getenv("TG_ENABLE_EXPERIMENTAL_CRYPTO", "false").lower() == "true"
+
+
+class ExperimentalCryptoError(RuntimeError):
+    """Raised when experimental crypto is used in production without explicit opt-in."""
+    pass
+
+
+def _check_experimental_crypto_allowed():
+    """
+    Check if experimental crypto is allowed in the current environment.
+
+    In production, experimental crypto is blocked unless TG_ENABLE_EXPERIMENTAL_CRYPTO=true.
+    This prevents accidental use of unaudited cryptographic code in production systems.
+    """
+    if _ENVIRONMENT == "production" and not _ENABLE_EXPERIMENTAL:
+        raise ExperimentalCryptoError(
+            "SECURITY ERROR: Experimental N2HE cryptography is blocked in production. "
+            "This module has NOT been audited and is NOT suitable for production use. "
+            "If you understand the risks and must proceed, set TG_ENABLE_EXPERIMENTAL_CRYPTO=true. "
+            "Recommended: Use Microsoft SEAL, OpenFHE, or Concrete ML instead."
+        )
+
+
+# Enforce gate on module import
+_check_experimental_crypto_allowed()
+
+# Emit security warning (even if allowed)
+if _ENABLE_EXPERIMENTAL and _ENVIRONMENT == "production":
+    warnings.warn(
+        "CRITICAL: Experimental N2HE crypto enabled in PRODUCTION. "
+        "This code is NOT AUDITED and may have security vulnerabilities. "
+        "You have accepted full responsibility for any security incidents.",
+        category=RuntimeWarning,
+        stacklevel=2
+    )
+else:
+    warnings.warn(
+        "tensorguard.core.crypto: N2HE is a RESEARCH PROTOTYPE. "
+        "NOT AUDITED for production use. See module docstring for details.",
+        category=UserWarning,
+        stacklevel=2
+    )
 
 # Performance: Bridge to HintSight's C++ N2HE-HEXL library if available
 try:
