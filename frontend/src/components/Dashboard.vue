@@ -1,6 +1,7 @@
 <script setup>
 import { Activity, Database, Key, ShieldCheck } from 'lucide-vue-next'
 import PipelineGraph from './dashboard/PipelineGraph.vue'
+import PerformanceDissect from './analytics/PerformanceDissect.vue'
 
 const stats = [
   { label: 'System Health', value: '99.9%', icon: Activity, color: 'text-green-500' },
@@ -34,5 +35,8 @@ const stats = [
 
     <!-- Pipeline Visualizer -->
     <PipelineGraph />
+
+    <!-- Mission Control Analytics -->
+    <PerformanceDissect />
   </div>
 </template>

@@ -1,6 +1,8 @@
-<script setup>
 import { Server, Radio, MoreVertical, Plus, RefreshCw, Loader2 } from 'lucide-vue-next'
 import { ref, onMounted } from 'vue'
+import { useSimulationStore } from '../stores/simulation'
+
+const store = useSimulationStore()
 
 const fleets = ref([])
 const loading = ref(true)
@@ -46,6 +48,19 @@ const enrollDevice = async () => {
     enrolling.value = false
 }
 
+const getDeviceCount = (fleetId) => {
+    // Try to get from simulation store if matches, else return fleet's total
+    const storeDevices = store.devices.filter(d => d.fleet === fleetId).length
+    const fleet = fleets.value.find(f => f.id === fleetId)
+    return storeDevices || (fleet ? fleet.devices_total : 0)
+}
+
+const getOnlineCount = (fleetId) => {
+    const storeOnline = store.devices.filter(d => d.fleet === fleetId && d.status !== 'offline').length
+    const fleet = fleets.value.find(f => f.id === fleetId)
+    return storeOnline || (fleet ? fleet.devices_online : 0)
+}
+
 onMounted(fetchFleets)
 </script>
 
@@ -57,6 +72,10 @@ onMounted(fetchFleets)
          <span class="text-xs text-gray-500">Edge Node Orchestration</span>
        </div>
        <div class="flex gap-2">
+          <button @click="store.startRound()" class="btn bg-gray-700 hover:bg-gray-600 text-white" :disabled="store.roundStatus !== 'idle'">
+              <Radio class="w-4 h-4 mr-2" :class="store.roundStatus !== 'idle' ? 'animate-spin' : ''" /> 
+              {{ store.roundStatus === 'idle' ? 'Start Training Round' : 'Round Active...' }}
+          </button>
           <button @click="fetchFleets" :disabled="loading" class="btn btn-secondary">
              <RefreshCw class="w-4 h-4" :class="loading ? 'animate-spin' : ''" />
           </button>
@@ -93,11 +112,11 @@ onMounted(fetchFleets)
           <div class="grid grid-cols-2 gap-4">
              <div class="bg-[#161b22] p-3 rounded border border-[#30363d] flex items-center justify-between">
                  <span class="text-sm text-gray-400">Total Devices</span>
-                 <span class="font-mono font-bold">{{ fleet.devices_total }}</span>
+                 <span class="font-mono font-bold">{{ getDeviceCount(fleet.id) }}</span>
              </div>
              <div class="bg-[#161b22] p-3 rounded border border-[#30363d] flex items-center justify-between">
                  <span class="text-sm text-gray-400">Online</span>
-                 <span class="font-mono font-bold text-green-500">{{ fleet.devices_online }}</span>
+                 <span class="font-mono font-bold text-green-500">{{ getOnlineCount(fleet.id) }}</span>
              </div>
           </div>
        </div>
