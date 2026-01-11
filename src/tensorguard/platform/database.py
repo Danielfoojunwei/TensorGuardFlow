@@ -27,6 +27,9 @@ from .models.peft_models import (  # noqa: F401
 )
 from .models.fedmoe_models import FedMoEExpert, SkillEvidence  # noqa: F401
 from .models.settings_models import SystemSetting, KMSKey, KMSRotationLog  # noqa: F401
+from .models.vla_models import (  # noqa: F401
+    VLAModel, VLASafetyCheck, VLADeploymentLog, VLABenchmarkResult
+)
 
 
 # Environment configuration
