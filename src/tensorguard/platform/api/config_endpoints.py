@@ -88,10 +88,11 @@ async def sync_agent_config(
         # Emergency lockdown if identity is compromised or near expiry
         security_level = "fail-safe"
     
+    from ..utils.config import settings
     return AgentConfig(
         agent_name=agent_name,
         fleet_id=fleet.id,
-        control_plane_url="http://localhost:8000",
+        control_plane_url=settings.CONTROL_PLANE_URL,
         identity={
             "enabled": True,
             "scan_interval_seconds": 3600,

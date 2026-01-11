@@ -10,6 +10,7 @@ from ..auth import get_current_user
 from ..models.peft_models import PeftRun, PeftWizardDraft, IntegrationConfig, PeftRunStatus
 from ...integrations.peft_hub.catalog import ConnectorCatalog, discover_connectors
 from ...integrations.peft_hub.schemas import PeftWizardState, TrainingConfig
+from ..dependencies import require_tenant_context
 
 # Ensure connectors are registered
 discover_connectors()
@@ -67,10 +68,11 @@ async def start_run(
     state: PeftWizardState, 
     background_tasks: BackgroundTasks,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    tenant_id: str = Depends(require_tenant_context)
 ):
     run = PeftRun(
-        tenant_id=current_user.tenant_id,
+        tenant_id=tenant_id,
         created_by_user_id=current_user.id,
         config_json=state.dict(),
         status=PeftRunStatus.PENDING,
@@ -85,8 +87,11 @@ async def start_run(
     return {"run_id": run.id, "status": run.status}
 
 @router.get("/runs")
-async def list_runs(session: Session = Depends(get_session), current_user: User = Depends(get_current_user)):
-    statement = select(PeftRun).where(PeftRun.tenant_id == current_user.tenant_id).order_by(PeftRun.created_at.desc())
+async def list_runs(
+    session: Session = Depends(get_session), 
+    tenant_id: str = Depends(require_tenant_context)
+):
+    statement = select(PeftRun).where(PeftRun.tenant_id == tenant_id).order_by(PeftRun.created_at.desc())
     return session.exec(statement).all()
 
 @router.get("/runs/{run_id}")

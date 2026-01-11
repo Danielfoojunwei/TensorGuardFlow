@@ -96,6 +96,7 @@ class TensorGuardSettings(BaseSettings):
     # NETWORKING
     # ==========================================================================
     CLOUD_ENDPOINT: str = Field(default="https://api.tensor-crate.ai", description="Cloud API endpoint")
+    CONTROL_PLANE_URL: str = Field(default="http://localhost:8000", description="Local or external control plane URL")
     DEFAULT_PORT: int = Field(default=8080, description="Default server port")
     DASHBOARD_PORT: int = Field(default=8000, description="Dashboard/platform port")
     MIN_CLIENTS: int = Field(default=2, description="Minimum clients for FL aggregation")

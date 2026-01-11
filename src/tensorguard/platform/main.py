@@ -29,9 +29,7 @@ if TG_ALLOW_CREDENTIALS and "*" in TG_ALLOWED_ORIGINS:
     logger.critical("SECURITY ERROR: Cannot use allow_credentials=true with wildcard origin '*'")
     TG_ALLOW_CREDENTIALS = False
 
-# Initialize database schema
-# In dev mode, we ensure the schema is up to date
-init_db()
+# Database schema managed via Alembic migrations (no auto-init)
 
 from .api import endpoints
 
@@ -62,7 +60,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # Content Security Policy (relaxed for SPA)
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+            "script-src 'self' 'unsafe-inline'; "
             "style-src 'self' 'unsafe-inline'; "
             "img-src 'self' data: https:; "
             "font-src 'self' data:; "
@@ -71,56 +69,13 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
         return response
 
-async def identity_job_runner():
-    """Background task to advance identity renewal jobs."""
-    while True:
-        try:
-            # We need a new session for each iteration
-            from .database import Session, engine
-            with Session(engine) as session:
-                scheduler = RenewalScheduler(session)
-                
-                # Find actionable jobs
-                # 1. Statuses where platform acts immediately
-                # 2. Statuses that need polling (ISSUING)
-                # 3. PENDING with next_retry_at <= now
-                now = datetime.utcnow()
-                statement = select(IdentityRenewalJob).where(
-                    (IdentityRenewalJob.status.in_([
-                        RenewalJobStatus.PENDING,
-                        RenewalJobStatus.CSR_RECEIVED,
-                        RenewalJobStatus.CHALLENGE_COMPLETE,
-                        RenewalJobStatus.ISSUED,
-                        RenewalJobStatus.VALIDATING,
-                        RenewalJobStatus.ISSUING
-                    ])) |
-                    ((IdentityRenewalJob.status == RenewalJobStatus.PENDING) & (IdentityRenewalJob.next_retry_at != None) & (IdentityRenewalJob.next_retry_at <= now))
-                )
-                
-                jobs = session.exec(statement).all()
-                for job in jobs:
-                    try:
-                        # Optimistic concurrency: scheduler.advance_job should handle it
-                        scheduler.advance_job(job.id)
-                    except Exception as e:
-                        print(f"Error advancing job {job.id}: {e}")
-            
-        except Exception as e:
-            print(f"Identity job runner loop error: {e}")
-            
-        await asyncio.sleep(10) # Run every 10 seconds
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Start background tasks
-    task = asyncio.create_task(identity_job_runner())
+    # Startup logic (e.g., connector discovery)
+    logger.info("Starting TensorGuard Management Platform...")
     yield
-    # Shutdown: Stop background tasks
-    task.cancel()
-    try:
-        await task
-    except asyncio.CancelledError:
-        pass
+    # Shutdown logic
+    logger.info("Shutting down...")
 
 app = FastAPI(
     title="TensorGuard Management Platform",

@@ -23,7 +23,7 @@ from ..models.identity_models import (
     IdentityRenewalJob, IdentityAuditLog, IdentityAgent,
     EndpointType, Criticality, CertificateType, RenewalJobStatus, AuditAction,
 )
-from ..auth import get_current_user
+from ..models.core import User, Fleet, ReplayNonce
 from ...identity.policy_engine import PolicyEngine
 from ...identity.inventory import InventoryService
 from ...identity.audit import AuditService
@@ -155,6 +155,23 @@ async def verify_fleet_auth(
     if not hmac.compare_digest(expected_sig, x_tg_signature):
         logger.warning(f"Signature mismatch for fleet {x_tg_fleet_id}")
         raise HTTPException(status_code=401, detail="Invalid signature")
+
+    # Check for nonce reuse (Replay attack prevention)
+    statement = select(ReplayNonce).where(ReplayNonce.nonce == x_tg_nonce, ReplayNonce.fleet_id == x_tg_fleet_id)
+    if session.exec(statement).first():
+        logger.warning(f"Replay attack detected: Nonce reuse for fleet {x_tg_fleet_id}")
+        raise HTTPException(status_code=401, detail="Invalid request (nonce reuse)")
+
+    # Record nonce usage
+    # Note: In production, nonces should be periodically purged based on expires_at
+    new_nonce = ReplayNonce(
+        nonce=x_tg_nonce,
+        fleet_id=x_tg_fleet_id,
+        timestamp=request_time,
+        expires_at=datetime.utcnow() + timedelta(minutes=10)
+    )
+    session.add(new_nonce)
+    session.commit()
     
     return fleet
 

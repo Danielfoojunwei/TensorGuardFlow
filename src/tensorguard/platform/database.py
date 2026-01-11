@@ -106,11 +106,9 @@ if not DATABASE_URL:
 engine = create_production_engine(DATABASE_URL)
 
 
-def init_db():
-    """Initialize database schema."""
-    logger.info("Initializing database schema...")
-    SQLModel.metadata.create_all(engine)
-    logger.info("Database schema initialized successfully")
+# Session factory for background tasks and non-FastAPI contexts
+def SessionLocal():
+    return Session(engine)
 
 
 def get_session():

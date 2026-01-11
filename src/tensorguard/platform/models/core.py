@@ -100,3 +100,10 @@ class AuditLog(SQLModel, table=True):
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     ip_address: Optional[str] = None
     success: bool = True
+
+class ReplayNonce(SQLModel, table=True):
+    """Store nonces to prevent HMAC replay attacks."""
+    nonce: str = Field(primary_key=True)
+    fleet_id: str = Field(index=True)
+    timestamp: int = Field(index=True)
+    expires_at: datetime = Field(index=True)

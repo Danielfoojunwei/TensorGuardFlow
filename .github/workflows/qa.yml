@@ -109,12 +109,12 @@ print('✓ Enterprise entitlements fail-closed')
 
     - name: Run Ruff
       run: |
-        ruff check src/ --select E,W,F --ignore E501 || true
+        ruff check src/ --select E,W,F --ignore E501
         echo "✓ Ruff linting complete"
 
     - name: Check Formatting (Black)
       run: |
-        black --check src/ --line-length 120 || true
+        black --check src/ --line-length 120
         echo "✓ Black formatting check complete"
 
   # ==========================================================================
