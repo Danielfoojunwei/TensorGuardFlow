@@ -1,9 +1,19 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from .database import init_db
+from starlette.middleware.base import BaseHTTPMiddleware
+from .database import init_db, check_db_health
 import os
+import logging
+from datetime import datetime
+
+logger = logging.getLogger(__name__)
+
+# Environment configuration
+TG_ENVIRONMENT = os.getenv("TG_ENVIRONMENT", "development")
+TG_ALLOWED_ORIGINS = os.getenv("TG_ALLOWED_ORIGINS", "*").split(",")
+TG_ENABLE_SECURITY_HEADERS = os.getenv("TG_ENABLE_SECURITY_HEADERS", "true").lower() == "true"
 
 # Initialize database schema
 # In dev mode, we ensure the schema is up to date
@@ -17,7 +27,35 @@ from .api.identity_endpoints import get_session
 from ..identity.scheduler import RenewalScheduler
 from .models.identity_models import IdentityRenewalJob, RenewalJobStatus
 from sqlmodel import select
-from datetime import datetime
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Add security headers to all responses for production hardening."""
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+
+        # Security headers (OWASP recommendations)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+
+        # HSTS for production (only over HTTPS)
+        if TG_ENVIRONMENT == "production":
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+
+        # Content Security Policy (relaxed for SPA)
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: https:; "
+            "font-src 'self' data:; "
+            "connect-src 'self' https:;"
+        )
+
+        return response
 
 async def identity_job_runner():
     """Background task to advance identity renewal jobs."""
@@ -73,17 +111,21 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="TensorGuard Management Platform",
     description="White-label backend for TensorGuard fleets",
-    version="2.1.0",
+    version="2.3.0",
     lifespan=lifespan
 )
+
+# Security headers middleware (first in chain)
+if TG_ENABLE_SECURITY_HEADERS:
+    app.add_middleware(SecurityHeadersMiddleware)
 
 # GZip compression for responses > 1KB (60-70% bandwidth savings)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-# CORS
+# CORS - configurable via environment
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=TG_ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -91,6 +133,56 @@ app.add_middleware(
 
 # Output structure for dev convenience
 os.makedirs("public", exist_ok=True)
+
+
+# --- Health Check Endpoints ---
+
+@app.get("/health", tags=["health"])
+async def health_check():
+    """
+    Health check endpoint for load balancers and monitoring.
+    Returns system health including database connectivity.
+    """
+    db_health = check_db_health()
+
+    health_status = {
+        "status": "healthy" if db_health["status"] == "healthy" else "degraded",
+        "timestamp": datetime.utcnow().isoformat(),
+        "version": "2.3.0",
+        "environment": TG_ENVIRONMENT,
+        "checks": {
+            "database": db_health
+        }
+    }
+
+    return health_status
+
+
+@app.get("/ready", tags=["health"])
+async def readiness_check():
+    """
+    Kubernetes readiness probe.
+    Returns 200 if the service can handle requests.
+    """
+    db_health = check_db_health()
+
+    if db_health["status"] != "healthy":
+        return Response(
+            content='{"ready": false, "reason": "database unavailable"}',
+            status_code=503,
+            media_type="application/json"
+        )
+
+    return {"ready": True}
+
+
+@app.get("/live", tags=["health"])
+async def liveness_check():
+    """
+    Kubernetes liveness probe.
+    Returns 200 if the process is alive.
+    """
+    return {"alive": True}
 
 # Routes
 app.include_router(endpoints.router, prefix="/api/v1")
