@@ -47,8 +47,8 @@ class ExportManager:
                 input_names=['input_ids', 'attention_mask'],
                 output_names=['logits'],
                 dynamic_axes={
-                    'input_ids': {0: 'batch_size', 1: 'sequence'],
-                    'attention_mask': {0: 'batch_size', 1: 'sequence'],
+                    'input_ids': {0: 'batch_size', 1: 'sequence'},
+                    'attention_mask': {0: 'batch_size', 1: 'sequence'},
                     'logits': {0: 'batch_size', 1: 'sequence'}
                 }
             )

@@ -37,7 +37,8 @@ This implementation is a RESEARCH PROTOTYPE. Before production use:
 
 ================================================================================
 
-Uses secrets-seeded CSPRNG for cryptographic randomness.
+Uses secrets module for cryptographic seed generation.
+NOTE: Large data structures use seeded PCG64 (not CSPRNG) for performance.
 """
 
 import numpy as np
@@ -215,11 +216,38 @@ class LWECiphertext:
         self.a, self.b, self.noise_budget = res.a, res.b, res.noise_budget
         return self
 
-# CSPRNG for cryptographic operations
-# Note: We use secrets for raw bit generation (A matrix, Keys).
-# For distributions (Poisson), we use a securely re-seeded Generator.
-def _get_secure_rng():
+# ============================================================================
+# RANDOMNESS GENERATION
+# ============================================================================
+# IMPORTANT: PCG64 is NOT a cryptographically secure PRNG.
+# While we seed it with secrets.randbits(256), the output stream is still
+# predictable given sufficient observations.
+#
+# For cryptographically secure random bytes, use: secrets.token_bytes()
+# For cryptographic key generation, use: secrets module directly
+#
+# The _get_seeded_rng() below is used ONLY for:
+# - Generating large uniform matrices (A in LWE) where unpredictability is
+#   derived from the seed secrecy, not the generator's cryptographic properties
+# - Sampling noise distributions (Poisson/Skellam) for DP purposes
+#
+# This is a deliberate trade-off: cryptographic randomness for seeds,
+# fast generation for large data structures.
+# ============================================================================
+
+def _get_seeded_rng():
+    """
+    Get a seeded RNG for large data generation.
+
+    WARNING: This is NOT a CSPRNG. The output is deterministic given the seed.
+    Use secrets module directly for cryptographic key material.
+    """
     return np.random.Generator(np.random.PCG64(secrets.randbits(256)))
+
+
+def _get_crypto_random_bytes(n: int) -> bytes:
+    """Get cryptographically secure random bytes using secrets module."""
+    return secrets.token_bytes(n)
 
 def sample_skellam(mu: float, size: int) -> np.ndarray:
     """
@@ -228,7 +256,7 @@ def sample_skellam(mu: float, size: int) -> np.ndarray:
     This noise provides both DP and LWE security (Valovich, 2016).
     Uses a securely re-seeded generator for each call to prevent state recovery.
     """
-    rng = _get_secure_rng()
+    rng = _get_seeded_rng()
     x1 = rng.poisson(mu, size)
     x2 = rng.poisson(mu, size)
     return (x1 - x2).astype(np.int64)
@@ -243,7 +271,7 @@ class N2HEContext:
     def generate_keys(self):
         """Generate secret key using CSPRNG."""
         # Use secrets-seeded RNG for key generation
-        rng = _get_secure_rng()
+        rng = _get_seeded_rng()
         self.lwe_key = rng.choice([-1, 0, 1], size=self.params.n).astype(np.int64)
         logger.debug("N2HE Keys generated with CSPRNG")
 

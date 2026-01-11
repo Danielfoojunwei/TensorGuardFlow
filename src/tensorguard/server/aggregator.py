@@ -2,6 +2,8 @@ from typing import List, Tuple, Optional, Dict, Union, Any
 import numpy as np
 from datetime import datetime
 
+# Flower (flwr) compatibility layer
+# Provides complete stubs when Flower is not installed
 try:
     import flwr as fl
     from flwr.common import (
@@ -10,17 +12,87 @@ try:
         FitRes,
         FitIns,
         parameters_to_ndarrays,
+        ndarrays_to_parameters,
     )
     from flwr.server.client_manager import ClientManager
     from flwr.server.client_proxy import ClientProxy
+    FLWR_AVAILABLE = True
 except ImportError:
+    import warnings
+    warnings.warn(
+        "Flower (flwr) not installed. Using stub implementations. "
+        "Install with: pip install flwr",
+        category=UserWarning,
+        stacklevel=2
+    )
+    FLWR_AVAILABLE = False
+
+    # Stub implementations
+    Scalar = float
+
+    class Parameters:
+        """Stub for flwr.common.Parameters."""
+        def __init__(self, tensors=None, tensor_type="numpy.ndarray"):
+            self.tensors = tensors or []
+            self.tensor_type = tensor_type
+
+    class FitIns:
+        """Stub for flwr.common.FitIns."""
+        def __init__(self, parameters=None, config=None):
+            self.parameters = parameters or Parameters()
+            self.config = config or {}
+
+    class FitRes:
+        """Stub for flwr.common.FitRes."""
+        def __init__(self, status=None, parameters=None, num_examples=0, metrics=None):
+            self.status = status
+            self.parameters = parameters or Parameters()
+            self.num_examples = num_examples
+            self.metrics = metrics or {}
+
+    class ClientProxy:
+        """Stub for flwr.server.client_proxy.ClientProxy."""
+        def __init__(self, cid=""):
+            self.cid = cid
+
+    class ClientManager:
+        """Stub for flwr.server.client_manager.ClientManager."""
+        pass
+
+    def parameters_to_ndarrays(parameters):
+        """Stub for flwr.common.parameters_to_ndarrays."""
+        import numpy as np
+        return [np.frombuffer(t, dtype=np.uint8) for t in parameters.tensors]
+
+    def ndarrays_to_parameters(ndarrays):
+        """Stub for flwr.common.ndarrays_to_parameters."""
+        return Parameters(tensors=[arr.tobytes() for arr in ndarrays])
+
     class fl:
+        """Stub for flwr module."""
         class server:
             class strategy:
-                class FedAvg: 
-                    def __init__(self, *args, **kwargs): pass
-    Parameters = FitRes = ClientProxy = ClientManager = Any
-    Scalar = float
+                class FedAvg:
+                    """Stub for flwr.server.strategy.FedAvg."""
+                    def __init__(self, *args, **kwargs):
+                        pass
+
+            class ServerConfig:
+                """Stub for flwr.server.ServerConfig."""
+                def __init__(self, num_rounds=1):
+                    self.num_rounds = num_rounds
+
+            @staticmethod
+            def start_server(*args, **kwargs):
+                raise NotImplementedError(
+                    "Flower server not available. Install flwr: pip install flwr"
+                )
+
+        class common:
+            Parameters = Parameters
+            FitIns = FitIns
+            FitRes = FitRes
+            Scalar = Scalar
 
 from ..core.crypto import N2HEContext, LWECiphertext
 from ..core.production import (
@@ -198,7 +270,6 @@ class TensorGuardStrategy(fl.server.strategy.FedAvg):
 
         # Re-serialize into Parameters for Flower
         final_payload = first_package.serialize()
-        from flwr.common import ndarrays_to_parameters
         aggregated_parameters = ndarrays_to_parameters([np.frombuffer(final_payload, dtype=np.uint8)])
         
         # Evaluation Gating

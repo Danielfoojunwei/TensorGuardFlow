@@ -12,8 +12,22 @@ logger = logging.getLogger(__name__)
 
 # Environment configuration
 TG_ENVIRONMENT = os.getenv("TG_ENVIRONMENT", "development")
-TG_ALLOWED_ORIGINS = os.getenv("TG_ALLOWED_ORIGINS", "*").split(",")
+_raw_origins = os.getenv("TG_ALLOWED_ORIGINS", "")
+# SECURITY: Default to restrictive CORS in production, permissive only in dev
+if _raw_origins:
+    TG_ALLOWED_ORIGINS = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+elif TG_ENVIRONMENT == "production":
+    TG_ALLOWED_ORIGINS = []  # No origins allowed by default in production
+    logger.warning("SECURITY: No TG_ALLOWED_ORIGINS configured for production. CORS will reject all origins.")
+else:
+    TG_ALLOWED_ORIGINS = ["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000"]
 TG_ENABLE_SECURITY_HEADERS = os.getenv("TG_ENABLE_SECURITY_HEADERS", "true").lower() == "true"
+
+# SECURITY: Credentials require explicit origin list (not wildcard)
+TG_ALLOW_CREDENTIALS = os.getenv("TG_ALLOW_CREDENTIALS", "false").lower() == "true"
+if TG_ALLOW_CREDENTIALS and "*" in TG_ALLOWED_ORIGINS:
+    logger.critical("SECURITY ERROR: Cannot use allow_credentials=true with wildcard origin '*'")
+    TG_ALLOW_CREDENTIALS = False
 
 # Initialize database schema
 # In dev mode, we ensure the schema is up to date
@@ -122,13 +136,13 @@ if TG_ENABLE_SECURITY_HEADERS:
 # GZip compression for responses > 1KB (60-70% bandwidth savings)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-# CORS - configurable via environment
+# CORS - configurable via environment with secure defaults
 app.add_middleware(
     CORSMiddleware,
     allow_origins=TG_ALLOWED_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_credentials=TG_ALLOW_CREDENTIALS,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-Tenant-ID"],
 )
 
 # Output structure for dev convenience
