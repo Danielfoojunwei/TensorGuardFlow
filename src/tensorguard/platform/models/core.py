@@ -1,8 +1,10 @@
 from typing import Optional, List
 from sqlmodel import SQLModel, Field, Relationship
+from sqlalchemy import Index, UniqueConstraint
 from datetime import datetime
 from enum import Enum
 import uuid
+
 
 class UserRole(str, Enum):
     ORG_ADMIN = "org_admin"
@@ -11,42 +13,78 @@ class UserRole(str, Enum):
     AUDITOR = "auditor"
     SERVICE_ACCOUNT = "service_account"
 
+
+class JobType(str, Enum):
+    """Canonical job types for type safety."""
+    TRAIN = "TRAIN"
+    EVAL = "EVAL"
+    DEPLOY = "DEPLOY"
+    VLA_TRAIN = "VLA_TRAIN"
+    VLA_EVAL = "VLA_EVAL"
+
+
+class JobStatus(str, Enum):
+    """Canonical job statuses for type safety."""
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
 class Tenant(SQLModel, table=True):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
-    name: str = Field(index=True)
+    name: str = Field(index=True, unique=True)  # Tenant names must be unique
     plan: str = Field(default="starter")
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    
+
     users: List["User"] = Relationship(back_populates="tenant")
-    fleets: List["Fleet"] = Relationship(back_populates="tenant")
+    fleets: List["Fleet"] = Relationship(back_populates="fleets")
+
 
 class User(SQLModel, table=True):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
     email: str = Field(unique=True, index=True)
+    name: Optional[str] = None  # Display name
     hashed_password: str
-    role: UserRole = Field(default=UserRole.OPERATOR) 
-    tenant_id: str = Field(foreign_key="tenant.id")
-    
+    role: UserRole = Field(default=UserRole.OPERATOR)
+    tenant_id: str = Field(foreign_key="tenant.id", index=True)
+    is_active: bool = Field(default=True)  # For account deactivation
+
     tenant: Tenant = Relationship(back_populates="users")
 
+
 class Fleet(SQLModel, table=True):
+    __table_args__ = (
+        UniqueConstraint('tenant_id', 'name', name='uq_fleet_tenant_name'),
+        Index('ix_fleet_tenant_active', 'tenant_id', 'is_active'),
+    )
+
     id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
-    name: str
-    tenant_id: str = Field(foreign_key="tenant.id")
+    name: str = Field(index=True)
+    tenant_id: str = Field(foreign_key="tenant.id", index=True)
     api_key_hash: str
-    is_active: bool = True
-    
+    is_active: bool = Field(default=True)
+    region: Optional[str] = Field(default=None, index=True)  # For regional queries
+
     tenant: Tenant = Relationship(back_populates="fleets")
     jobs: List["Job"] = Relationship(back_populates="fleet")
 
+
 class Job(SQLModel, table=True):
+    __table_args__ = (
+        Index('ix_job_fleet_status', 'fleet_id', 'status'),
+        Index('ix_job_status_created', 'status', 'created_at'),
+    )
+
     id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
-    fleet_id: str = Field(foreign_key="fleet.id")
-    type: str # TRAIN, EVAL, DEPLOY
-    status: str = Field(default="pending") # pending, running, completed, failed
-    config_json: str
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    
+    fleet_id: str = Field(foreign_key="fleet.id", index=True)
+    type: str = Field(index=True)  # Uses JobType values
+    status: str = Field(default=JobStatus.PENDING.value, index=True)
+    config_json: str = Field(default="{}")
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    completed_at: Optional[datetime] = None
+
     fleet: Fleet = Relationship(back_populates="jobs")
 
 class AuditLog(SQLModel, table=True):
