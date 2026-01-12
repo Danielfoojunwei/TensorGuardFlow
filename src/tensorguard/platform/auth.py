@@ -32,14 +32,23 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 # JWT Configuration - MUST be set in production
+from ..utils.production_gates import is_production, ProductionGateError
+
 SECRET_KEY = os.getenv("TG_SECRET_KEY")
 if not SECRET_KEY:
-    logger.warning(
-        "SECURITY WARNING: TG_SECRET_KEY not set. "
-        "Generating ephemeral key - tokens will be invalid after restart. "
-        "Set TG_SECRET_KEY environment variable for production."
-    )
-    SECRET_KEY = secrets.token_hex(32)
+    if is_production():
+        raise ProductionGateError(
+            gate_name="SECRET_KEY",
+            message="TG_SECRET_KEY is not set. Cannot start in production without a secure JWT signing key.",
+            remediation="Set TG_SECRET_KEY environment variable: export TG_SECRET_KEY=$(python -c \"import secrets; print(secrets.token_hex(32))\")"
+        )
+    else:
+        logger.warning(
+            "SECURITY WARNING: TG_SECRET_KEY not set. "
+            "Generating ephemeral key - tokens will be invalid after restart. "
+            "Set TG_SECRET_KEY environment variable for production."
+        )
+        SECRET_KEY = secrets.token_hex(32)
 
 # Use HS256 for simplicity, but ensure key is at least 256 bits
 ALGORITHM = os.getenv("TG_JWT_ALGORITHM", "HS256")
