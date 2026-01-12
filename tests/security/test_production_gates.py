@@ -198,3 +198,200 @@ class TestConfigValidation:
 
             settings = TensorGuardSettings()
             assert settings.is_production() is False
+
+
+# ============================================================================
+# CI Guard: Forbidden Strings in Production Code
+# ============================================================================
+
+import re
+from pathlib import Path
+
+
+# Strings that should NOT appear in production code (src/tensorguard/**)
+FORBIDDEN_PRODUCTION_STRINGS = [
+    "DUMMY_",  # Dummy artifacts
+    "SimulatedTrainer",  # Old trainer class (quarantined to DemoTrainer)
+    "mock_ciphertext",  # Mock crypto values
+    "MVP_STUB_CERT",  # Stub certificates
+]
+
+# Paths where forbidden strings ARE allowed
+ALLOWED_PATHS = [
+    "tests/",
+    "demo_",
+    "examples/",
+    "HARDENING_REPORT",
+    "__pycache__",
+]
+
+
+def get_production_files():
+    """Get all Python files in production paths."""
+    project_root = Path(__file__).parent.parent.parent
+    prod_path = project_root / "src" / "tensorguard"
+
+    if not prod_path.exists():
+        return []
+
+    files = []
+    for py_file in prod_path.rglob("*.py"):
+        rel_path = str(py_file.relative_to(project_root))
+        if not any(allowed in rel_path for allowed in ALLOWED_PATHS):
+            files.append(py_file)
+
+    return files
+
+
+class TestForbiddenStringsCI:
+    """CI guard tests for forbidden strings in production code."""
+
+    def test_no_dummy_artifacts(self):
+        """Ensure no DUMMY_ prefixed strings creating fake artifacts."""
+        violations = []
+
+        for file_path in get_production_files():
+            content = file_path.read_text(errors="ignore")
+            lines = content.split("\n")
+
+            for i, line in enumerate(lines):
+                # Skip comments and string definitions
+                if line.strip().startswith("#"):
+                    continue
+                if "FORBIDDEN_PRODUCTION_STRINGS" in line:
+                    continue
+
+                # Look for DUMMY_ that's not in a comment or test list
+                if re.search(r'(?<!["\'])DUMMY_', line):
+                    violations.append((file_path.name, i + 1, line.strip()[:60]))
+
+        assert not violations, (
+            f"Found DUMMY_ strings in production code:\n"
+            + "\n".join(f"  {f}:{ln}: {line}" for f, ln, line in violations[:5])
+        )
+
+    def test_no_simulated_trainer(self):
+        """Ensure SimulatedTrainer is not used in production."""
+        violations = []
+
+        for file_path in get_production_files():
+            content = file_path.read_text(errors="ignore")
+
+            if "SimulatedTrainer" in content:
+                lines = content.split("\n")
+                for i, line in enumerate(lines):
+                    if "SimulatedTrainer" in line:
+                        if not line.strip().startswith("#"):
+                            violations.append((file_path.name, i + 1))
+
+        assert not violations, (
+            f"Found SimulatedTrainer in production code:\n"
+            + "\n".join(f"  {f}:{ln}" for f, ln in violations[:5])
+        )
+
+    def test_no_mvp_stub_certs(self):
+        """Ensure no MVP_STUB_CERT placeholder certificates."""
+        violations = []
+
+        for file_path in get_production_files():
+            content = file_path.read_text(errors="ignore")
+
+            if "MVP_STUB_CERT" in content:
+                lines = content.split("\n")
+                for i, line in enumerate(lines):
+                    if "MVP_STUB_CERT" in line:
+                        if not line.strip().startswith("#"):
+                            violations.append((file_path.name, i + 1))
+
+        assert not violations, (
+            f"Found MVP_STUB_CERT in production code:\n"
+            + "\n".join(f"  {f}:{ln}" for f, ln in violations[:5])
+        )
+
+
+class TestProductionGatesModule:
+    """Test the production_gates utility module."""
+
+    def test_production_gates_imports(self):
+        """Verify production_gates module can be imported."""
+        from tensorguard.utils.production_gates import (
+            is_production,
+            require_env,
+            require_dependency,
+            ProductionGateError,
+            block_demo_mode,
+        )
+        assert callable(is_production)
+        assert callable(require_env)
+        assert callable(require_dependency)
+        assert callable(block_demo_mode)
+
+    def test_is_production_detection(self):
+        """Test is_production() detects environment correctly."""
+        from tensorguard.utils.production_gates import is_production
+
+        # Clear cache for accurate testing
+        is_production.cache_clear()
+
+        with patch.dict(os.environ, {"TG_ENVIRONMENT": "production"}):
+            is_production.cache_clear()
+            assert is_production() is True
+
+        with patch.dict(os.environ, {"TG_ENVIRONMENT": "development"}):
+            is_production.cache_clear()
+            assert is_production() is False
+
+        # Restore
+        is_production.cache_clear()
+
+    def test_require_env_fails_in_production(self):
+        """Test require_env raises in production when var missing."""
+        from tensorguard.utils.production_gates import (
+            require_env,
+            ProductionGateError,
+            is_production,
+        )
+
+        is_production.cache_clear()
+
+        with patch.dict(os.environ, {"TG_ENVIRONMENT": "production"}, clear=False):
+            is_production.cache_clear()
+
+            # Remove test var if exists
+            test_var = "TG_TEST_VAR_NONEXISTENT"
+            env_copy = os.environ.copy()
+            env_copy.pop(test_var, None)
+
+            with patch.dict(os.environ, env_copy, clear=True):
+                os.environ["TG_ENVIRONMENT"] = "production"
+                is_production.cache_clear()
+
+                with pytest.raises(ProductionGateError):
+                    require_env(test_var)
+
+        is_production.cache_clear()
+
+
+class TestDeterminismModule:
+    """Test the determinism utility module."""
+
+    def test_determinism_imports(self):
+        """Verify determinism module can be imported."""
+        from tensorguard.utils.determinism import (
+            is_deterministic_mode,
+            get_determinism_seed,
+            set_global_determinism,
+        )
+        assert callable(is_deterministic_mode)
+        assert callable(get_determinism_seed)
+        assert callable(set_global_determinism)
+
+    def test_set_determinism_returns_config(self):
+        """set_global_determinism should return config dict."""
+        from tensorguard.utils.determinism import set_global_determinism
+
+        result = set_global_determinism(seed=42)
+
+        assert isinstance(result, dict)
+        assert result["seed"] == 42
+        assert "libraries" in result
