@@ -15,16 +15,79 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 import uuid
 import hashlib
+import json
+import os
 
 from ..database import get_session
 from ..auth import get_current_user
 from ..models.core import User, AuditLog
+from ...utils.production_gates import is_production, ProductionGateError
+
+# PQC Signing - optional but enforced in production with TG_PQC_REQUIRED
+_PQC_AVAILABLE = False
+_pqc_sign_hybrid = None
+_pqc_keypair = None
+
+try:
+    from ...crypto.sig import sign_hybrid as _sign_hybrid_impl, generate_hybrid_sig_keypair
+
+    _PQC_AVAILABLE = True
+    _pqc_sign_hybrid = _sign_hybrid_impl
+
+    # Load or generate signing keypair
+    # In production, keys should be loaded from secure storage
+    _signing_key_path = os.getenv("TG_VLA_SIGNING_KEY_PATH")
+    if _signing_key_path and os.path.exists(_signing_key_path):
+        import json
+        with open(_signing_key_path, "r") as f:
+            _pqc_keypair = json.load(f)
+    else:
+        if is_production() and os.getenv("TG_PQC_REQUIRED", "false").lower() == "true":
+            raise ProductionGateError(
+                gate_name="VLA_PQC_KEYS",
+                message="TG_PQC_REQUIRED=true but TG_VLA_SIGNING_KEY_PATH not set or file not found.",
+                remediation="Generate keys with tensorguard.crypto.sig.generate_hybrid_sig_keypair() and save to TG_VLA_SIGNING_KEY_PATH"
+            )
+        # Generate ephemeral keys for development
+        _pqc_keypair = generate_hybrid_sig_keypair()
+
+except ImportError as e:
+    if is_production() and os.getenv("TG_PQC_REQUIRED", "false").lower() == "true":
+        raise ProductionGateError(
+            gate_name="VLA_PQC_DEPS",
+            message="TG_PQC_REQUIRED=true but PQC crypto dependencies not available.",
+            remediation="Install PQC dependencies: pip install liboqs-python"
+        )
 from ..models.vla_models import (
     VLAModel, VLASafetyCheck, VLADeploymentLog, VLABenchmarkResult,
     VLAModelStatus, SafetyCheckStatus, VLATaskType
 )
 
 router = APIRouter()
+
+
+def _generate_pqc_signature(data: str) -> str:
+    """
+    Generate a PQC signature for the given data.
+
+    In production with TG_PQC_REQUIRED=true, uses real Dilithium signatures.
+    Otherwise, falls back to SHA256 hash (development only).
+    """
+    if _PQC_AVAILABLE and _pqc_keypair:
+        # Use real PQC signing
+        _, private_key = _pqc_keypair
+        signature = _pqc_sign_hybrid(private_key, data.encode())
+        # Return JSON-encoded signature
+        return json.dumps(signature)
+    else:
+        # Fallback to SHA256 (development only)
+        if is_production() and os.getenv("TG_PQC_REQUIRED", "false").lower() == "true":
+            raise ProductionGateError(
+                gate_name="VLA_PQC_SIGN",
+                message="TG_PQC_REQUIRED=true but PQC signing not available.",
+                remediation="Install PQC dependencies and configure TG_VLA_SIGNING_KEY_PATH"
+            )
+        return hashlib.sha256(data.encode()).hexdigest()
 
 
 # --- Request/Response Models ---
@@ -377,10 +440,9 @@ async def submit_safety_results(
     elif check.status == SafetyCheckStatus.FAILED.value:
         model.status = VLAModelStatus.STAGED.value  # Needs fixes
 
-    # Generate PQC signature placeholder
-    check.pqc_signature = hashlib.sha256(
-        f"{check.id}:{check.overall_score}:{datetime.utcnow().isoformat()}".encode()
-    ).hexdigest()
+    # Generate PQC signature for safety check attestation
+    signature_data = f"{check.id}:{check.overall_score}:{datetime.utcnow().isoformat()}"
+    check.pqc_signature = _generate_pqc_signature(signature_data)
 
     session.commit()
 
@@ -521,10 +583,9 @@ async def deploy_vla_model(
         performed_by=current_user.id
     )
 
-    # Generate PQC signature
-    deploy_log.pqc_signature = hashlib.sha256(
-        f"{deploy_log.id}:{req.model_id}:{req.fleet_id}:{datetime.utcnow().isoformat()}".encode()
-    ).hexdigest()
+    # Generate PQC signature for deployment attestation
+    signature_data = f"{deploy_log.id}:{req.model_id}:{req.fleet_id}:{datetime.utcnow().isoformat()}"
+    deploy_log.pqc_signature = _generate_pqc_signature(signature_data)
 
     session.add(deploy_log)
 

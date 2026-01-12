@@ -17,6 +17,9 @@ import json
 
 logger = logging.getLogger(__name__)
 
+# Production gates
+from ..utils.production_gates import is_production, ProductionGateError
+
 # Try crypto imports
 try:
     from cryptography.hazmat.primitives import serialization
@@ -25,6 +28,12 @@ try:
     HAS_CRYPTOGRAPHY = True
 except ImportError:
     HAS_CRYPTOGRAPHY = False
+    if is_production():
+        raise ProductionGateError(
+            gate_name="CRYPTOGRAPHY",
+            message="cryptography library is required for key storage in production.",
+            remediation="Install cryptography: pip install cryptography>=41.0"
+        )
 
 
 @dataclass
@@ -100,14 +109,30 @@ class FileKeyProvider(KeyProvider):
         else:
             key_hex = os.environ.get(master_key_env)
             if key_hex:
-                self.master_key = bytes.fromhex(key_hex)
+                try:
+                    self.master_key = bytes.fromhex(key_hex)
+                    if len(self.master_key) != 32:
+                        raise ValueError(f"Master key must be 32 bytes (64 hex chars), got {len(self.master_key)} bytes")
+                except ValueError as e:
+                    raise ProductionGateError(
+                        gate_name="KEY_MASTER_FORMAT",
+                        message=f"Invalid TG_KEY_MASTER format: {e}",
+                        remediation="Provide a valid 32-byte hex-encoded key: export TG_KEY_MASTER=$(python -c \"import os; print(os.urandom(32).hex())\")"
+                    )
             else:
-                # Generate a new master key (NOT FOR PRODUCTION)
-                self.master_key = os.urandom(32)
-                logger.warning(
-                    f"No master key provided. Generated temporary key. "
-                    f"Set {master_key_env} for production."
-                )
+                if is_production():
+                    raise ProductionGateError(
+                        gate_name="KEY_MASTER",
+                        message="TG_KEY_MASTER is required for key encryption in production.",
+                        remediation="Set TG_KEY_MASTER environment variable: export TG_KEY_MASTER=$(python -c \"import os; print(os.urandom(32).hex())\")"
+                    )
+                else:
+                    # Generate a new master key (NOT FOR PRODUCTION)
+                    self.master_key = os.urandom(32)
+                    logger.warning(
+                        f"No master key provided. Generated temporary key. "
+                        f"Set {master_key_env} for production."
+                    )
         
         self._metadata_file = self.storage_path / "keys.json"
         self._metadata: Dict[str, dict] = self._load_metadata()
@@ -128,9 +153,15 @@ class FileKeyProvider(KeyProvider):
     def _encrypt(self, data: bytes) -> bytes:
         """Encrypt data with master key."""
         if not HAS_CRYPTOGRAPHY:
-            logger.warning("cryptography not installed, storing unencrypted")
+            if is_production():
+                raise ProductionGateError(
+                    gate_name="ENCRYPT_CRYPTO",
+                    message="Cannot store keys unencrypted in production.",
+                    remediation="Install cryptography: pip install cryptography>=41.0"
+                )
+            logger.warning("cryptography not installed, storing unencrypted - NOT FOR PRODUCTION")
             return data
-        
+
         nonce = os.urandom(12)
         aesgcm = AESGCM(self.master_key)
         ciphertext = aesgcm.encrypt(nonce, data, None)

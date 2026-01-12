@@ -312,8 +312,24 @@ class RenewalScheduler:
             except Exception as e:
                 return self._handle_failure(job, f"ACME order failed: {str(e)}")
         else:
-            # Private CA flow (placeholder)
-            job.status = RenewalJobStatus.CHALLENGE_COMPLETE # Skip challenge for private CA usually
+            # Private CA flow - requires implementation or explicit configuration
+            from ..utils.production_gates import is_production, ProductionGateError
+
+            if is_production():
+                raise ProductionGateError(
+                    gate_name="PRIVATE_CA_CHALLENGE",
+                    message="Private CA flow is not fully implemented. Cannot skip challenge in production.",
+                    remediation=(
+                        "Either configure require_public_trust=true to use ACME (Let's Encrypt), "
+                        "or implement the Private CA integration at identity/ca/private_ca.py"
+                    )
+                )
+
+            logger.warning(
+                "[DEV MODE] Private CA flow - skipping challenge for development. "
+                "Production requires full implementation."
+            )
+            job.status = RenewalJobStatus.CHALLENGE_COMPLETE
             job.updated_at = datetime.utcnow()
             self.session.add(job)
             self.session.commit()
@@ -373,16 +389,27 @@ class RenewalScheduler:
             except Exception as e:
                 return self._handle_failure(job, f"ACME finalization failed: {str(e)}")
         else:
-            # Private CA flow
-            # In production: call Internal CA API
-            # For MVP: dummy success
-            job.issued_cert_pem = "---BEGIN CERTIFICATE---\nMVP_STUB_CERT\n---END CERTIFICATE---"
-            job.new_cert_id = hashlib.sha256(job.issued_cert_pem.encode()).hexdigest()
-            job.status = RenewalJobStatus.ISSUED
-            job.updated_at = datetime.utcnow()
-            self.session.add(job)
-            self.session.commit()
-            return job
+            # Private CA flow - requires real implementation
+            from ..utils.production_gates import is_production, ProductionGateError
+
+            if is_production():
+                raise ProductionGateError(
+                    gate_name="PRIVATE_CA_ISSUANCE",
+                    message="Private CA certificate issuance is not implemented. Cannot issue stub certificates in production.",
+                    remediation=(
+                        "Either configure require_public_trust=true to use ACME (Let's Encrypt), "
+                        "or implement the Private CA API integration at identity/ca/private_ca.py"
+                    )
+                )
+
+            logger.warning(
+                "[DEV MODE] Private CA issuance not implemented. "
+                "Returning error - use ACME or implement Private CA for real certificates."
+            )
+            return self._handle_failure(
+                job,
+                "Private CA issuance not implemented. Configure require_public_trust=true or implement Private CA."
+            )
     
     def receive_certificate(self, job_id: str, cert_pem: str, cert_id: str) -> IdentityRenewalJob:
         """Receive issued certificate (manual/external)."""
