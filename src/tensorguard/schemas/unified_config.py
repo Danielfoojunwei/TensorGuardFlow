@@ -68,6 +68,23 @@ class NetworkConfig(BaseModel):
     wtf_pad_burst_threshold: float = 0.5
 
 
+# === Deployment Directive (Control Plane → Agent) ===
+
+class DeploymentDirective(BaseModel):
+    """
+    Deployment directive from control plane to agent.
+
+    Specifies which model/adapter version the agent should apply.
+    Supports canary, A/B, shadow, and full deployment modes.
+    """
+    deployment_id: str
+    target_adapter_id: Optional[str] = None
+    target_model_version: str
+    shadow: bool = False  # If true, run both adapters, discard new output (shadow mode)
+    compat_min_version: str = "1.0.0"  # Minimum agent version allowed
+    rollback_adapter_id: Optional[str] = None  # Previous adapter to rollback to
+
+
 # === Machine Learning (Core) Configuration ===
 
 class ModelType(str, Enum):
@@ -126,7 +143,10 @@ class AgentConfig(BaseModel):
     identity: IdentityConfig = Field(default_factory=IdentityConfig)
     network: NetworkConfig = Field(default_factory=NetworkConfig)
     ml: MLConfig = Field(default_factory=MLConfig)
-    
+
+    # Deployment Directive (from control plane)
+    deployment: Optional[DeploymentDirective] = None
+
     # System
     log_level: str = "INFO"
     data_dir: str = "/var/lib/tensorguard"

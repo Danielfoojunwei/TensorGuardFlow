@@ -97,7 +97,11 @@ app.add_middleware(
     allow_origins=TG_ALLOWED_ORIGINS,
     allow_credentials=TG_ALLOW_CREDENTIALS,
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-Tenant-ID"],
+    allow_headers=[
+        "Authorization", "Content-Type", "X-Request-ID", "X-Tenant-ID",
+        # HMAC auth headers for edge agent telemetry
+        "X-TG-Fleet-Id", "X-TG-Timestamp", "X-TG-Nonce", "X-TG-Signature",
+    ],
 )
 
 # Output structure for dev convenience
@@ -152,6 +156,21 @@ async def liveness_check():
     Returns 200 if the process is alive.
     """
     return {"alive": True}
+
+
+@app.get("/metrics", tags=["observability"])
+async def prometheus_metrics():
+    """
+    Prometheus metrics endpoint (stub).
+
+    Returns an empty Prometheus-formatted response.
+    In production, this would be populated by prometheus_client or similar.
+    """
+    return Response(
+        content="# TensorGuard Platform Metrics\n# TYPE tensorguard_info gauge\ntensorguard_info{version=\"2.3.0\"} 1\n",
+        media_type="text/plain; charset=utf-8"
+    )
+
 
 # Routes
 app.include_router(endpoints.router, prefix="/api/v1")
@@ -219,6 +238,14 @@ app.include_router(lineage_endpoints.router, prefix="/api/v1", tags=["lineage"])
 # VLA (Vision-Language-Action) for Robotics
 from .api import vla_endpoints
 app.include_router(vla_endpoints.router, prefix="/api/v1", tags=["vla"])
+
+# Production Telemetry Ingestion & Query
+from .api import telemetry_endpoints
+app.include_router(telemetry_endpoints.router, prefix="/api/v1", tags=["telemetry"])
+
+# Deployment Management (Canary, A/B, Shadow, Rollback)
+from .api import deployment_endpoints
+app.include_router(deployment_endpoints.router, prefix="/api/v1", tags=["deployments"])
 
 # Enterprise Stubs (Proprietary Boundary)
 try:
