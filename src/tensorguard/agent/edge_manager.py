@@ -48,14 +48,22 @@ class EdgeAgentManager:
         db_path = os.path.join(data_dir, "spool.db")
         self.spooler = Spooler(db_path)
         
-        # 2. Uploader
-        api_url = self.config.control_plane_url + "/api/v1/enablement"
+        # 2. Uploader - Point to real telemetry ingestion endpoint
+        base_url = self.config.control_plane_url + "/api/v1"
         api_key = self.config.api_key or os.environ.get("TG_FLEET_API_KEY")
-        
+        fleet_id = getattr(self.config, 'fleet_id', os.environ.get("TG_FLEET_ID", ""))
+
         if not api_key:
             logger.warning("No API Key found. Uploader disabled.")
+        elif not fleet_id:
+            logger.warning("No Fleet ID found. Uploader disabled.")
         else:
-            self.uploader = Uploader(self.spooler, target_url=api_url, api_key=api_key)
+            self.uploader = Uploader(
+                self.spooler,
+                target_url=base_url + "/telemetry",
+                api_key=api_key,
+                fleet_id=fleet_id,
+            )
             self.uploader.start()
             
         # 3. ROS Node

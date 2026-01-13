@@ -39,6 +39,24 @@ def is_production() -> bool:
     return os.getenv("TG_ENVIRONMENT", "development").lower() == "production"
 
 
+def is_demo_mode() -> bool:
+    """
+    Check if demo mode is allowed.
+
+    Demo mode is ONLY allowed when:
+    - TG_DEMO_MODE=true AND
+    - TG_ENVIRONMENT != production
+
+    This ensures that demo/mock data endpoints are never accessible
+    in production environments.
+
+    Returns:
+        True if demo mode is active and allowed, False otherwise
+    """
+    demo_enabled = os.getenv("TG_DEMO_MODE", "false").lower() == "true"
+    return demo_enabled and not is_production()
+
+
 def require_env(
     var_name: str,
     remediation: Optional[str] = None,

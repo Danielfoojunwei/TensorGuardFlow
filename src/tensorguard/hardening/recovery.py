@@ -3,6 +3,9 @@ Recovery Strategy Module
 
 Provides retry policies, fallback handlers, and recovery strategies
 for graceful error handling and automatic recovery.
+
+Supports deterministic jitter mode (TG_DETERMINISTIC=true) for reproducible
+retry behavior in testing and debugging scenarios.
 """
 
 import time
@@ -10,12 +13,57 @@ import random
 import functools
 import threading
 import logging
+import hashlib
+import os
 from enum import Enum
 from dataclasses import dataclass, field
 from typing import Optional, Callable, Any, Dict, List, Type, Union
 from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
+
+
+def _is_deterministic_mode() -> bool:
+    """Check if deterministic mode is enabled via environment."""
+    return os.getenv("TG_DETERMINISTIC", "false").lower() == "true"
+
+
+def _compute_deterministic_jitter(
+    func_name: str,
+    attempt: int,
+    request_id: Optional[str] = None,
+    jitter_factor: float = 0.25,
+    base_delay: float = 1.0
+) -> float:
+    """
+    Compute deterministic jitter using hash-based calculation.
+
+    Given the same inputs, this function always produces the same jitter value.
+    This is useful for reproducible testing and debugging.
+
+    Args:
+        func_name: Name of the function being retried
+        attempt: Current retry attempt number
+        request_id: Optional request ID for additional uniqueness
+        jitter_factor: Maximum jitter as a fraction of base_delay (0.0-1.0)
+        base_delay: Base delay to calculate jitter range from
+
+    Returns:
+        Deterministic jitter value in range [-jitter_range, +jitter_range]
+    """
+    # Create a deterministic hash from inputs
+    hash_input = f"{func_name}:{attempt}:{request_id or 'no_request_id'}"
+    hash_bytes = hashlib.sha256(hash_input.encode()).digest()
+
+    # Convert first 8 bytes to a float between 0 and 1
+    hash_int = int.from_bytes(hash_bytes[:8], byteorder='big')
+    normalized = hash_int / (2**64 - 1)  # Normalize to [0, 1]
+
+    # Scale to [-jitter_range, +jitter_range]
+    jitter_range = base_delay * jitter_factor
+    jitter = (normalized * 2 - 1) * jitter_range
+
+    return jitter
 
 
 class BackoffStrategy(Enum):
@@ -44,14 +92,41 @@ class RetryPolicy:
     Configurable retry policy with multiple backoff strategies.
 
     Supports various backoff strategies, jitter, and exception filtering.
+
+    When TG_DETERMINISTIC=true, jitter is computed using a hash-based approach
+    that produces the same delay for the same (func_name, attempt, request_id)
+    combination, enabling reproducible retry behavior for testing.
     """
 
-    def __init__(self, config: Optional[RetryConfig] = None):
+    def __init__(
+        self,
+        config: Optional[RetryConfig] = None,
+        func_name: Optional[str] = None,
+        request_id: Optional[str] = None
+    ):
         self.config = config or RetryConfig()
         self._attempt = 0
+        self._func_name = func_name or "unknown"
+        self._request_id = request_id
+
+    def set_context(self, func_name: str, request_id: Optional[str] = None) -> None:
+        """
+        Set context for deterministic jitter calculation.
+
+        Args:
+            func_name: Name of the function being retried
+            request_id: Optional request ID for additional uniqueness
+        """
+        self._func_name = func_name
+        self._request_id = request_id
 
     def calculate_delay(self, attempt: int) -> float:
-        """Calculate delay for a given attempt number."""
+        """
+        Calculate delay for a given attempt number.
+
+        When TG_DETERMINISTIC=true, uses hash-based deterministic jitter
+        instead of random jitter for reproducibility.
+        """
         cfg = self.config
         strategy = cfg.backoff_strategy
 
@@ -63,8 +138,25 @@ class RetryPolicy:
             delay = cfg.base_delay_seconds * (cfg.backoff_multiplier ** attempt)
         elif strategy == BackoffStrategy.EXPONENTIAL_JITTER:
             base_delay = cfg.base_delay_seconds * (cfg.backoff_multiplier ** attempt)
-            jitter_range = base_delay * cfg.jitter_factor
-            delay = base_delay + random.uniform(-jitter_range, jitter_range)
+
+            if _is_deterministic_mode():
+                # Use deterministic jitter for reproducible retries
+                jitter = _compute_deterministic_jitter(
+                    func_name=self._func_name,
+                    attempt=attempt,
+                    request_id=self._request_id,
+                    jitter_factor=cfg.jitter_factor,
+                    base_delay=base_delay
+                )
+                delay = base_delay + jitter
+                logger.debug(
+                    f"Deterministic jitter for {self._func_name} attempt {attempt}: "
+                    f"base={base_delay:.3f}s, jitter={jitter:.3f}s, total={delay:.3f}s"
+                )
+            else:
+                # Use random jitter for production variance
+                jitter_range = base_delay * cfg.jitter_factor
+                delay = base_delay + random.uniform(-jitter_range, jitter_range)
         else:
             delay = cfg.base_delay_seconds
 
@@ -81,6 +173,7 @@ class RetryPolicy:
         func: Callable,
         *args,
         on_retry: Optional[Callable[[int, Exception], None]] = None,
+        request_id: Optional[str] = None,
         **kwargs
     ) -> Any:
         """
@@ -89,6 +182,7 @@ class RetryPolicy:
         Args:
             func: Function to execute
             on_retry: Callback for retry events (attempt, exception)
+            request_id: Optional request ID for deterministic jitter calculation
             *args, **kwargs: Arguments passed to func
 
         Returns:
@@ -99,6 +193,11 @@ class RetryPolicy:
         """
         last_exception = None
         cfg = self.config
+
+        # Set context for deterministic jitter calculation
+        self._func_name = getattr(func, '__name__', 'anonymous')
+        if request_id:
+            self._request_id = request_id
 
         for attempt in range(cfg.max_retries + 1):
             try:
@@ -134,6 +233,9 @@ class RetryPolicy:
 
     def wrap(self, func: Callable) -> Callable:
         """Decorator to wrap a function with retry logic."""
+        # Set func_name at decoration time for deterministic jitter
+        self._func_name = getattr(func, '__name__', 'anonymous')
+
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             return self.execute(func, *args, **kwargs)

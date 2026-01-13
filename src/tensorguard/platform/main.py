@@ -97,7 +97,11 @@ app.add_middleware(
     allow_origins=TG_ALLOWED_ORIGINS,
     allow_credentials=TG_ALLOW_CREDENTIALS,
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-Tenant-ID"],
+    allow_headers=[
+        "Authorization", "Content-Type", "X-Request-ID", "X-Tenant-ID",
+        # HMAC auth headers for edge agent telemetry
+        "X-TG-Fleet-Id", "X-TG-Timestamp", "X-TG-Nonce", "X-TG-Signature",
+    ],
 )
 
 # Output structure for dev convenience
@@ -219,6 +223,10 @@ app.include_router(lineage_endpoints.router, prefix="/api/v1", tags=["lineage"])
 # VLA (Vision-Language-Action) for Robotics
 from .api import vla_endpoints
 app.include_router(vla_endpoints.router, prefix="/api/v1", tags=["vla"])
+
+# Production Telemetry Ingestion & Query
+from .api import telemetry_endpoints
+app.include_router(telemetry_endpoints.router, prefix="/api/v1", tags=["telemetry"])
 
 # Enterprise Stubs (Proprietary Boundary)
 try:
