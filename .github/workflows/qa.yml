@@ -32,14 +32,15 @@ jobs:
     - name: Install Python Dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -e .
-        pip install pytest pytest-cov requests httpx coverage
 
     - name: Run Backend QA Suite
-      env:
-        PYTHONPATH: src
       run: |
-        pytest tests/ --cov=src/tensorguard --cov-report=xml
+        make ci
+
+    - name: Build Docker Images
+      run: |
+        docker build -f docker/platform/Dockerfile .
+        docker build -f docker/bench/Dockerfile .
 
     - name: Upload Report Artifacts
       uses: actions/upload-artifact@v3

@@ -49,6 +49,11 @@ def get_logger(name: str) -> logging.Logger:
         except (ImportError, AttributeError):
             env = "dev"
             lvl = "INFO"
+        try:
+            from .environment import get_environment
+            env = get_environment()
+        except ImportError:
+            pass
         
         if env == "production":
             handler.setFormatter(StructuredFormatter())

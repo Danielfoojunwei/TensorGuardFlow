@@ -76,11 +76,11 @@ class Dilithium3(PostQuantumSig):
                 self._use_liboqs = False
 
         if not self._use_liboqs:
-            from ...utils.config import settings
-            if settings.ENVIRONMENT == "production":
+            from ...utils.environment import is_production
+            if is_production():
                 raise ImportError(
                     "Dilithium3: liboqs not available in PRODUCTION environment. "
-                    "Fail-closed policy enforced. Install liboqs-python or change TENSORGUARD_ENVIRONMENT."
+                    "Fail-closed policy enforced. Install liboqs-python or change TG_ENVIRONMENT."
                 )
             
             warnings.warn(
