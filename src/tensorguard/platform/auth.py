@@ -23,6 +23,7 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlmodel import Session
 
 from .database import get_session
+from ..utils.environment import is_production
 from .models.core import User, UserRole
 
 logger = logging.getLogger(__name__)
@@ -34,10 +35,13 @@ logger = logging.getLogger(__name__)
 # JWT Configuration - MUST be set in production
 SECRET_KEY = os.getenv("TG_SECRET_KEY")
 if not SECRET_KEY:
+    if is_production():
+        raise RuntimeError(
+            "TG_SECRET_KEY must be set in production. Refusing to generate an ephemeral key."
+        )
     logger.warning(
         "SECURITY WARNING: TG_SECRET_KEY not set. "
-        "Generating ephemeral key - tokens will be invalid after restart. "
-        "Set TG_SECRET_KEY environment variable for production."
+        "Generating ephemeral key for non-production use only."
     )
     SECRET_KEY = secrets.token_hex(32)
 
@@ -203,7 +207,9 @@ async def get_current_user(
     # --- DEMO MODE BYPASS ---
     # If no token is provided, return a demo user for development convenience.
     # This should be disabled in production via TG_DEMO_MODE=false.
-    DEMO_MODE = os.getenv("TG_DEMO_MODE", "true").lower() == "true"
+    DEMO_MODE = os.getenv("TG_DEMO_MODE", "false").lower() == "true"
+    if is_production():
+        DEMO_MODE = False
     if DEMO_MODE and not token:
         logger.info("DEMO MODE: Returning demo user (no token required)")
         # Return a synthetic user object

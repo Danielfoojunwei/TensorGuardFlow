@@ -13,14 +13,10 @@ try:
     )
     from flwr.server.client_manager import ClientManager
     from flwr.server.client_proxy import ClientProxy
-except ImportError:
-    class fl:
-        class server:
-            class strategy:
-                class FedAvg: 
-                    def __init__(self, *args, **kwargs): pass
-    Parameters = FitRes = ClientProxy = ClientManager = Any
-    Scalar = float
+except ImportError as exc:
+    raise ImportError(
+        "Flower (flwr) is required for aggregation. Install tensorguard[fl] to enable."
+    ) from exc
 
 from ..core.crypto import N2HEContext, LWECiphertext
 from ..core.production import (
@@ -34,6 +30,7 @@ from ..core.production import (
 )
 from ..utils.logging import get_logger
 from ..utils.config import settings
+from ..utils.startup_validation import validate_startup_config
 
 logger = get_logger(__name__)
 
@@ -163,9 +160,15 @@ class TensorGuardStrategy(fl.server.strategy.FedAvg):
             if c.client_id == first_client_id:
                 first_package = c.update_package
                 break
+
+        base_metrics = {
+            "accepted": accepted_count,
+            "outliers": len(outliers),
+            "round": server_round,
+        }
         
         if not first_package:
-            return active_results[0][1].parameters, metrics
+            return active_results[0][1].parameters, base_metrics
 
         # Deep copy the first package's structure for the sum (effectively identity start)
         # But we actually want to sum ALL active contributions.
@@ -203,19 +206,17 @@ class TensorGuardStrategy(fl.server.strategy.FedAvg):
         
         # Evaluation Gating
         if self.eval_gate:
-            # Mocking evaluation for pipeline validation
-            metrics = EvaluationMetrics(success_rate=0.85, constraint_violations=0)
+            eval_payload = first_package.compression_metadata.get("evaluation_metrics", {})
+            if not eval_payload:
+                logger.error("Evaluation gate enabled but no evaluation metrics provided.")
+                return None, {"error": "missing_evaluation_metrics"}
+            metrics = EvaluationMetrics(**eval_payload)
             passed, reasons = self.eval_gate.evaluate(metrics)
             if not passed:
                 logger.warning(f"Evaluation gate failed: {reasons}")
+                return None, {"error": "evaluation_gate_failed", "reasons": reasons}
 
-        metrics = {
-            "accepted": accepted_count,
-            "outliers": len(outliers),
-            "round": server_round
-        }
-        
-        return aggregated_parameters, metrics
+        return aggregated_parameters, base_metrics
 
 class ExpertDrivenStrategy(TensorGuardStrategy):
     """
@@ -263,6 +264,7 @@ class ExpertDrivenStrategy(TensorGuardStrategy):
 
 def start_server(port: Optional[int] = None):
     """Launch the aggregation server."""
+    validate_startup_config()
     port = port or settings.DEFAULT_PORT
     # Use ExpertDrivenStrategy for v2.0
     strategy = ExpertDrivenStrategy(quorum_threshold=settings.MIN_CLIENTS)

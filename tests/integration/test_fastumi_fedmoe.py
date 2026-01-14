@@ -6,6 +6,10 @@ import time
 
 from tensorguard.core.adapters import MoEAdapter
 from tensorguard.utils.fastumi_adapter import FastUMIAdapter, FastUMISimulator
+import pytest
+
+pytest.importorskip("flwr")
+
 from tensorguard.server.aggregator import ExpertDrivenStrategy, ClientContribution
 from tensorguard.schemas.common import Demonstration
 from tensorguard.core.production import UpdatePackage, ModelTargetMap, TrainingMetadata, ObjectiveType

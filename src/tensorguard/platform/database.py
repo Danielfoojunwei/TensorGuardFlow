@@ -1,6 +1,7 @@
 from sqlmodel import SQLModel, create_engine, Session
-from ..utils.config import settings
 import os
+
+from ..utils.environment import is_production
 
 # Import all models to register them with SQLModel
 from .models.core import Tenant, User, Fleet, Job  # noqa: F401
@@ -19,12 +20,15 @@ from .models.settings_models import SystemSetting # noqa: F401
 # Default to local sqlite for ease of deployment in MVP
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
+    if is_production():
+        raise RuntimeError("DATABASE_URL must be set in production.")
     # Fallback for dev, but warn loudly
     import logging
     logging.getLogger(__name__).warning("DATABASE_URL not set, using local SQLite (NOT FOR PRODUCTION)")
     DATABASE_URL = "sqlite:///./tg_platform.db"
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+engine = create_engine(DATABASE_URL, connect_args=connect_args)
 
 def init_db():
     SQLModel.metadata.create_all(engine)

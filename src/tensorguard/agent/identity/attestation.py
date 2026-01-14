@@ -9,8 +9,12 @@ import hashlib
 import json
 import secrets
 import logging
+import os
 from typing import Dict, Any, Optional
 from datetime import datetime
+
+# Environment gating
+from ...utils.environment import is_production
 
 # Use our standardized crypto helpers if available, else standard lib
 try:
@@ -29,6 +33,17 @@ class TPMSimulator:
     """
     
     def __init__(self, seed: Optional[str] = None):
+        if is_production():
+            allow_simulator = os.getenv("TG_ALLOW_TPM_SIMULATOR", "false").lower() == "true"
+            if not allow_simulator:
+                raise RuntimeError(
+                    "TPM simulator is not allowed in production. "
+                    "Set TG_ALLOW_TPM_SIMULATOR=true only for explicit research overrides."
+                )
+            logger.error(
+                "SECURITY WARNING: TPM simulator enabled in production. "
+                "Attestation claims will be marked as non-hardware."
+            )
         self._aik_private = rsa.generate_private_key(
             public_exponent=65537,
             key_size=2048
@@ -89,7 +104,9 @@ class TPMSimulator:
             "nonce": nonce,
             "boot_counter": self.boot_counter,
             "timestamp": datetime.utcnow().isoformat() + "Z",
-            "magic": "TG_TPM_QUOTE_V1"
+            "magic": "TG_TPM_QUOTE_V1",
+            "attested": False,
+            "simulated": True,
         }
         
         # 2. Canonicalize for signing

@@ -8,6 +8,10 @@ from tensorguard.core.adapters import MoEAdapter
 from tensorguard.core.pipeline import ExpertGater, RandomSparsifier, APHECompressor
 from tensorguard.core.crypto import N2HEEncryptor, N2HEContext, LWECiphertext
 from tensorguard.core.production import UpdatePackage, ModelTargetMap, TrainingMetadata, ObjectiveType
+import pytest
+
+pytest.importorskip("flwr")
+
 from tensorguard.server.aggregator import ExpertDrivenStrategy, ClientContribution
 
 # Mock Flower components

@@ -6,12 +6,13 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y build-essential && rm -rf /var/lib/apt/lists/*
 
 # Copy Core SDK and Platform
+COPY pyproject.toml README.md /app/
+COPY requirements.lock /app/
 COPY src /app/src
-COPY requirements.txt /app/
 
-# Install dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install "uvicorn[standard]" "fastapi" "sqlmodel" "python-jose[cryptography]" "passlib[argon2]" "python-multipart"
+# Install dependencies (pinned) and package
+RUN pip install --no-cache-dir -r requirements.lock
+RUN pip install --no-cache-dir --no-deps .
 
 # Env
 ENV PYTHONPATH=/app/src

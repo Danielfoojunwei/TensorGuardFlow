@@ -2,11 +2,12 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from ..utils.startup_validation import validate_startup_config
 from .database import init_db
 import os
 
-# Initialize database schema
-# In dev mode, we ensure the schema is up to date
+# Validate startup config and initialize database schema
+validate_startup_config()
 init_db()
 
 from .api import endpoints
@@ -159,7 +160,10 @@ app.include_router(lineage_endpoints.router, prefix="/api/v1", tags=["lineage"])
 try:
     from .enterprise import check_entitlement, log_audit_event
     print("Enterprise extensions found.")
-except ImportError:
+except ImportError as exc:
+    from ..utils.environment import is_production
+    if is_production():
+        raise RuntimeError("Enterprise extensions are required in production.") from exc
     def check_entitlement(user, feat): return True
     def log_audit_event(ev): pass
 

@@ -1,0 +1,13 @@
+# Pinned core dependencies for reproducible builds.
+# Update via a lockfile tool in a networked environment.
+fastapi==0.104.1
+uvicorn==0.24.0
+sqlmodel==0.0.14
+pydantic==2.5.3
+pydantic-settings==2.1.0
+cryptography==41.0.7
+requests==2.31.0
+numpy==1.24.4
+python-jose[cryptography]==3.3.0
+passlib[argon2]==1.7.4
+python-multipart==0.0.6
