@@ -13,6 +13,7 @@ const showCreateModal = ref(false)
 const showSafetyModal = ref(false)
 const deploying = ref(null)
 const validating = ref(null)
+const errorMessage = ref('')
 
 // Create model form
 const newModel = ref({
@@ -35,20 +36,19 @@ const taskTypeOptions = [
 
 const fetchModels = async () => {
     loading.value = true
+    errorMessage.value = ''
     try {
         const res = await fetch('/api/v1/vla/models')
         if (res.ok) {
             const data = await res.json()
             models.value = data.models || []
+        } else {
+            throw new Error('Backend unavailable')
         }
     } catch (e) {
         console.error("Failed to fetch VLA models", e)
-        // Mock data for demo
-        models.value = [
-            { id: 'vla-001', name: 'OpenVLA-Factory', version: '2.1.0', status: 'deployed', task_types: ['manipulation', 'assembly'], success_rate: 0.968, safety_score: 0.95, avg_latency_ms: 48.2, created_at: '2025-12-15T10:30:00Z' },
-            { id: 'vla-002', name: 'Pi0-Logistics', version: '1.3.2', status: 'staged', task_types: ['pick_and_place', 'navigation'], success_rate: 0.942, safety_score: 0.88, avg_latency_ms: 35.1, created_at: '2025-12-10T14:20:00Z' },
-            { id: 'vla-003', name: 'RT2-Domestic', version: '0.9.0', status: 'validating', task_types: ['pouring', 'wiping'], success_rate: 0.875, safety_score: null, avg_latency_ms: 52.8, created_at: '2025-12-18T09:15:00Z' }
-        ]
+        models.value = []
+        errorMessage.value = 'Unable to load VLA models. Verify API connectivity.'
     }
     loading.value = false
 }
@@ -91,7 +91,7 @@ const startSafetyValidation = async (modelId) => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 model_id: modelId,
-                test_environment: 'simulation',
+                test_environment: 'production',
                 test_scenarios: 100
             })
         })
@@ -175,6 +175,9 @@ onMounted(fetchModels)
     </div>
 
     <!-- Stats Cards -->
+    <div v-if="errorMessage" class="text-xs text-red-400 bg-red-500/10 border border-red-500/30 rounded p-3">
+        {{ errorMessage }}
+    </div>
     <div class="grid grid-cols-4 gap-4">
         <div class="bg-[#111] border border-[#333] rounded-lg p-4">
             <div class="flex items-center gap-3 mb-2">

@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { usePeftStore } from '../stores/peft'
 import { Zap, Play, RotateCcw, CheckCircle, FileJson, Server, Activity, Database, Box } from 'lucide-vue-next'
 
@@ -14,28 +14,33 @@ const steps = [
     'Launch'
 ]
 
-// Mock Integration States
-const integrations = ref({
-    isaac: { active: true, status: 'connected', latency: '12ms' },
-    ros2: { active: false, status: 'disconnected', latency: '-' },
-    formant: { active: true, status: 'streaming', latency: '45ms' },
-    hf: { active: true, status: 'authenticated', user: 'tensorguard-ent' }
-})
+const integrations = ref({})
+const integrationsError = ref('')
 
 const vlaInput = ref({
     modelId: 'openvla/openvla-7b',
-    datasetPath: 's3://tg-teleop-data/pick-place-v2',
-    validating: false,
-    validated: false
+    datasetPath: 's3://tg-teleop-data/pick-place-v2'
 })
 
-const validateVLA = () => {
-    vlaInput.value.validating = true
-    setTimeout(() => {
-        vlaInput.value.validating = false
-        vlaInput.value.validated = true
-    }, 1500)
+const fetchIntegrations = async () => {
+    integrationsError.value = ''
+    try {
+        const res = await fetch('/api/v1/integrations/status')
+        if (res.ok) {
+            integrations.value = await res.json()
+        } else {
+            throw new Error('Backend unavailable')
+        }
+    } catch (e) {
+        console.warn('Failed to fetch integrations', e)
+        integrations.value = {}
+        integrationsError.value = 'Unable to load integration status.'
+    }
 }
+
+const getIntegration = (service) => integrations.value[service] || { status: 'unavailable' }
+
+onMounted(fetchIntegrations)
 </script>
 
 <template>
@@ -80,25 +85,25 @@ const validateVLA = () => {
         
         <!-- Step 1: Backend -->
         <div v-if="store.step === 1" class="space-y-4">
-          <h3 class="text-lg font-bold border-b border-[#333] pb-2">Choose Robotics Simulation Backend</h3>
+          <h3 class="text-lg font-bold border-b border-[#333] pb-2">Choose Compute Backend</h3>
           <div class="grid grid-cols-2 gap-4">
             <div class="p-4 border rounded cursor-pointer transition-all relative overflow-hidden group"
-                 :class="store.config.backend === 'isaac' ? 'border-primary bg-primary/10' : 'border-[#333] hover:border-gray-500'"
-                 @click="store.config.backend = 'isaac'">
+                 :class="store.config.backend === 'local-gpu' ? 'border-primary bg-primary/10' : 'border-[#333] hover:border-gray-500'"
+                 @click="store.config.backend = 'local-gpu'">
                <div class="flex justify-between items-start mb-2">
-                   <div class="font-bold flex items-center gap-2"><Server class="w-4 h-4"/> NVIDIA Isaac Sim</div>
-                   <span class="text-[10px] bg-[#333] px-2 py-0.5 rounded font-mono text-gray-300">CONNECTED</span>
+                   <div class="font-bold flex items-center gap-2"><Server class="w-4 h-4"/> Local GPU</div>
+                   <span class="text-[10px] bg-[#333] px-2 py-0.5 rounded font-mono text-gray-300">AVAILABLE</span>
                </div>
-               <div class="text-xs text-gray-400">High-fidelity photorealistic rendering for domain randomization.</div>
+               <div class="text-xs text-gray-400">Run training jobs on locally attached accelerators.</div>
             </div>
             <div class="p-4 border rounded cursor-pointer transition-all relative overflow-hidden group"
-                 :class="store.config.backend === 'mujoco' ? 'border-primary bg-primary/10' : 'border-[#333] hover:border-gray-500'"
-                 @click="store.config.backend = 'mujoco'">
+                 :class="store.config.backend === 'kubernetes' ? 'border-primary bg-primary/10' : 'border-[#333] hover:border-gray-500'"
+                 @click="store.config.backend = 'kubernetes'">
                <div class="flex justify-between items-start mb-2">
-                   <div class="font-bold flex items-center gap-2"><Box class="w-4 h-4"/> MuJoCo (DeepMind)</div>
-                   <span class="text-[10px] bg-red-900/30 text-red-400 px-2 py-0.5 rounded font-mono border border-red-900/50">MISSING</span>
+                   <div class="font-bold flex items-center gap-2"><Box class="w-4 h-4"/> Kubernetes Cluster</div>
+                   <span class="text-[10px] bg-[#333] px-2 py-0.5 rounded font-mono text-gray-300">REQUIRES CONFIG</span>
                </div>
-               <div class="text-xs text-gray-400">Fast physics engine for contact-rich manipulation tasks.</div>
+               <div class="text-xs text-gray-400">Submit runs to a secured cluster with GPU scheduling.</div>
             </div>
           </div>
         </div>
@@ -111,12 +116,9 @@ const validateVLA = () => {
                     <label class="block text-xs text-gray-500 mb-1">Hugging Face Model ID</label>
                     <div class="flex gap-2">
                         <input type="text" v-model="vlaInput.modelId" class="flex-1 bg-black border border-[#333] p-2 rounded text-sm font-mono focus:border-primary outline-none text-white">
-                        <button @click="validateVLA" class="btn btn-secondary text-xs">
-                            {{ vlaInput.validating ? 'Validating...' : 'Validate' }}
-                        </button>
                     </div>
-                    <div v-if="vlaInput.validated" class="mt-2 text-xs text-green-500 flex items-center gap-1">
-                        <CheckCircle class="w-3 h-3" /> Model found: OpenVLA-7B (4-bit Quantized)
+                    <div class="mt-2 text-xs text-gray-500 flex items-center gap-1">
+                        <CheckCircle class="w-3 h-3" /> Model validation occurs during run submission.
                     </div>
                 </div>
             </div>
@@ -133,19 +135,8 @@ const validateVLA = () => {
                          <button class="btn btn-secondary text-xs"><Database class="w-3 h-3"/></button>
                     </div>
                 </div>
-                <div class="bg-[#111] p-4 rounded border border-[#333] grid grid-cols-3 gap-4 text-center">
-                    <div>
-                        <div class="text-xl font-bold text-white">4.2k</div>
-                        <div class="text-[10px] text-gray-500 uppercase">Episodes</div>
-                    </div>
-                    <div>
-                        <div class="text-xl font-bold text-white">128GB</div>
-                        <div class="text-[10px] text-gray-500 uppercase">Size</div>
-                    </div>
-                    <div>
-                        <div class="text-xl font-bold text-white">UR5e</div>
-                        <div class="text-[10px] text-gray-500 uppercase">Robot</div>
-                    </div>
+                <div class="text-xs text-gray-500">
+                    Dataset metadata is available after indexing completes.
                 </div>
             </div>
         </div>
@@ -170,6 +161,9 @@ const validateVLA = () => {
         <div v-else-if="store.step === 5" class="space-y-6">
             <h3 class="text-lg font-bold border-b border-[#333] pb-2">External Integrations</h3>
             <div class="space-y-4">
+                <div v-if="integrationsError" class="text-xs text-red-400 bg-red-500/10 border border-red-500/30 rounded p-3">
+                    {{ integrationsError }}
+                </div>
                 
                 <!-- Isaac Lab -->
                 <div class="flex items-center justify-between p-4 border border-[#333] rounded bg-[#111]">
@@ -181,7 +175,9 @@ const validateVLA = () => {
                         </div>
                     </div>
                     <div>
-                         <span class="text-xs font-mono text-green-500 bg-green-900/20 px-2 py-1 rounded border border-green-900/50">CONNECTED ({{integrations.isaac.latency}})</span>
+                         <span class="text-xs font-mono text-gray-300 bg-[#222] px-2 py-1 rounded border border-[#333]">
+                             {{ getIntegration('isaac_lab').status?.toUpperCase() || 'UNKNOWN' }}
+                         </span>
                     </div>
                 </div>
 
@@ -195,7 +191,9 @@ const validateVLA = () => {
                         </div>
                     </div>
                     <div>
-                         <button class="text-xs bg-primary text-black px-3 py-1 rounded font-bold hover:bg-orange-500 transition-colors">CONNECT</button>
+                         <span class="text-xs font-mono text-gray-300 bg-[#222] px-2 py-1 rounded border border-[#333]">
+                             {{ getIntegration('ros2_bridge').status?.toUpperCase() || 'UNKNOWN' }}
+                         </span>
                     </div>
                 </div>
 
@@ -209,7 +207,9 @@ const validateVLA = () => {
                         </div>
                     </div>
                     <div>
-                         <span class="text-xs font-mono text-blue-500 bg-blue-900/20 px-2 py-1 rounded border border-blue-900/50">STREAMING ({{integrations.formant.latency}})</span>
+                         <span class="text-xs font-mono text-gray-300 bg-[#222] px-2 py-1 rounded border border-[#333]">
+                             {{ getIntegration('formant').status?.toUpperCase() || 'UNKNOWN' }}
+                         </span>
                     </div>
                 </div>
 

@@ -72,11 +72,21 @@ class MoEAdapter(VLAAdapter):
     Replaces magnitude-based heuristics with Instruction-Aware Expert Gating (DGMoE).
     Addresses parameter interference in heterogeneous federated fleets.
     """
-    def __init__(self, experts: List[str] = None):
+    def __init__(
+        self,
+        model: Any = None,
+        gradient_fn: Optional[Callable] = None,
+        apply_fn: Optional[Callable] = None,
+        experts: List[str] = None,
+    ):
+        if gradient_fn is None:
+            gradient_fn = self._raise_missing_gradient_fn
+        if apply_fn is None:
+            apply_fn = lambda m, g: None
         super().__init__(
-            model={"type": "pi0-moe"},
-            gradient_fn=self._moe_gradient_fn,
-            apply_fn=lambda m, g: None
+            model=model,
+            gradient_fn=gradient_fn,
+            apply_fn=apply_fn,
         )
         self.experts = experts or ["visual_primary", "visual_aux", "language_semantic", "manipulation_grasp"]
         self.expert_prototypes = {
@@ -89,18 +99,19 @@ class MoEAdapter(VLAAdapter):
             "fastening_screwing": ["screw", "unscrew", "cap", "twist", "rotate", "thread", "bolt"]
         }
 
-    def _moe_gradient_fn(self, model, demo: Demonstration):
-        # High-dimensional gradient simulation
-        return {f"block_{i}.param": np.random.normal(0, 0.01, (1000,)) for i in range(10)}
+    def _raise_missing_gradient_fn(self, model, demo: Demonstration):
+        raise ValidationError(
+            "MoEAdapter requires a production gradient_fn implementation. "
+            "Provide a real model and gradient function."
+        )
 
     def get_expert_gate_weights(self, task_instruction: str) -> Dict[str, float]:
         """Instruction-Oriented Scene-Parsing (IOSP) simulation."""
         weights = {}
-        # Graceful degradation for missing task IDs
         instr = (task_instruction or "").lower()
         for exp, kws in self.expert_prototypes.items():
             relevance = sum(2.5 for kw in kws if kw in instr)
-            weights[exp] = relevance + np.random.uniform(0.2, 0.5)
+            weights[exp] = relevance + 0.1
         
         # Softmax normalize with stability
         e_x = np.exp(list(weights.values()))
@@ -138,9 +149,7 @@ class FHEExportAdapter(VLAAdapter):
     Strictly forbids exporting the entire model to prevent IP leakage.
     """
     def __init__(self, model_path: str, target_modules: List[str] = None):
-        # In a real implementation, this would load the model structure
-        # Here we mock the loading for the purpose of the export logic
-        self.model = {"type": "pi0-export-target", "weights": {}}
+        self.model_path = model_path
         self.target_modules = target_modules or ["policy_head", "visual_router"]
         self.max_params = 1_000_000  # Strict limit for FHE feasibility
 
@@ -165,4 +174,3 @@ class FHEExportAdapter(VLAAdapter):
             raise ValidationError(f"Export exceeds FHE capacity: {total_params} > {self.max_params}")
             
         return exported_weights
-

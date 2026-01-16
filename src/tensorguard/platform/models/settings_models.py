@@ -40,6 +40,19 @@ class SystemSetting(SystemSettingBase, table=True):
     tenant_id: Optional[str] = Field(default=None, foreign_key="tenant.id", index=True)
 
 
+class FleetPolicyRecord(SQLModel, table=True):
+    """
+    Persisted fleet policy configuration.
+    """
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
+    tenant_id: str = Field(foreign_key="tenant.id", index=True)
+    fleet_id: str = Field(foreign_key="fleet.id", index=True, unique=True)
+    policy_json: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_by: Optional[str] = Field(default=None, foreign_key="user.id")
+
+
 class KMSKey(SQLModel, table=True):
     """
     Managed cryptographic key for the TensorGuard KMS.

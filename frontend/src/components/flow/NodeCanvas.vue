@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { VueFlow, useVueFlow } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
-import { Rocket, Play, Activity, Monitor } from 'lucide-vue-next'
+import { Monitor } from 'lucide-vue-next'
 import { useSimulationStore } from '../../stores/simulation'
 import PipelineNode from './PipelineNode.vue'
 import NodeInspector from '../modals/NodeInspector.vue'
@@ -16,8 +16,8 @@ const selectedNode = ref(null)
 const nodes = computed(() => store.graphNodes)
 const edges = computed(() => store.graphEdges)
 
-onMounted(() => {
-  // Lock view after initial fit
+onMounted(async () => {
+  await store.fetchTelemetry()
   setTimeout(() => fitView({ padding: 0.1 }), 200)
 })
 
@@ -73,24 +73,30 @@ const handleNodeClick = (e) => {
       <div class="flex gap-8">
          <div class="text-right">
              <div class="text-[10px] text-gray-500 uppercase font-bold">Latency</div>
-             <div class="text-sm font-mono font-bold text-green-400">14ms</div>
+             <div class="text-sm font-mono font-bold text-green-400">
+               {{ store.lastMetrics.latencyMs !== null ? `${store.lastMetrics.latencyMs.toFixed(1)}ms` : 'N/A' }}
+             </div>
          </div>
          <div class="text-right">
              <div class="text-[10px] text-gray-500 uppercase font-bold">Throughput</div>
-             <div class="text-sm font-mono font-bold text-blue-400">4.2 GB/s</div>
+             <div class="text-sm font-mono font-bold text-blue-400">
+               {{ store.lastMetrics.throughput || 0 }}
+             </div>
          </div>
          <div class="text-right">
              <div class="text-[10px] text-gray-500 uppercase font-bold">Active Nodes</div>
-             <div class="text-sm font-mono font-bold text-white">452</div>
+             <div class="text-sm font-mono font-bold text-white">{{ store.lastMetrics.activeNodes }}</div>
          </div>
       </div>
     </div>
 
-    <!-- Simulation Footer -->
+    <!-- Telemetry Footer -->
     <div class="absolute bottom-0 left-0 right-0 h-12 bg-[#0d1117] border-t border-[#30363d] flex items-center px-6 z-20 justify-between">
        <div class="flex items-center gap-2">
-          <div class="w-2 h-2 rounded-full" :class="store.roundStatus !== 'idle' ? 'bg-orange-500 animate-pulse' : 'bg-gray-600'"></div>
-          <span class="text-xs font-mono text-gray-400 uppercase">{{ store.roundStatus !== 'idle' ? 'Live Training Sequence Active' : 'System Idle' }}</span>
+          <div class="w-2 h-2 rounded-full" :class="store.roundStatus === 'active' ? 'bg-green-500 animate-pulse' : store.roundStatus === 'degraded' ? 'bg-orange-500 animate-pulse' : 'bg-gray-600'"></div>
+          <span class="text-xs font-mono text-gray-400 uppercase">
+            {{ store.errorMessage ? 'Telemetry Unavailable' : store.roundStatus === 'active' ? 'Telemetry Streaming' : store.roundStatus === 'degraded' ? 'Telemetry Degraded' : 'System Idle' }}
+          </span>
        </div>
        <div class="text-xs font-mono text-gray-600">
           Uptime: 14d 02h 12m

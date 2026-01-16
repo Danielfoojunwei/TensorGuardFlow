@@ -1,13 +1,18 @@
 <script setup>
 import { ref, onMounted } from 'vue'
-import { Play, AlertTriangle, CheckCircle, Zap, Crosshair, Box, Plus, History, ShieldCheck } from 'lucide-vue-next'
+import { Play, CheckCircle, Zap, Box, Plus, History, ShieldCheck } from 'lucide-vue-next'
 
 const task = ref('Pick up the red cube and place it on the blue coaster')
 const generated = ref(false)
 const evaluating = ref(false)
+const errorMessage = ref('')
+const lastEvidence = ref(null)
 const showCreateModal = ref(false)
 const newExpertName = ref('')
 const newExpertBase = ref('openvla-7b')
+const evidenceScore = ref(0.9)
+const evidenceCollision = ref(0.02)
+const evidenceLatency = ref(25)
 
 const experts = ref([])
 const selectedExpert = ref(null)
@@ -59,40 +64,36 @@ const startEval = async () => {
     if (!task.value || !selectedExpert.value) return
     evaluating.value = true
     generated.value = false
+    errorMessage.value = ''
     
-    // Simulate generation delay
-    setTimeout(async () => {
-        evaluating.value = false
-        generated.value = true
-        
-        // POST real evidence to backend
-        try {
-            await fetch(`/api/v1/fedmoe/experts/${selectedExpert.value.id}/evidence`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    evidence_type: 'SIM_SUCCESS',
-                    value: {
-                        task: task.value,
-                        score: 0.92,
-                        collision_rate: 0.001,
-                        latency_hz: 25
-                    }
-                })
+    try {
+        const res = await fetch(`/api/v1/fedmoe/experts/${selectedExpert.value.id}/evidence`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                evidence_type: 'EVAL_RESULT',
+                value: {
+                    task: task.value,
+                    score: Number(evidenceScore.value),
+                    collision_rate: Number(evidenceCollision.value),
+                    latency_hz: Number(evidenceLatency.value)
+                }
             })
-            fetchExperts() // Refresh expert status
-        } catch (e) {
-            console.error("Failed to submit evidence", e)
+        })
+        if (!res.ok) {
+            const error = await res.json()
+            throw new Error(error.detail || 'Evaluation submission failed')
         }
-    }, 2500)
+        lastEvidence.value = await res.json()
+        generated.value = true
+        fetchExperts()
+    } catch (e) {
+        console.error("Failed to submit evidence", e)
+        errorMessage.value = e.message || 'Failed to submit evaluation evidence.'
+    } finally {
+        evaluating.value = false
+    }
 }
-
-const benchmarks = ref([
-    { name: 'Sim Success Rate (SR)', score_base: '42%', score_ft: '92%', status: 'improved' },
-    { name: 'Collision Rate', score_base: '15%', score_ft: '0.1%', status: 'improved' },
-    { name: 'Command Latency (Hz)', score_base: '5Hz', score_ft: '25Hz', status: 'improved' },
-    { name: 'Behavioral Drift', score_base: 'Low', score_ft: 'Stable', status: 'improved' },
-])
 
 onMounted(fetchExperts)
 </script>
@@ -106,7 +107,7 @@ onMounted(fetchExperts)
                   <h2 class="text-2xl font-bold uppercase tracking-tight">FedMoE Eval Arena</h2>
                   <div class="flex items-center gap-2">
                       <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                      <span class="text-[10px] text-gray-500 font-mono uppercase">Simulation Engine Active</span>
+                      <span class="text-[10px] text-gray-500 font-mono uppercase">Evaluation Evidence Ready</span>
                   </div>
               </div>
           </div>
@@ -129,21 +130,15 @@ onMounted(fetchExperts)
           <div class="col-span-4 bg-[#111] border border-[#333] rounded-lg flex flex-col overflow-hidden relative grayscale opacity-40">
              <div class="p-3 border-b border-[#333] bg-[#161616] flex justify-between items-center">
                  <span class="font-bold text-[10px] text-gray-500 uppercase tracking-widest">Base: OpenVLA-7B</span>
-                 <span class="text-[10px] text-red-500 font-bold border border-red-500/30 px-2 py-0.5 rounded">FAILED</span>
+                 <span class="text-[10px] text-gray-400 font-bold border border-gray-500/30 px-2 py-0.5 rounded">NO BASELINE</span>
              </div>
              
-             <!-- Mock Sim View -->
              <div class="flex-1 relative bg-[#050505] overflow-hidden flex items-center justify-center p-8">
                   <div class="absolute inset-0 grid grid-cols-12 grid-rows-12 gap-1 opacity-10 pointer-events-none text-green-500/20">
                       <div v-for="i in 144" :key="i" class="border-[0.5px] border-current"></div>
                   </div>
-                  <div class="relative w-full h-full border border-[#333] rounded p-4 flex items-center justify-center">
-                       <div class="w-16 h-16 border-2 border-gray-600 rounded flex items-center justify-center text-xs text-gray-600">Blue Pad</div>
-                       <div class="absolute top-10 left-10 w-8 h-8 bg-red-800 rounded flex items-center justify-center text-[8px] text-white">Cube</div>
-                       <svg class="absolute inset-0 w-full h-full pointer-events-none">
-                           <path d="M 50 50 Q 100 150 200 100" stroke="#333" stroke-width="2" fill="none" stroke-dasharray="5,5" />
-                           <circle cx="200" cy="100" r="4" fill="red" />
-                       </svg>
+                  <div class="relative w-full h-full border border-[#333] rounded p-4 flex items-center justify-center text-xs text-gray-600 font-mono">
+                       Baseline render unavailable. Attach a real evaluation trace to visualize.
                   </div>
              </div>
           </div>
@@ -157,7 +152,7 @@ onMounted(fetchExperts)
                          <ShieldCheck class="w-2.5 h-2.5" /> PQC VERIFIED
                      </span>
                  </div>
-                 <span v-if="generated" class="text-[10px] text-green-500 font-bold border border-green-500/30 px-2 py-0.5 rounded animate-pulse">SUCCESS (0.8s)</span>
+                 <span v-if="generated" class="text-[10px] text-green-500 font-bold border border-green-500/30 px-2 py-0.5 rounded animate-pulse">EVIDENCE LOGGED</span>
              </div>
              
              <!-- Mock Sim View Active -->
@@ -167,24 +162,16 @@ onMounted(fetchExperts)
                   </div>
                   
                   <div v-if="!generated && !evaluating" class="absolute inset-0 flex items-center justify-center text-gray-700 font-mono text-[10px] uppercase tracking-tighter">
-                      Waiting for command sequence...
+                      Awaiting evaluation evidence...
                   </div>
 
                   <div v-if="evaluating" class="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/60 z-10 backdrop-blur-md">
                       <div class="w-12 h-12 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-                      <div class="font-mono text-primary text-[10px] tracking-widest uppercase animate-pulse">Running Physics Sim...</div>
+                      <div class="font-mono text-primary text-[10px] tracking-widest uppercase animate-pulse">Submitting Evidence...</div>
                   </div>
 
-                  <!-- Success Visual -->
-                  <div v-if="generated" class="relative w-full h-full border border-primary/20 rounded p-4 flex items-center justify-center transition-all duration-700 scale-105">
-                       <div class="w-16 h-16 border-2 border-blue-500/50 rounded flex items-center justify-center text-xs text-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.3)]">
-                            <div class="w-8 h-8 bg-red-600 rounded flex items-center justify-center text-[8px] text-white shadow-lg transform rotate-12">Cube</div>
-                       </div>
-                       <!-- Trajectory -->
-                       <svg class="absolute inset-0 w-full h-full pointer-events-none">
-                           <path d="M 50 50 Q 150 50 250 150 T 400 200" stroke="#ff5722" stroke-width="3" fill="none" class="drop-shadow-[0_0_8px_rgba(255,87,34,0.9)]" />
-                           <circle cx="400" cy="200" r="4" fill="#ff5722" class="animate-ping" />
-                       </svg>
+                  <div v-if="generated" class="relative w-full h-full border border-primary/20 rounded p-4 flex items-center justify-center text-xs text-primary font-mono">
+                       Evidence logged successfully.
                   </div>
              </div>
           </div>
@@ -229,43 +216,38 @@ onMounted(fetchExperts)
                   <button @click="startEval" 
                           class="absolute bottom-4 right-4 bg-primary text-black px-6 py-2 font-black text-xs uppercase tracking-widest flex items-center gap-2 rounded-lg shadow-[0_0_20px_rgba(255,87,34,0.4)] hover:scale-105 active:scale-95 transition-all disabled:grayscale disabled:opacity-50" 
                           :disabled="!task || evaluating || !selectedExpert">
-                      <Play class="w-4 h-4" /> {{ evaluating ? 'EXECUTING...' : 'EXECUTE SIM' }}
+                      <Play class="w-4 h-4" /> {{ evaluating ? 'SUBMITTING...' : 'SUBMIT EVIDENCE' }}
                   </button>
+              </div>
+              <div v-if="errorMessage" class="mt-2 text-xs text-red-400 bg-red-500/10 border border-red-500/30 rounded p-2">
+                  {{ errorMessage }}
               </div>
           </div>
 
-          <!-- Benchmark Table -->
+          <!-- Evaluation Metrics -->
           <div class="col-span-4 bg-[#111] border border-[#333] rounded-lg overflow-hidden flex flex-col shadow-xl">
               <div class="p-3 border-b border-[#333] font-black text-[10px] uppercase tracking-widest flex justify-between items-center bg-[#161616]">
-                  <span class="text-gray-400">Physics Benchmarks</span>
-                  <div class="flex items-center gap-2">
-                      <span class="text-[9px] bg-primary/10 text-primary px-2 py-0.5 rounded border border-primary/20">CALVIN-V2</span>
-                      <span class="text-[9px] bg-blue-500/10 text-blue-500 px-2 py-0.5 rounded border border-blue-500/20">ISAAC SIM</span>
-                  </div>
+                  <span class="text-gray-400">Evaluation Metrics</span>
               </div>
-              <div class="flex-1 overflow-y-auto">
-                  <table class="w-full text-[10px] text-left">
-                      <thead class="bg-[#111] text-gray-600 border-b border-[#222]">
-                          <tr>
-                              <th class="p-2 font-bold uppercase">Metric</th>
-                              <th class="p-2 font-bold uppercase">Base</th>
-                              <th class="p-2 font-bold uppercase">Expert</th>
-                              <th class="p-2"></th>
-                          </tr>
-                      </thead>
-                      <tbody>
-                          <tr v-for="b in benchmarks" :key="b.name" class="border-b border-[#222] hover:bg-white/[0.02] transition-colors">
-                              <td class="p-2 text-gray-400">{{ b.name }}</td>
-                              <td class="p-2 text-gray-600 font-mono">{{ b.score_base }}</td>
-                              <td class="p-2 font-black font-mono" :class="b.status === 'improved' ? 'text-green-500' : 'text-red-500'">{{ b.score_ft }}</td>
-                              <td class="p-2">
-                                  <component :is="b.status === 'improved' ? CheckCircle : AlertTriangle" 
-                                             class="w-3 h-3" 
-                                             :class="b.status === 'improved' ? 'text-green-500' : 'text-red-500'" />
-                              </td>
-                          </tr>
-                      </tbody>
-                  </table>
+              <div class="flex-1 p-4 space-y-4 text-xs text-gray-400">
+                  <div>
+                      <label class="block text-[10px] uppercase mb-1 text-gray-500">Score</label>
+                      <input v-model="evidenceScore" type="number" step="0.01" min="0" max="1"
+                             class="w-full bg-[#0d1117] border border-[#333] rounded px-3 py-2 text-sm text-white" />
+                  </div>
+                  <div>
+                      <label class="block text-[10px] uppercase mb-1 text-gray-500">Collision Rate</label>
+                      <input v-model="evidenceCollision" type="number" step="0.001" min="0"
+                             class="w-full bg-[#0d1117] border border-[#333] rounded px-3 py-2 text-sm text-white" />
+                  </div>
+                  <div>
+                      <label class="block text-[10px] uppercase mb-1 text-gray-500">Latency (Hz)</label>
+                      <input v-model="evidenceLatency" type="number" step="1" min="0"
+                             class="w-full bg-[#0d1117] border border-[#333] rounded px-3 py-2 text-sm text-white" />
+                  </div>
+                  <div v-if="lastEvidence" class="text-[10px] text-gray-500 border-t border-[#222] pt-3">
+                      Latest evidence ID: <span class="text-gray-300 font-mono">{{ lastEvidence.id }}</span>
+                  </div>
               </div>
           </div>
       </div>

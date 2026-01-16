@@ -6,16 +6,11 @@ Provides NIST-standardized post-quantum cryptographic primitives:
 - ML-DSA-65 (Dilithium-3): Digital Signature Algorithm (FIPS 204)
 
 Production Mode:
-    When liboqs is installed, real cryptographic implementations are used.
+    Requires liboqs for real cryptographic implementations.
     Install with: pip install tensorguard[pqc]
-
-Development Mode:
-    When liboqs is not available, functional simulators are used.
-    Simulators provide API compatibility but NO cryptographic security.
 
 SECURITY CONFIGURATION:
     TG_PQC_STRICT=true (default in production): Fail if liboqs not available
-    TG_PQC_STRICT=false: Allow simulator fallback (dev/test only)
 
 Usage:
     from tensorguard.crypto.pqc import Kyber768, Dilithium3, is_pqc_production_ready
@@ -24,7 +19,7 @@ Usage:
     if is_pqc_production_ready():
         print("Using production PQC with liboqs")
     else:
-        print("WARNING: Using simulator mode - no security")
+        raise RuntimeError("PQC not available")
 
     # Key encapsulation
     kem = Kyber768()
@@ -41,7 +36,6 @@ Usage:
 
 import os
 import logging
-import warnings
 
 logger = logging.getLogger(__name__)
 
@@ -86,22 +80,15 @@ def enforce_pqc_strict_mode() -> None:
         if not is_pqc_production_ready():
             error_msg = (
                 "SECURITY ERROR: PQC strict mode enabled but liboqs is not available. "
-                "Post-quantum cryptographic operations cannot use insecure simulators. "
-                "Install liboqs: pip install tensorguard[pqc] or set TG_PQC_STRICT=false "
-                "for development/testing only."
+                "Install liboqs: pip install tensorguard[pqc]."
             )
             logger.critical(error_msg)
             raise PQCSecurityError(error_msg)
         logger.info("PQC strict mode: liboqs verified, using production cryptography")
-    else:
-        if not is_pqc_production_ready():
-            warnings.warn(
-                "PQC SIMULATOR MODE: Using non-cryptographic simulators. "
-                "This provides NO security and is for development/testing only. "
-                "Set TG_PQC_STRICT=true and install liboqs for production.",
-                category=UserWarning,
-                stacklevel=2
-            )
+    elif not is_pqc_production_ready():
+        raise PQCSecurityError(
+            "PQC libraries are required. Install liboqs: pip install tensorguard[pqc]."
+        )
 
 
 # Enforce on module import in production

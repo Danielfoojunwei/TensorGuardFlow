@@ -5,7 +5,7 @@
  * Consolidates: VLA Registry, PEFT Studio, Eval Arena, Skills Library, Model Lineage
  * Tabbed interface for complete model workflow from creation to deployment
  */
-import { ref, computed, onMounted, provide } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import {
     Bot, Database, Scale, BookOpen, GitBranch,
     Plus, Search, Filter, RefreshCw, Play, Shield,
@@ -34,6 +34,7 @@ const skills = ref([])
 const loading = ref(true)
 const searchQuery = ref('')
 const statusFilter = ref('all')
+const errorMessage = ref('')
 
 // Modal states
 const showCreateModal = ref(false)
@@ -43,6 +44,7 @@ const selectedModel = ref(null)
 // Fetch data
 const fetchData = async () => {
     loading.value = true
+    errorMessage.value = ''
     try {
         const [modelsRes, runsRes, skillsRes] = await Promise.allSettled([
             fetch('/api/v1/vla/models'),
@@ -54,33 +56,33 @@ const fetchData = async () => {
             const data = await modelsRes.value.json()
             models.value = data.models || []
         } else {
-            // Mock data
-            models.value = [
-                { id: 'vla-001', name: 'OpenVLA-Factory', version: '2.1.0', status: 'deployed', task_types: ['manipulation', 'assembly'], success_rate: 0.968, safety_score: 0.95, created_at: '2025-12-15T10:30:00Z' },
-                { id: 'vla-002', name: 'Pi0-Logistics', version: '1.3.2', status: 'staged', task_types: ['pick_and_place'], success_rate: 0.942, safety_score: 0.88, created_at: '2025-12-10T14:20:00Z' },
-                { id: 'vla-003', name: 'RT2-Domestic', version: '0.9.0', status: 'validating', task_types: ['pouring', 'wiping'], success_rate: 0.875, safety_score: null, created_at: '2025-12-18T09:15:00Z' }
-            ]
+            models.value = []
+            errorMessage.value = 'Unable to load models. Verify API connectivity.'
         }
 
         if (runsRes.status === 'fulfilled' && runsRes.value.ok) {
             trainingRuns.value = await runsRes.value.json()
         } else {
-            trainingRuns.value = [
-                { id: 'run-001', name: 'factory-finetune-v3', status: 'running', progress: 67, model: 'openvla-7b', created_at: '2025-12-20T08:00:00Z' },
-                { id: 'run-002', name: 'logistics-adapt', status: 'completed', progress: 100, model: 'pi0', created_at: '2025-12-19T14:00:00Z' }
-            ]
+            trainingRuns.value = []
+            if (!errorMessage.value) {
+                errorMessage.value = 'Unable to load training runs. Verify API connectivity.'
+            }
         }
 
         if (skillsRes.status === 'fulfilled' && skillsRes.value.ok) {
             skills.value = await skillsRes.value.json()
         } else {
-            skills.value = [
-                { id: 'skill-001', name: 'pick_and_place', base_model: 'openvla-7b', accuracy: 0.94, status: 'validated' },
-                { id: 'skill-002', name: 'assembly_screw', base_model: 'pi0', accuracy: 0.89, status: 'adapting' }
-            ]
+            skills.value = []
+            if (!errorMessage.value) {
+                errorMessage.value = 'Unable to load skills library. Verify API connectivity.'
+            }
         }
     } catch (e) {
         console.error('Failed to fetch data', e)
+        models.value = []
+        trainingRuns.value = []
+        skills.value = []
+        errorMessage.value = 'Unable to load model data. Verify API connectivity.'
     }
     loading.value = false
 }
@@ -125,7 +127,7 @@ const runValidation = async (modelId) => {
         await fetch('/api/v1/vla/safety/validate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model_id: modelId, test_environment: 'simulation', test_scenarios: 100 })
+            body: JSON.stringify({ model_id: modelId, test_environment: 'production', test_scenarios: 100 })
         })
         await fetchData()
     } catch (e) {
@@ -174,6 +176,9 @@ onMounted(fetchData)
 
     <!-- Tab Content -->
     <div class="flex-1 overflow-hidden bg-[#161b22]">
+      <div v-if="errorMessage" class="px-6 py-3 text-xs text-red-400 bg-red-500/10 border-b border-red-500/30">
+        {{ errorMessage }}
+      </div>
       <!-- Registry Tab -->
       <div v-if="activeTab === 'registry'" class="h-full overflow-y-auto p-6">
         <!-- Filters -->

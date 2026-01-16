@@ -1,20 +1,48 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
-from typing import List, Any, Dict, Optional
+from typing import List, Any, Dict
 from datetime import datetime
-import secrets
 import json
+from functools import lru_cache
 
 from ..database import get_session
 from ..models.core import User, AuditLog
 from ..models.fedmoe_models import FedMoEExpert, SkillEvidence
 from ..auth import get_current_user
-from ...crypto.sig import generate_hybrid_sig_keypair, sign_hybrid
-from ...evidence.canonical import canonical_bytes
+from ...crypto.pqc.dilithium import Dilithium3
+from ...utils.production_gates import require_env
 
 from pydantic import BaseModel
 
 router = APIRouter()
+
+
+@lru_cache(maxsize=1)
+def _load_audit_keys() -> Dict[str, bytes]:
+    private_key_hex = require_env(
+        "TG_AUDIT_PQC_PRIVATE_KEY",
+        remediation="Provide Dilithium-3 private key hex in TG_AUDIT_PQC_PRIVATE_KEY.",
+    )
+    public_key_hex = require_env(
+        "TG_AUDIT_PQC_PUBLIC_KEY",
+        remediation="Provide Dilithium-3 public key hex in TG_AUDIT_PQC_PUBLIC_KEY.",
+    )
+    if not private_key_hex or not public_key_hex:
+        raise RuntimeError("Audit PQC keys must be configured.")
+    try:
+        return {
+            "private": bytes.fromhex(private_key_hex),
+            "public": bytes.fromhex(public_key_hex),
+        }
+    except ValueError as exc:
+        raise ValueError("Invalid hex encoding for audit PQC keys.") from exc
+
+
+def _sign_audit_payload(payload: Dict[str, Any]) -> str:
+    keys = _load_audit_keys()
+    pqc = Dilithium3()
+    signature_bytes = pqc.sign(keys["private"], json.dumps(payload).encode())
+    return f"pqc-dilithium3:{signature_bytes.hex()}"
 
 class ExpertCreate(BaseModel):
     name: str
@@ -46,16 +74,13 @@ async def create_expert(req: ExpertCreate, session: Session = Depends(get_sessio
     session.commit()
     session.refresh(expert)
     
-    # Log the creation in AuditLog with PQC signature
-    # (In real world, we'd use a persistent platform key)
-    pub, priv = generate_hybrid_sig_keypair()
     log_entry = {
         "action": "EXPERT_CREATED",
         "expert_id": expert.id,
         "name": expert.name,
         "timestamp": datetime.utcnow().isoformat()
     }
-    sig = sign_hybrid(priv, json.dumps(log_entry).encode())
+    sig = _sign_audit_payload(log_entry)
     
     audit = AuditLog(
         tenant_id=current_user.tenant_id,
@@ -64,7 +89,7 @@ async def create_expert(req: ExpertCreate, session: Session = Depends(get_sessio
         resource_id=expert.id,
         resource_type="fedmoe_expert",
         details=json.dumps(log_entry),
-        pqc_signature=sig["sig_pqc"]
+        pqc_signature=sig
     )
     session.add(audit)
     session.commit()
@@ -105,17 +130,14 @@ async def add_evidence(expert_id: str, evidence_type: str, value: Dict[str, Any]
         value_json=json.dumps(value)
     )
     
-    # Proof of work signing
-    pub, priv = generate_hybrid_sig_keypair()
     proof_data = {"type": evidence_type, "value": value}
-    sig = sign_hybrid(priv, json.dumps(proof_data).encode())
-    
-    evidence.signed_proof = sig["sig_pqc"]
+    sig = _sign_audit_payload(proof_data)
+    evidence.signed_proof = sig
     
     session.add(evidence)
     
     # Auto-update expert status if evidence is significant
-    if evidence_type == "SIM_SUCCESS" and value.get("score", 0) > 0.8:
+    if evidence_type in {"SIM_SUCCESS", "EVAL_RESULT"} and value.get("score", 0) > 0.8:
         expert.status = "validated"
         expert.accuracy_score = value.get("score")
         expert.collision_rate = value.get("collision_rate", 0.05)

@@ -2,8 +2,11 @@
 TensorGuard Edge Client Core
 """
 
+import io
 import logging
 from typing import Optional, List, Dict, Any
+
+import numpy as np
 from ..schemas.common import Demonstration, ShieldConfig, ClientStatus
 from ..utils.exceptions import ValidationError
 from .adapters import VLAAdapter
@@ -47,14 +50,50 @@ class EdgeClient:
         
         if not self.demonstrations:
             return b""
-            
-        # In a real implementation, this would iterate through demos,
-        # compute gradients via self.adapter, aggregate, and encrypt.
-        # For the unified core, we return a mock payload.
-        
+
+        gradient_batches: List[Dict[str, np.ndarray]] = []
+        for demo in self.demonstrations:
+            gradients = self.adapter.compute_gradients(demo)
+            if not gradients:
+                raise ValidationError("Empty gradients received from adapter")
+            gradient_batches.append(gradients)
+
+        aggregated: Dict[str, np.ndarray] = {}
+        for key in gradient_batches[0].keys():
+            stacked = np.stack([g[key] for g in gradient_batches], axis=0)
+            aggregated[key] = np.mean(stacked, axis=0)
+
+        # Clip gradients to configured norm
+        max_norm = float(self.config.max_gradient_norm)
+        for key, value in aggregated.items():
+            norm = np.linalg.norm(value)
+            if norm > max_norm > 0:
+                aggregated[key] = value * (max_norm / (norm + 1e-12))
+
+        # Apply sparsity by keeping top-k magnitudes (deterministic)
+        sparsity = float(self.config.sparsity)
+        if 0 < sparsity < 1:
+            for key, value in aggregated.items():
+                flat = value.flatten()
+                k = max(1, int(flat.size * (1 - sparsity)))
+                if k < flat.size:
+                    threshold = np.partition(np.abs(flat), -k)[-k]
+                    mask = np.abs(value) >= threshold
+                    aggregated[key] = value * mask
+
+        # Apply DP noise calibrated by epsilon (basic Gaussian mechanism)
+        epsilon = max(float(self.config.dp_epsilon), 1e-6)
+        noise_scale = 1.0 / epsilon
+        rng = np.random.default_rng()
+        for key, value in aggregated.items():
+            aggregated[key] = value + rng.normal(0, noise_scale, size=value.shape)
+
+        buffer = io.BytesIO()
+        np.savez_compressed(buffer, **aggregated)
+
         self.submissions_count += 1
         self.demonstrations = []
-        return b"TENSORGUARD_ENCRYPTED_UPDATE_V2"
+        return buffer.getvalue()
 
 def create_client(model_type: str = "pi0", **kwargs) -> EdgeClient:
     """Factory function for creating an EdgeClient."""

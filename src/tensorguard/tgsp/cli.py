@@ -15,7 +15,7 @@ from .manifest import PackageManifest
 from .tar_deterministic import create_deterministic_tar
 from .format import write_tgsp_package_v1, read_tgsp_header
 from ..crypto.kem import generate_hybrid_keypair, decap_hybrid
-from ..crypto.sig import generate_hybrid_sig_keypair, Dilithium3
+from ..crypto.sig import generate_hybrid_sig_keypair
 from ..crypto.payload import PayloadDecryptor
 
 logger = logging.getLogger(__name__)
@@ -66,22 +66,8 @@ def run_build(args):
                     path = r_str
             
             if os.path.exists(path):
-                try:
-                    with open(path, "r") as f:
-                        pk = json.load(f)
-                except (json.JSONDecodeError, UnicodeDecodeError):
-                    # Fallback for raw legacy bytes
-                    from ..crypto.pqc.kyber import Kyber768
-                    with open(path, "rb") as f:
-                        raw = f.read()
-                        # Generate proper PQC keys for simulator
-                        kyber = Kyber768()
-                        pk_pqc, _ = kyber.keygen()
-                        pk = {
-                            "classic": raw.hex(),
-                            "pqc": pk_pqc.hex(),
-                            "alg": "Hybrid-Kyber-v1"
-                        }
+                with open(path, "r") as f:
+                    pk = json.load(f)
                 recipients_public_keys.append(pk)
             else:
                 logger.warning(f"Recipient key not found: {r_str} (resolved to {path})")
@@ -93,28 +79,28 @@ def run_build(args):
         
     # 4. Signing Key
     if args.signing_key:
-        try:
-            with open(args.signing_key, "r") as f:
-                sk = json.load(f)
-        except (json.JSONDecodeError, UnicodeDecodeError):
-            # Fallback for raw legacy bytes
-            with open(args.signing_key, "rb") as f:
-                raw = f.read()
-                # Generate proper PQC keys for simulator
-                dil = Dilithium3()
-                _, sk_pqc = dil.keygen()
-                sk = {
-                    "classic": raw.hex(),
-                    "pqc": sk_pqc.hex(),
-                    "alg": "Hybrid-Dilithium-v1"
-                }
+        with open(args.signing_key, "r") as f:
+            sk = json.load(f)
         sk_id = "key_1"
     else:
         raise ValueError("TGSP v1.0 requires signing key (Hybrid PQC)")
+
+    if not args.signing_pub:
+        raise ValueError("TGSP v1.0 requires signing public key (Hybrid PQC)")
+    with open(args.signing_pub, "r") as f:
+        signing_pub = json.load(f)
         
     # 5. Write Container
     with open(tf_path, "rb") as payload_stream:
-        evt = write_tgsp_package_v1(args.out, manifest, payload_stream, recipients_public_keys, sk, sk_id)
+        evt = write_tgsp_package_v1(
+            args.out,
+            manifest,
+            payload_stream,
+            recipients_public_keys,
+            sk,
+            signing_pub,
+            sk_id,
+        )
         
     from ..evidence.store import get_store
     get_store().save_event(evt)
@@ -136,22 +122,8 @@ def run_open(args):
         print("Private key required to open")
         return
 
-    try:
-        with open(args.key, "r") as f:
-            sk = json.load(f)
-    except (json.JSONDecodeError, UnicodeDecodeError):
-        # Fallback for raw legacy bytes
-        from ..crypto.pqc.kyber import Kyber768
-        with open(args.key, "rb") as f:
-            raw = f.read()
-            # Generate proper PQC keys for simulator
-            kyber = Kyber768()
-            _, sk_pqc = kyber.keygen()
-            sk = {
-                "classic": raw.hex(),
-                "pqc": sk_pqc.hex(),
-                "alg": "Hybrid-Kyber-v1"
-            }
+    with open(args.key, "r") as f:
+        sk = json.load(f)
         
     dek = None
     for rec in data["recipients"]:
@@ -258,6 +230,7 @@ def main():
     bd.add_argument("--model-version", default="1.0.0")
     bd.add_argument("--recipients", nargs="+", help="Paths to recipient public key JSONs")
     bd.add_argument("--signing-key", required=True, help="Path to signing private key JSON")
+    bd.add_argument("--signing-pub", required=True, help="Path to signing public key JSON")
     
     ins = subps.add_parser("inspect")
     ins.add_argument("--file", required=True)

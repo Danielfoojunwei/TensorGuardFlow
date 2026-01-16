@@ -4,6 +4,8 @@ Configuration Endpoints - Unified Agent Config Management
 Endpoints for agents to fetch their configuration and for admins to manage fleet policies.
 """
 
+import json
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Header
 from sqlmodel import Session, select
 from typing import Dict, Any, Optional
@@ -11,6 +13,7 @@ from packaging import version
 
 from ..database import get_session
 from ..models.core import Fleet
+from ..models.settings_models import FleetPolicyRecord
 from ..auth import get_current_user
 from ...schemas.unified_config import AgentConfig, FleetPolicy, DeploymentDirective
 from ..models.identity_models import IdentityAgent as AgentDB
@@ -34,15 +37,18 @@ async def get_fleet_policy(
     if not fleet or fleet.tenant_id != current_user.tenant_id:
         raise HTTPException(status_code=404, detail="Fleet not found")
     
-    # In a real impl, this would come from a FleetPolicyDB model
-    # For now, return a default/stub policy based on fleet config
-    return FleetPolicy(
-        fleet_id=fleet.id,
-        name=f"Policy for {fleet.name}",
-        identity_rules={"auto_renew": True},
-        network_rules={"defense_mode": "front"},
-        ml_rules={"security_level": "medium"}
-    )
+    policy_record = session.exec(
+        select(FleetPolicyRecord).where(
+            FleetPolicyRecord.fleet_id == fleet.id,
+            FleetPolicyRecord.tenant_id == current_user.tenant_id,
+        )
+    ).first()
+    if not policy_record:
+        raise HTTPException(
+            status_code=404,
+            detail="Fleet policy not found. Create one via the update endpoint.",
+        )
+    return FleetPolicy(**json.loads(policy_record.policy_json))
 
 @router.put("/fleets/{fleet_id}/policy", response_model=FleetPolicy)
 async def update_fleet_policy(
@@ -56,7 +62,26 @@ async def update_fleet_policy(
     if not fleet or fleet.tenant_id != current_user.tenant_id:
         raise HTTPException(status_code=404, detail="Fleet not found")
     
-    # Stub: Save policy to DB
+    policy_record = session.exec(
+        select(FleetPolicyRecord).where(
+            FleetPolicyRecord.fleet_id == fleet.id,
+            FleetPolicyRecord.tenant_id == current_user.tenant_id,
+        )
+    ).first()
+    if policy_record:
+        policy_record.policy_json = policy.model_dump_json()
+        policy_record.updated_at = datetime.utcnow()
+        policy_record.updated_by = current_user.id
+    else:
+        policy_record = FleetPolicyRecord(
+            tenant_id=current_user.tenant_id,
+            fleet_id=fleet.id,
+            policy_json=policy.model_dump_json(),
+            updated_by=current_user.id,
+        )
+    session.add(policy_record)
+    session.commit()
+    session.refresh(policy_record)
     return policy
 
 

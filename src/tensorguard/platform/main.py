@@ -3,7 +3,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
-from .database import init_db, check_db_health
+from .database import init_db, check_db_health, SessionLocal
 import os
 import logging
 from datetime import datetime
@@ -38,7 +38,9 @@ from contextlib import asynccontextmanager
 from .api.identity_endpoints import get_session
 from ..identity.scheduler import RenewalScheduler
 from .models.identity_models import IdentityRenewalJob, RenewalJobStatus
-from sqlmodel import select
+from .models.core import AuditLog, Fleet
+from .models.telemetry_models import TelemetryStageEvent, TelemetrySystemEvent
+from sqlmodel import select, func
 from ..utils.startup_validation import validate_startup_config
 
 
@@ -169,13 +171,44 @@ async def liveness_check():
 @app.get("/metrics", tags=["observability"])
 async def prometheus_metrics():
     """
-    Prometheus metrics endpoint (stub).
+    Prometheus metrics endpoint.
 
-    Returns an empty Prometheus-formatted response.
-    In production, this would be populated by prometheus_client or similar.
+    Returns a Prometheus-formatted response derived from live database data.
     """
+    try:
+        with SessionLocal() as session:
+            audit_total = session.exec(select(func.count()).select_from(AuditLog)).one()
+            fleet_total = session.exec(select(func.count()).select_from(Fleet)).one()
+            stage_events_total = session.exec(
+                select(func.count()).select_from(TelemetryStageEvent)
+            ).one()
+            system_events_total = session.exec(
+                select(func.count()).select_from(TelemetrySystemEvent)
+            ).one()
+
+        lines = [
+            "# TensorGuard Platform Metrics",
+            "# TYPE tensorguard_info gauge",
+            "tensorguard_info{version=\"2.3.0\"} 1",
+            "# TYPE tensorguard_audit_logs_total counter",
+            f"tensorguard_audit_logs_total {audit_total}",
+            "# TYPE tensorguard_fleets_total gauge",
+            f"tensorguard_fleets_total {fleet_total}",
+            "# TYPE tensorguard_telemetry_stage_events_total counter",
+            f"tensorguard_telemetry_stage_events_total {stage_events_total}",
+            "# TYPE tensorguard_telemetry_system_events_total counter",
+            f"tensorguard_telemetry_system_events_total {system_events_total}",
+        ]
+        content = "\n".join(lines) + "\n"
+    except Exception as exc:
+        logger.error(f"Metrics collection failed: {exc}")
+        return Response(
+            content='{"error": "metrics collection failed"}',
+            status_code=503,
+            media_type="application/json",
+        )
     return Response(
-        content="# TensorGuard Platform Metrics\n# TYPE tensorguard_info gauge\ntensorguard_info{version=\"2.3.0\"} 1\n",
+        content=content,
         media_type="text/plain; charset=utf-8"
     )
 

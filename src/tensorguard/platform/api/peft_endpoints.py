@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlmodel import Session, select
 from typing import List, Any, Dict, Optional
 from datetime import datetime
+import hashlib
 import json
 
 from ..database import get_session
@@ -47,9 +48,11 @@ async def list_profiles(current_user: User = Depends(get_current_user)):
 async def compile_wizard(state: PeftWizardState, current_user: User = Depends(get_current_user)):
     # Derived defaults and validation
     config = state.dict()
+    config_blob = json.dumps(config, sort_keys=True, separators=(",", ":")).encode()
+    config_hash = hashlib.sha256(config_blob).hexdigest()
     config["derived_info"] = {
         "estimated_memory": "8GB (approx)",
-        "config_hash": "stub-hash-123"
+        "config_hash": config_hash
     }
     return config
 
@@ -105,7 +108,8 @@ async def get_run(run_id: str, session: Session = Depends(get_session), current_
 async def promote_run(run_id: str, channel: str, session: Session = Depends(get_session), current_user: User = Depends(get_current_user)):
     run = session.get(PeftRun, run_id)
     if not run: raise HTTPException(status_code=404)
-    # Policy Gate Placeholder
+    if not run.metrics_json:
+        return {"ok": False, "reason": "Policy Gate: Missing metrics for promotion."}
     if run.metrics_json.get("accuracy", 0) < 0.9:
         return {"ok": False, "reason": "Policy Gate: Accuracy too low for promotion."}
     
