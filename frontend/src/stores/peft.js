@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 
 export const usePeftStore = defineStore('peft', () => {
   const step = ref(1)
@@ -68,9 +68,9 @@ export const usePeftStore = defineStore('peft', () => {
         throw new Error('Failed to start run')
       }
     } catch (e) {
-      console.warn("Backend not available - falling back to simulation", e)
-      run.value.logs.push('[WARN] Backend unavailable, simulating training...')
-      simulateTraining()
+      console.warn("Backend not available", e)
+      run.value.status = 'failed'
+      run.value.logs.push('[ERROR] Backend unavailable. Training run was not started.')
     }
   }
 
@@ -109,24 +109,6 @@ export const usePeftStore = defineStore('peft', () => {
     }, 2000)
   }
 
-  // Fallback simulation when backend unavailable
-  const simulateTraining = () => {
-    run.value.status = 'running'
-    let p = 0
-    const interval = setInterval(() => {
-      p += 5
-      run.value.progress = p
-      run.value.logs.push(`[TRAIN] Step ${p/5}: Loss=${(Math.random()).toFixed(4)}`)
-
-      if (p >= 100) {
-        clearInterval(interval)
-        run.value.status = 'completed'
-        run.value.metrics = { loss: 0.0123, accuracy: 0.956 }
-        run.value.logs.push('[DONE] Training completed successfully.')
-      }
-    }, 200)
-  }
-
   // Load profiles from backend
   const loadProfiles = async () => {
     try {
@@ -137,9 +119,7 @@ export const usePeftStore = defineStore('peft', () => {
     } catch (e) {
       console.warn("Failed to load profiles", e)
     }
-    return [
-      { id: 'local-hf', name: 'Local HF Studio', description: 'Local training with HuggingFace' }
-    ]
+    return []
   }
 
   const applyProfile = async (profileName) => {

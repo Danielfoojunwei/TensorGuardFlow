@@ -1,28 +1,26 @@
 <script setup>
-import { ClipboardList, Hash, RefreshCw, FileText } from 'lucide-vue-next'
+import { ClipboardList, Hash, RefreshCw } from 'lucide-vue-next'
 import { ref, onMounted } from 'vue'
 
 const auditLogs = ref([])
 const loading = ref(false)
+const errorMessage = ref('')
 
 const fetchLogs = async () => {
     loading.value = true
+    errorMessage.value = ''
     try {
         const res = await fetch('/api/v1/audit/logs?limit=50')
         if (res.ok) {
             const data = await res.json()
             auditLogs.value = data
         } else {
-            throw new Error('Backend not available')
+            throw new Error('Backend unavailable')
         }
     } catch (e) {
-        console.warn("Failed to fetch audit logs - using fallback data", e)
-        // Fallback to mock data if backend not available
-        auditLogs.value = [
-            { id: 'ev-1', action: 'KEY_ROTATION_SUCCESS', actor: 'SYSTEM', target: 'key-us-east-1', hash: 'e3b0c44298fc1...2427ae41e4649', time: '10m ago' },
-            { id: 'ev-2', action: 'MODEL_DEPLOY', actor: 'Daniel Foo', target: 'llama-3-8b-finetuned-v2', hash: '8f434346648f6...1dd3c1ac88b59', time: '1h ago' },
-            { id: 'ev-3', action: 'FLEET_ENROLL', actor: 'PROVISIONER', target: 'device-ax-99', hash: 'ca978112ca1bb...807785afee48bb', time: '2h ago' },
-        ]
+        console.warn("Failed to fetch audit logs", e)
+        auditLogs.value = []
+        errorMessage.value = 'Unable to load audit logs. Ensure the backend is reachable and you are authenticated.'
     }
     loading.value = false
 }
@@ -47,7 +45,8 @@ onMounted(fetchLogs)
     <div class="bg-[#0d1117] border border-[#30363d] rounded-lg overflow-hidden">
        <div v-if="auditLogs.length === 0" class="flex flex-col items-center justify-center p-20 text-gray-500">
            <ClipboardList class="w-16 h-16 mb-4 opacity-20" />
-           <p>No security events found</p>
+           <p v-if="errorMessage">{{ errorMessage }}</p>
+           <p v-else>No security events found</p>
        </div>
        
        <div v-else class="divide-y divide-[#30363d]">

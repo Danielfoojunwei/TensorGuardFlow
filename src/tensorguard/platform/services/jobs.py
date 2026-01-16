@@ -1,4 +1,6 @@
+import json
 import logging
+import os
 from ..models.core import Job
 
 logger = logging.getLogger(__name__)
@@ -15,9 +17,12 @@ async def dispatch_job_to_fleet(job: Job):
     logger.info(f"Dispatching JOB {job.id} [Type: {job.type}] to Fleet {job.fleet_id}")
     
     # 1. Resolve Fleet Address (Real Logic)
-    # in a real app, fleet.api_url would be in the DB.
-    # We'll assume a convention or env var for this execution if not present.
-    target_url = "http://localhost:8080/v1/task" # Default placeholder
+    # Resolve target URL from job config or environment.
+    config = json.loads(job.config_json or "{}")
+    target_url = config.get("target_url") or os.getenv("TG_FLEET_TARGET_URL")
+    if not target_url:
+        logger.error("Dispatch failed: target_url not configured for job.")
+        return False
     
     import requests
     try:

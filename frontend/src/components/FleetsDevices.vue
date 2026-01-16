@@ -1,9 +1,6 @@
 <script setup>
-import { Server, Radio, MoreVertical, Plus, RefreshCw, Loader2 } from 'lucide-vue-next'
+import { Server, Plus, RefreshCw, Loader2 } from 'lucide-vue-next'
 import { ref, onMounted } from 'vue'
-import { useSimulationStore } from '../stores/simulation'
-
-const store = useSimulationStore()
 
 const fleets = ref([])
 const loading = ref(true)
@@ -19,11 +16,8 @@ const fetchFleets = async () => {
             throw new Error('Backend not available')
         }
     } catch (e) {
-        console.warn("Failed to fetch fleets - using fallback", e)
-        fleets.value = [
-            { id: 'f1', name: 'US-East-1 Cluster', region: 'us-east-1', status: 'Healthy', devices_total: 450, devices_online: 442, trust: 99.2 },
-            { id: 'f2', name: 'Berlin Gigafactory', region: 'eu-central-1', status: 'Degraded', devices_total: 120, devices_online: 89, trust: 84.5 },
-        ]
+        console.warn("Failed to fetch fleets", e)
+        fleets.value = []
     }
     loading.value = false
 }
@@ -50,16 +44,13 @@ const enrollDevice = async () => {
 }
 
 const getDeviceCount = (fleetId) => {
-    // Try to get from simulation store if matches, else return fleet's total
-    const storeDevices = store.devices.filter(d => d.fleet === fleetId).length
     const fleet = fleets.value.find(f => f.id === fleetId)
-    return storeDevices || (fleet ? fleet.devices_total : 0)
+    return fleet ? fleet.devices_total : 0
 }
 
 const getOnlineCount = (fleetId) => {
-    const storeOnline = store.devices.filter(d => d.fleet === fleetId && d.status !== 'offline').length
     const fleet = fleets.value.find(f => f.id === fleetId)
-    return storeOnline || (fleet ? fleet.devices_online : 0)
+    return fleet ? fleet.devices_online : 0
 }
 
 onMounted(fetchFleets)
@@ -73,10 +64,6 @@ onMounted(fetchFleets)
          <span class="text-xs text-gray-500">Edge Node Orchestration</span>
        </div>
        <div class="flex gap-2">
-          <button @click="store.startRound()" class="btn bg-gray-700 hover:bg-gray-600 text-white" :disabled="store.roundStatus !== 'idle'">
-              <Radio class="w-4 h-4 mr-2" :class="store.roundStatus !== 'idle' ? 'animate-spin' : ''" /> 
-              {{ store.roundStatus === 'idle' ? 'Start Training Round' : 'Round Active...' }}
-          </button>
           <button @click="fetchFleets" :disabled="loading" class="btn btn-secondary">
              <RefreshCw class="w-4 h-4" :class="loading ? 'animate-spin' : ''" />
           </button>

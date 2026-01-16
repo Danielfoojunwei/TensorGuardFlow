@@ -32,6 +32,7 @@ def write_tgsp_package_v1(output_path: str,
                           payload_stream: IO[bytes],
                           recipients_public_keys: List[Dict], # List of Hybrid Public Keys
                           signing_key: Dict,  # Hybrid Private Key
+                          signing_public_key: Dict,  # Hybrid Public Key
                           signing_key_id: str) -> Dict:
     """
     Write a TGSP v1.0 Container (Hybrid PQC).
@@ -45,25 +46,20 @@ def write_tgsp_package_v1(output_path: str,
     payload_temp = tempfile.TemporaryFile()
     
     # Embed signing public key in manifest for self-verification
-    from ..crypto.sig import Dilithium3
     from cryptography.hazmat.primitives.asymmetric import ed25519
     from cryptography.hazmat.primitives import serialization
     
     # Derive public key from private key
     priv_c = ed25519.Ed25519PrivateKey.from_private_bytes(bytes.fromhex(signing_key["classic"]))
     pub_c = priv_c.public_key()
-    
-    # Get PQC public key (stored in signing_key or derive from secret)
-    dil = Dilithium3()
-    pk_pqc_bytes = bytes.fromhex(signing_key["pqc"])
-    # For simulator: the secret key starts with the public key seed
-    pk_seed = hashlib.sha256(pk_pqc_bytes).digest()
-    pk_pqc = pk_seed + os.urandom(dil.PK_SIZE - 32)
-    
+
     author_pubkey = {
-        "classic": pub_c.public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw).hex(),
-        "pqc": pk_pqc.hex(),
-        "alg": "Hybrid-Dilithium-v1"
+        "classic": signing_public_key.get(
+            "classic",
+            pub_c.public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw).hex(),
+        ),
+        "pqc": signing_public_key["pqc"],
+        "alg": signing_public_key.get("alg", "Hybrid-Dilithium-v1"),
     }
     
     # Create a new manifest with the embedded pubkey

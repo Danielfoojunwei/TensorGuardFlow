@@ -9,21 +9,41 @@ Used for adapter swaps, rollbacks, and other security-critical events.
 
 import json
 import logging
-import hashlib
-import os
+from functools import lru_cache
 from datetime import datetime
 from typing import Optional, Dict, Any
 from sqlmodel import Session
 
 from ..models.core import AuditLog
 from ..models.telemetry_models import ForensicsEvent
+from ...crypto.pqc.dilithium import Dilithium3
+from ...utils.production_gates import require_env
 
 logger = logging.getLogger(__name__)
 
-# PQC implementation status
-# In production, this would use a proper PQC library like liboqs or pqcrypto
-# For now, we use SHA-512 with a secret key as a placeholder
-PQC_SECRET_KEY = os.environ.get("TG_PQC_SECRET_KEY", "default-pqc-secret-key")
+@lru_cache(maxsize=1)
+def _load_pqc_keys() -> Dict[str, bytes]:
+    private_key_hex = require_env(
+        "TG_FORENSICS_PQC_PRIVATE_KEY",
+        remediation=(
+            "Provide the Dilithium-3 private key hex in TG_FORENSICS_PQC_PRIVATE_KEY."
+        ),
+    )
+    public_key_hex = require_env(
+        "TG_FORENSICS_PQC_PUBLIC_KEY",
+        remediation=(
+            "Provide the Dilithium-3 public key hex in TG_FORENSICS_PQC_PUBLIC_KEY."
+        ),
+    )
+    if not private_key_hex or not public_key_hex:
+        raise RuntimeError("Forensics PQC keys must be configured.")
+    try:
+        return {
+            "private": bytes.fromhex(private_key_hex),
+            "public": bytes.fromhex(public_key_hex),
+        }
+    except ValueError as exc:
+        raise ValueError("Invalid hex encoding for forensics PQC keys.") from exc
 
 
 class ForensicsService:
@@ -123,21 +143,31 @@ class ForensicsService:
         Returns:
             True if signature is valid, False otherwise
         """
-        expected_signature = self._compute_pqc_signature(
-            deployment_id=event.deployment_id,
-            adapter_id=event.adapter_id,
-            timestamp=event.ts
-        )
+        if not event.pqc_signature:
+            logger.warning(f"Forensics event missing signature: event_id={event.id}")
+            return False
 
-        is_valid = event.pqc_signature == expected_signature
+        prefix = "pqc-dilithium3:"
+        if not event.pqc_signature.startswith(prefix):
+            logger.warning(f"Unsupported signature format for event_id={event.id}")
+            return False
 
+        signature_hex = event.pqc_signature[len(prefix):]
+        try:
+            signature_bytes = bytes.fromhex(signature_hex)
+        except ValueError:
+            logger.warning(f"Invalid signature encoding for event_id={event.id}")
+            return False
+
+        keys = _load_pqc_keys()
+        pqc = Dilithium3()
+        message = f"{event.deployment_id}:{event.adapter_id}:{event.ts.strftime('%Y-%m-%dT%H:%M:%S.%fZ')}"
+
+        is_valid = pqc.verify(keys["public"], message.encode(), signature_bytes)
         if not is_valid:
             logger.warning(
-                f"Forensics event signature verification failed: "
-                f"event_id={event.id}, expected={expected_signature[:16]}..., "
-                f"actual={event.pqc_signature[:16]}..."
+                f"Forensics event signature verification failed: event_id={event.id}"
             )
-
         return is_valid
 
     def log_adapter_swap(
@@ -233,28 +263,17 @@ class ForensicsService:
         """
         Compute PQC signature for forensics event.
 
-        Signature format: pqc-sha512:<hex-digest>
-
-        Note: In production, this would use a proper PQC algorithm like
-        CRYSTALS-Dilithium or SPHINCS+. For now, we use HMAC-SHA512 as a
-        placeholder that provides the same tamper-detection properties.
+        Signature format: pqc-dilithium3:<hex-signature>
         """
         # Canonical timestamp format
         ts_str = timestamp.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
         # Message to sign: deployment_id + adapter_id + timestamp
         message = f"{deployment_id}:{adapter_id}:{ts_str}"
-
-        # HMAC-SHA512 with PQC secret key
-        import hmac
-        signature_bytes = hmac.new(
-            PQC_SECRET_KEY.encode(),
-            message.encode(),
-            hashlib.sha512
-        ).digest()
-
-        # Return with algorithm prefix for future compatibility
-        return f"pqc-sha512:{signature_bytes.hex()}"
+        keys = _load_pqc_keys()
+        pqc = Dilithium3()
+        signature_bytes = pqc.sign(keys["private"], message.encode())
+        return f"pqc-dilithium3:{signature_bytes.hex()}"
 
     def _log_to_audit(
         self,
@@ -300,11 +319,7 @@ def compute_pqc_signature_standalone(
     ts_str = timestamp.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
     message = f"{deployment_id}:{adapter_id}:{ts_str}"
 
-    import hmac
-    signature_bytes = hmac.new(
-        PQC_SECRET_KEY.encode(),
-        message.encode(),
-        hashlib.sha512
-    ).digest()
-
-    return f"pqc-sha512:{signature_bytes.hex()}"
+    keys = _load_pqc_keys()
+    pqc = Dilithium3()
+    signature_bytes = pqc.sign(keys["private"], message.encode())
+    return f"pqc-dilithium3:{signature_bytes.hex()}"
