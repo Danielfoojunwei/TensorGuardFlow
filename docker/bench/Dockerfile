@@ -6,14 +6,14 @@ WORKDIR /app
 # Install system dependencies
 RUN apt-get update && apt-get install -y make curl build-essential
 
-# Install dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install psutil matplotlib
+# Copy packaging metadata first for better layer caching
+COPY pyproject.toml README.md Makefile /app/
+COPY src /app/src
+COPY alembic /app/alembic
+COPY alembic.ini /app/
 
-# Copy Source
-COPY . .
-RUN pip install -e .
+# Install dependencies
+RUN pip install --no-cache-dir ".[bench,fl,acme,pqc]"
 
 # Set Env
 ENV PYTHONPATH=/app/src

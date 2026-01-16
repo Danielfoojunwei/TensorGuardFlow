@@ -241,6 +241,7 @@ class MoaiExporter:
             open(model_path, "rb").read()
         ).hexdigest()[:32]
 
+        base_config = self.config.__dict__.copy() if hasattr(self.config, "__dict__") else {}
         meta = ModelPackMetadata(
             model_id=model_id,
             version="1.0.0",
@@ -249,7 +250,7 @@ class MoaiExporter:
             created_at=datetime.utcnow().isoformat(),
             git_commit_hash=git_commit,
             config={
-                **self.config.__dict__.copy() if hasattr(self.config, "__dict__") else {},
+                **base_config,
                 "source_checkpoint": model_path,
                 "checkpoint_hash": checkpoint_hash,
                 "weight_hashes": weight_hashes,

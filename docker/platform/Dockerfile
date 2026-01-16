@@ -13,14 +13,14 @@ RUN apt-get update && apt-get install -y \
     liboqs-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy source code
+# Copy packaging metadata first for better layer caching
+COPY pyproject.toml README.md /app/
 COPY src /app/src
 COPY alembic /app/alembic
 COPY alembic.ini /app/
+
+# Install package with required extras
+RUN pip install --no-cache-dir ".[fl,acme,pqc]"
 
 # Set ownership
 RUN chown -R tensorguard:tensorguard /app

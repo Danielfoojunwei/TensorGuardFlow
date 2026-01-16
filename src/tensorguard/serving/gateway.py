@@ -11,6 +11,7 @@ import uvicorn
 import base64
 
 from ..utils.logging import get_logger
+from ..utils.startup_validation import validate_startup_config
 from .backend import TenSEALBackend, MoaiBackend
 from .auth import get_current_tenant
 from ..moai.modelpack import ModelPack
@@ -86,4 +87,10 @@ async def load_model(file: bytes = fastapi.File(...), tenant_id: str = Depends(g
 
 
 def start_server(port=8000):
+    validate_startup_config(
+        "serving",
+        require_database=True,
+        require_secret_key=True,
+        required_dependencies=[("cryptography", "Install cryptography: pip install cryptography>=41.0")],
+    )
     uvicorn.run(app, host="0.0.0.0", port=port)

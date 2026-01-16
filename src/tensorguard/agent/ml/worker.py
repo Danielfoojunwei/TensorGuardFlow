@@ -29,49 +29,13 @@ from tensorguard.core.production import (
     ModelQualityMetrics,
 )
 from tensorguard.schemas.common import Demonstration
+from tensorguard.utils.production_gates import ProductionGateError, is_production, require_dependency
 
-# Flower compatibility
-# Provides stubs for Flower (flwr) types when the library is not installed.
-# This allows the code to be imported and type-checked without flwr dependency.
-try:
-    import flwr as fl
-    from flwr.common import FitIns, FitRes, Parameters
-    FLWR_AVAILABLE = True
-except ImportError:
-    FLWR_AVAILABLE = False
-
-    # Stub classes for when Flower is not installed
-    class Parameters:
-        """Stub for flwr.common.Parameters."""
-        def __init__(self, tensors=None, tensor_type=""):
-            self.tensors = tensors or []
-            self.tensor_type = tensor_type
-
-    class FitIns:
-        """Stub for flwr.common.FitIns."""
-        def __init__(self, parameters=None, config=None):
-            self.parameters = parameters or Parameters()
-            self.config = config or {}
-
-    class FitRes:
-        """Stub for flwr.common.FitRes."""
-        def __init__(self, status=None, parameters=None, num_examples=0, metrics=None):
-            self.status = status
-            self.parameters = parameters or Parameters()
-            self.num_examples = num_examples
-            self.metrics = metrics or {}
-
-    class fl:
-        """Stub for flwr module."""
-        class client:
-            class NumPyClient:
-                """Stub for flwr.client.NumPyClient."""
-                pass
-
-        class common:
-            Parameters = Parameters
-            FitIns = FitIns
-            FitRes = FitRes
+fl = require_dependency(
+    "flwr",
+    package_name="flwr",
+    remediation="Install flwr: pip install tensorguard[fl]",
+)
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +50,7 @@ class WorkerConfig:
     key_path: str = "keys/tensorguard.key"
     security_level: int = 128
 
-class TrainingWorker(fl.client.NumPyClient if 'fl' in globals() else object):
+class TrainingWorker(fl.client.NumPyClient if fl is not None else object):
     """
     Worker responsible for executing training rounds and preserving privacy.
     """
@@ -97,6 +61,14 @@ class TrainingWorker(fl.client.NumPyClient if 'fl' in globals() else object):
         cid: str = "0",
         enable_observability: bool = True
     ):
+        if fl is None:
+            if is_production():
+                raise ProductionGateError(
+                    gate_name="FLWR_DEPENDENCY",
+                    message="Flower (flwr) is required for federated training in production.",
+                    remediation="Install flwr: pip install tensorguard[fl]",
+                )
+            logger.warning("Flower (flwr) not installed; TrainingWorker running without federated client bindings.")
         self.cid = cid
         self.config = config
         
@@ -288,8 +260,8 @@ class TrainingWorker(fl.client.NumPyClient if 'fl' in globals() else object):
                     training_duration_seconds=latency.train_ms / 1000
                 ),
                 safety_stats=SafetyStatistics(
-                    kl_divergence=0.0, # Stub
-                    grad_norm_mean=0.0, # Stub
+                    kl_divergence=0.0,
+                    grad_norm_mean=0.0,
                     grad_norm_max=0.0,
                     dp_epsilon_consumed=self.dp_profile.epsilon_consumed
                 )

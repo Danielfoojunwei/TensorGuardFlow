@@ -30,7 +30,7 @@ from .manager import IdentityManager
 from .scanner import CertificateScanner
 from .csr_generator import CSRGenerator
 from .deployers import DeployerFactory
-from .attestation import TPMSimulator
+from .tpm_simulator import TPMSimulator
 
 __all__ = [
     "IdentityManager",

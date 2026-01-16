@@ -1,7 +1,7 @@
 # Makefile for TensorGuardFlow
 # Automation for build, test, and security verification
 
-.PHONY: install test agent bench clean reports lint setup
+.PHONY: install test agent bench clean reports lint setup ci typecheck
 
 # Default target
 all: test
@@ -29,7 +29,7 @@ setup:
 # Testing
 test:
 	@echo "--- Running Holistic Security Fabric Tests ---"
-	export PYTHONPATH=src && python -m pytest tests/
+	python -m pytest tests/
 
 # Agent Orchestration
 agent:
@@ -49,6 +49,15 @@ bench:
 lint:
 	@echo "--- Running Linter (ruff) ---"
 	ruff check src/
+
+# Type checking
+typecheck:
+	@echo "--- Running Type Checker (mypy) ---"
+	mypy src/
+
+# CI target: install, lint, (optional type check), tests
+ci: install lint typecheck test
+	@echo "--- CI checks completed ---"
 
 # Cleanup
 clean:
