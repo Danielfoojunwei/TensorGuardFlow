@@ -11,6 +11,7 @@ from typing import Dict, Any, List
 
 from ..moai.modelpack import ModelPack
 from ..utils.logging import get_logger
+from ..utils.production_gates import ProductionGateError, is_production
 from ..utils.serialization import safe_loads
 
 logger = get_logger(__name__)
@@ -129,8 +130,16 @@ class TenSEALBackend(MoaiBackend):
 class NativeBackend(MoaiBackend):
     """Placeholder for C++ MOAI runtime."""
 
+    def __init__(self):
+        if is_production():
+            raise ProductionGateError(
+                gate_name="MOAI_NATIVE_BACKEND",
+                message="Native MOAI runtime is not available in this build.",
+                remediation="Install the native MOAI runtime or configure TenSEAL backend for production.",
+            )
+
     def load_model(self, model_pack: ModelPack):
-        raise NotImplementedError("Native MOAI runtime not available inside python-only environment.")
+        raise RuntimeError("Native MOAI runtime not available inside python-only environment.")
 
     def infer(self, ciphertext: bytes, eval_keys: bytes) -> bytes:
-        raise NotImplementedError("Native MOAI runtime not available.")
+        raise RuntimeError("Native MOAI runtime not available.")

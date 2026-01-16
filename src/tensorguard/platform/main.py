@@ -39,6 +39,7 @@ from .api.identity_endpoints import get_session
 from ..identity.scheduler import RenewalScheduler
 from .models.identity_models import IdentityRenewalJob, RenewalJobStatus
 from sqlmodel import select
+from ..utils.startup_validation import validate_startup_config
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -71,6 +72,13 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    validate_startup_config(
+        "platform",
+        require_database=True,
+        require_secret_key=True,
+        require_key_master=True,
+        required_dependencies=[("cryptography", "Install cryptography: pip install cryptography>=41.0")],
+    )
     # Startup logic (e.g., connector discovery)
     logger.info("Starting TensorGuard Management Platform...")
     yield

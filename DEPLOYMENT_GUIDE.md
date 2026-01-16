@@ -28,8 +28,8 @@ pip install -r requirements.txt
 # Set DB URL (defaults to sqlite:///tensorguard.db)
 set DATABASE_URL=postgresql://user:pass@localhost:5432/tensorguard
 
-# Verify Alembic migrations
-python migrate_db.py
+# Apply Alembic migrations
+alembic upgrade head
 ```
 
 ### Step 3: Seed Default Policies

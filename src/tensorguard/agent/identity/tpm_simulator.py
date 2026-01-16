@@ -1,23 +1,23 @@
 """
-TPM 2.0 Simulator for Hardware Attestation
+TPM 2.0 Simulator for Hardware Attestation.
 
 Simulates Platform Configuration Registers (PCRs) and AIK signing
-to provide "hardware-backed" identity claims in software environments.
+to provide software-only identity claims. This is NOT a hardware
+root of trust and must never be treated as attested in production
+unless explicitly allowed for research use.
 """
 
 import hashlib
 import json
-import secrets
 import logging
+import os
 from typing import Dict, Any, Optional
 from datetime import datetime
 
-# Use our standardized crypto helpers if available, else standard lib
-try:
-    from cryptography.hazmat.primitives import hashes, serialization
-    from cryptography.hazmat.primitives.asymmetric import rsa, padding
-except ImportError:
-    raise ImportError("cryptography library required for TPM simulation")
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa, padding
+
+from ...utils.production_gates import is_production, ProductionGateError
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +29,19 @@ class TPMSimulator:
     """
     
     def __init__(self, seed: Optional[str] = None):
+        if is_production():
+            allow_simulator = os.getenv("TG_ALLOW_TPM_SIMULATOR", "false").lower() == "true"
+            if not allow_simulator:
+                raise ProductionGateError(
+                    gate_name="TPM_SIMULATOR",
+                    message="TPM simulator cannot be used in production.",
+                    remediation="Provision hardware-backed attestation or set TG_ALLOW_TPM_SIMULATOR=true for research only.",
+                )
+            logger.critical(
+                "SECURITY WARNING: TPM simulator enabled in production via TG_ALLOW_TPM_SIMULATOR. "
+                "Attestation claims will be marked as untrusted."
+            )
+
         self._aik_private = rsa.generate_private_key(
             public_exponent=65537,
             key_size=2048
@@ -89,7 +102,9 @@ class TPMSimulator:
             "nonce": nonce,
             "boot_counter": self.boot_counter,
             "timestamp": datetime.utcnow().isoformat() + "Z",
-            "magic": "TG_TPM_QUOTE_V1"
+            "magic": "TG_TPM_QUOTE_V1",
+            "attested": False,
+            "simulator": True,
         }
         
         # 2. Canonicalize for signing

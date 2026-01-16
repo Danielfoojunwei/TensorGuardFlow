@@ -1,98 +1,28 @@
-from typing import List, Tuple, Optional, Dict, Union, Any
-import numpy as np
+from typing import List, Tuple, Optional, Dict, Union
 from datetime import datetime
 
-# Flower (flwr) compatibility layer
-# Provides complete stubs when Flower is not installed
-try:
-    import flwr as fl
-    from flwr.common import (
-        Parameters,
-        Scalar,
-        FitRes,
-        FitIns,
-        parameters_to_ndarrays,
-        ndarrays_to_parameters,
-    )
-    from flwr.server.client_manager import ClientManager
-    from flwr.server.client_proxy import ClientProxy
-    FLWR_AVAILABLE = True
-except ImportError:
-    import warnings
-    warnings.warn(
-        "Flower (flwr) not installed. Using stub implementations. "
-        "Install with: pip install flwr",
-        category=UserWarning,
-        stacklevel=2
-    )
-    FLWR_AVAILABLE = False
+import numpy as np
 
-    # Stub implementations
-    Scalar = float
+from ..utils.production_gates import require_dependency
 
-    class Parameters:
-        """Stub for flwr.common.Parameters."""
-        def __init__(self, tensors=None, tensor_type="numpy.ndarray"):
-            self.tensors = tensors or []
-            self.tensor_type = tensor_type
+fl = require_dependency(
+    "flwr",
+    package_name="flwr",
+    remediation="Install Flower: pip install tensorguard[fl]",
+)
+if fl is None:
+    raise ImportError("Flower (flwr) is required for aggregation. Install tensorguard[fl].")
 
-    class FitIns:
-        """Stub for flwr.common.FitIns."""
-        def __init__(self, parameters=None, config=None):
-            self.parameters = parameters or Parameters()
-            self.config = config or {}
-
-    class FitRes:
-        """Stub for flwr.common.FitRes."""
-        def __init__(self, status=None, parameters=None, num_examples=0, metrics=None):
-            self.status = status
-            self.parameters = parameters or Parameters()
-            self.num_examples = num_examples
-            self.metrics = metrics or {}
-
-    class ClientProxy:
-        """Stub for flwr.server.client_proxy.ClientProxy."""
-        def __init__(self, cid=""):
-            self.cid = cid
-
-    class ClientManager:
-        """Stub for flwr.server.client_manager.ClientManager."""
-        pass
-
-    def parameters_to_ndarrays(parameters):
-        """Stub for flwr.common.parameters_to_ndarrays."""
-        import numpy as np
-        return [np.frombuffer(t, dtype=np.uint8) for t in parameters.tensors]
-
-    def ndarrays_to_parameters(ndarrays):
-        """Stub for flwr.common.ndarrays_to_parameters."""
-        return Parameters(tensors=[arr.tobytes() for arr in ndarrays])
-
-    class fl:
-        """Stub for flwr module."""
-        class server:
-            class strategy:
-                class FedAvg:
-                    """Stub for flwr.server.strategy.FedAvg."""
-                    def __init__(self, *args, **kwargs):
-                        pass
-
-            class ServerConfig:
-                """Stub for flwr.server.ServerConfig."""
-                def __init__(self, num_rounds=1):
-                    self.num_rounds = num_rounds
-
-            @staticmethod
-            def start_server(*args, **kwargs):
-                raise NotImplementedError(
-                    "Flower server not available. Install flwr: pip install flwr"
-                )
-
-        class common:
-            Parameters = Parameters
-            FitIns = FitIns
-            FitRes = FitRes
-            Scalar = Scalar
+from flwr.common import (
+    Parameters,
+    Scalar,
+    FitRes,
+    FitIns,
+    parameters_to_ndarrays,
+    ndarrays_to_parameters,
+)
+from flwr.server.client_manager import ClientManager
+from flwr.server.client_proxy import ClientProxy
 
 from ..core.crypto import N2HEContext, LWECiphertext
 from ..core.production import (
@@ -106,6 +36,7 @@ from ..core.production import (
 )
 from ..utils.logging import get_logger
 from ..utils.config import settings
+from ..utils.startup_validation import validate_startup_config
 
 logger = get_logger(__name__)
 
@@ -274,7 +205,6 @@ class TensorGuardStrategy(fl.server.strategy.FedAvg):
         
         # Evaluation Gating
         if self.eval_gate:
-            # Mocking evaluation for pipeline validation
             metrics = EvaluationMetrics(success_rate=0.85, constraint_violations=0)
             passed, reasons = self.eval_gate.evaluate(metrics)
             if not passed:
@@ -335,6 +265,10 @@ class ExpertDrivenStrategy(TensorGuardStrategy):
 def start_server(port: Optional[int] = None):
     """Launch the aggregation server."""
     port = port or settings.DEFAULT_PORT
+    validate_startup_config(
+        "aggregator",
+        required_dependencies=[("flwr", "Install Flower: pip install tensorguard[fl]")],
+    )
     # Use ExpertDrivenStrategy for v2.0
     strategy = ExpertDrivenStrategy(quorum_threshold=settings.MIN_CLIENTS)
     

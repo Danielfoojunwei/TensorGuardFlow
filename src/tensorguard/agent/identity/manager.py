@@ -15,7 +15,7 @@ from ...schemas.unified_config import IdentityConfig
 from .scanner import CertificateScanner
 from .csr_generator import CSRGenerator
 from .deployers import DeployerFactory
-from .attestation import TPMSimulator
+from .tpm_simulator import TPMSimulator
 from .work_poller import WorkPoller
 from .client import IdentityAgentClient
 

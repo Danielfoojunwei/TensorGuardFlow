@@ -18,22 +18,20 @@ import json
 logger = logging.getLogger(__name__)
 
 # Production gates
-from ..utils.production_gates import is_production, ProductionGateError
+from ...utils.production_gates import is_production, ProductionGateError, require_dependency
 
-# Try crypto imports
-try:
+crypto_module = require_dependency(
+    "cryptography",
+    package_name="cryptography",
+    remediation="Install cryptography: pip install cryptography>=41.0",
+)
+if crypto_module is None:
+    HAS_CRYPTOGRAPHY = False
+else:
     from cryptography.hazmat.primitives import serialization
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
     from cryptography.hazmat.backends import default_backend
     HAS_CRYPTOGRAPHY = True
-except ImportError:
-    HAS_CRYPTOGRAPHY = False
-    if is_production():
-        raise ProductionGateError(
-            gate_name="CRYPTOGRAPHY",
-            message="cryptography library is required for key storage in production.",
-            remediation="Install cryptography: pip install cryptography>=41.0"
-        )
 
 
 @dataclass
@@ -284,13 +282,21 @@ class PKCS11KeyProvider(KeyProvider):
         slot: int = 0,
         pin: Optional[str] = None,
     ):
+        if is_production():
+            raise ProductionGateError(
+                gate_name="PKCS11_PROVIDER",
+                message="PKCS#11 provider is not available in this build.",
+                remediation="Use the file provider or deploy with a supported PKCS#11 implementation.",
+            )
         self.library_path = library_path
         self.slot = slot
         self.pin = pin
         self._session = None
         
-        # Would use python-pkcs11 or PyKCS11
-        logger.info("PKCS#11 provider initialized (stub)")
+        raise RuntimeError(
+            "PKCS#11 provider is not available in this build. "
+            "Deploy with a supported PKCS#11 implementation."
+        )
     
     def store_key(
         self,
@@ -299,8 +305,7 @@ class PKCS11KeyProvider(KeyProvider):
         metadata: Optional[Dict[str, Any]] = None,
     ) -> StoredKey:
         """Import key to PKCS#11 device."""
-        # Would use pkcs11.Session.create_keypair or import
-        raise NotImplementedError("PKCS#11 import not implemented")
+        raise RuntimeError("PKCS#11 provider is not available in this build.")
     
     def load_key(self, key_id: str) -> Optional[bytes]:
         """
@@ -313,8 +318,7 @@ class PKCS11KeyProvider(KeyProvider):
     
     def delete_key(self, key_id: str) -> bool:
         """Delete key from PKCS#11 device."""
-        # Would use pkcs11.Object.destroy
-        raise NotImplementedError("PKCS#11 delete not implemented")
+        raise RuntimeError("PKCS#11 provider is not available in this build.")
     
     def list_keys(self) -> list[StoredKey]:
         """List keys on PKCS#11 device."""
@@ -326,8 +330,7 @@ class PKCS11KeyProvider(KeyProvider):
     
     def sign(self, key_id: str, data: bytes, algorithm: str = "SHA256") -> bytes:
         """Sign data using PKCS#11 key without export."""
-        # Would use pkcs11.Key.sign
-        raise NotImplementedError("PKCS#11 signing not implemented")
+        raise RuntimeError("PKCS#11 provider is not available in this build.")
 
 
 class KMSKeyProvider(KeyProvider):
@@ -344,11 +347,20 @@ class KMSKeyProvider(KeyProvider):
         key_prefix: str = "tensorguard/identity/",
         **config,
     ):
+        if is_production():
+            raise ProductionGateError(
+                gate_name="KMS_PROVIDER",
+                message=f"KMS provider '{provider}' is not available in this build.",
+                remediation="Use the file provider or deploy with a supported KMS implementation.",
+            )
         self.provider = provider
         self.key_prefix = key_prefix
         self.config = config
         
-        logger.info(f"KMS provider initialized: {provider}")
+        raise RuntimeError(
+            f"KMS provider '{provider}' is not available in this build. "
+            "Deploy with a supported KMS implementation."
+        )
     
     def store_key(
         self,
@@ -361,7 +373,7 @@ class KMSKeyProvider(KeyProvider):
         
         Prefer using generate_key() for new keys.
         """
-        raise NotImplementedError("KMS import not supported. Use generate_key()")
+        raise RuntimeError("KMS provider is not available in this build.")
     
     def generate_key(
         self,
@@ -375,17 +387,15 @@ class KMSKeyProvider(KeyProvider):
         elif self.provider == "gcp":
             return self._gcp_generate_key(key_id, key_type, key_size)
         else:
-            raise NotImplementedError(f"KMS provider not supported: {self.provider}")
+            raise RuntimeError(f"KMS provider not supported: {self.provider}")
     
     def _aws_generate_key(self, key_id: str, key_type: str, key_size: int) -> StoredKey:
         """Generate key in AWS KMS."""
-        # Would use boto3.client('kms').create_key()
-        raise NotImplementedError("AWS KMS key generation not implemented")
+        raise RuntimeError("AWS KMS provider is not available in this build.")
     
     def _gcp_generate_key(self, key_id: str, key_type: str, key_size: int) -> StoredKey:
         """Generate key in GCP KMS."""
-        # Would use google.cloud.kms_v1.KeyManagementServiceClient
-        raise NotImplementedError("GCP KMS key generation not implemented")
+        raise RuntimeError("GCP KMS provider is not available in this build.")
     
     def load_key(self, key_id: str) -> Optional[bytes]:
         """Cannot export keys from KMS."""
@@ -394,8 +404,7 @@ class KMSKeyProvider(KeyProvider):
     
     def delete_key(self, key_id: str) -> bool:
         """Schedule key deletion in KMS."""
-        # Would use appropriate KMS API
-        raise NotImplementedError("KMS key deletion not implemented")
+        raise RuntimeError("KMS provider is not available in this build.")
     
     def list_keys(self) -> list[StoredKey]:
         """List keys in KMS."""
@@ -407,12 +416,13 @@ class KMSKeyProvider(KeyProvider):
     
     def sign(self, key_id: str, data: bytes, algorithm: str = "SHA256") -> bytes:
         """Sign data using KMS key."""
-        # Would use KMS sign API
-        raise NotImplementedError("KMS signing not implemented")
+        raise RuntimeError("KMS provider is not available in this build.")
 
 
 class KeyProviderFactory:
     """Factory for creating key providers."""
+
+    SUPPORTED_PROVIDERS = {"file"}
     
     @staticmethod
     def create(
@@ -429,13 +439,15 @@ class KeyProviderFactory:
         Returns:
             Configured KeyProvider
         """
+        if provider_type not in KeyProviderFactory.SUPPORTED_PROVIDERS:
+            if is_production():
+                raise ProductionGateError(
+                    gate_name="KEY_PROVIDER",
+                    message=f"Key provider '{provider_type}' is not supported in this build.",
+                    remediation=f"Use one of: {sorted(KeyProviderFactory.SUPPORTED_PROVIDERS)}",
+                )
+            raise ValueError(f"Key provider '{provider_type}' is not supported in this build.")
+
         if provider_type == "file":
             return FileKeyProvider(**config)
-        elif provider_type == "pkcs11":
-            return PKCS11KeyProvider(**config)
-        elif provider_type.startswith("aws"):
-            return KMSKeyProvider(provider="aws", **config)
-        elif provider_type.startswith("gcp"):
-            return KMSKeyProvider(provider="gcp", **config)
-        else:
-            raise ValueError(f"Unknown provider type: {provider_type}")
+        raise ValueError(f"Unknown provider type: {provider_type}")

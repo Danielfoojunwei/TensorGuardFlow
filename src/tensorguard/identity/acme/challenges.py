@@ -12,6 +12,8 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from dataclasses import dataclass
 import logging
 
+from ...utils.production_gates import ProductionGateError, is_production, require_dependency
+
 logger = logging.getLogger(__name__)
 
 
@@ -151,11 +153,19 @@ class DNS01Handler:
     
     def add_txt_record(self, domain: str, txt_value: str) -> bool:
         """Add TXT record. Override in provider implementations."""
-        raise NotImplementedError("DNS provider not configured")
+        raise ProductionGateError(
+            gate_name="DNS_PROVIDER",
+            message="DNS provider not configured for DNS-01 challenges.",
+            remediation="Configure a supported DNS provider (e.g., Route53 or Cloudflare) or use HTTP-01 challenges.",
+        )
     
     def remove_txt_record(self, domain: str) -> bool:
         """Remove TXT record. Override in provider implementations."""
-        raise NotImplementedError("DNS provider not configured")
+        raise ProductionGateError(
+            gate_name="DNS_PROVIDER",
+            message="DNS provider not configured for DNS-01 challenges.",
+            remediation="Configure a supported DNS provider (e.g., Route53 or Cloudflare) or use HTTP-01 challenges.",
+        )
 
 
 class ManualDNS01Handler(DNS01Handler):
@@ -187,7 +197,7 @@ class ManualDNS01Handler(DNS01Handler):
 
 class Route53DNS01Handler(DNS01Handler):
     """
-    AWS Route53 DNS-01 handler (stub).
+    AWS Route53 DNS-01 handler.
     
     Requires boto3 and AWS credentials.
     """
@@ -197,14 +207,19 @@ class Route53DNS01Handler(DNS01Handler):
     
     def add_txt_record(self, domain: str, txt_value: str) -> bool:
         """Add TXT record via Route53 API."""
+        boto3 = require_dependency(
+            "boto3",
+            package_name="boto3",
+            remediation="Install boto3 and provide AWS credentials.",
+        )
+        if boto3 is None:
+            return False
+
         try:
-            import boto3
-            
             client = boto3.client("route53")
-            
             record_name = f"_acme-challenge.{domain}"
-            
-            response = client.change_resource_record_sets(
+
+            client.change_resource_record_sets(
                 HostedZoneId=self.hosted_zone_id,
                 ChangeBatch={
                     "Changes": [{
@@ -218,27 +233,56 @@ class Route53DNS01Handler(DNS01Handler):
                     }]
                 }
             )
-            
+
             logger.info(f"Added Route53 TXT record: {record_name}")
             return True
-            
-        except ImportError:
-            logger.error("boto3 required for Route53 integration")
-            return False
         except Exception as e:
             logger.error(f"Route53 error: {e}")
             return False
     
     def remove_txt_record(self, domain: str) -> bool:
         """Remove TXT record via Route53 API."""
-        # Similar implementation with DELETE action
-        logger.info(f"Would remove Route53 TXT record for {domain}")
-        return True
+        boto3 = require_dependency(
+            "boto3",
+            package_name="boto3",
+            remediation="Install boto3 and provide AWS credentials.",
+        )
+        if boto3 is None:
+            return False
+
+        try:
+            client = boto3.client("route53")
+            record_name = f"_acme-challenge.{domain}"
+
+            response = client.list_resource_record_sets(
+                HostedZoneId=self.hosted_zone_id,
+                StartRecordName=record_name,
+                StartRecordType="TXT",
+            )
+            records = [
+                record for record in response.get("ResourceRecordSets", [])
+                if record.get("Name", "").rstrip(".") == record_name and record.get("Type") == "TXT"
+            ]
+            if not records:
+                logger.warning(f"No Route53 TXT records found for {record_name}")
+                return False
+
+            changes = [{"Action": "DELETE", "ResourceRecordSet": record} for record in records]
+            client.change_resource_record_sets(
+                HostedZoneId=self.hosted_zone_id,
+                ChangeBatch={"Changes": changes},
+            )
+
+            logger.info(f"Removed Route53 TXT record: {record_name}")
+            return True
+        except Exception as e:
+            logger.error(f"Route53 error: {e}")
+            return False
 
 
 class CloudflareDNS01Handler(DNS01Handler):
     """
-    Cloudflare DNS-01 handler (stub).
+    Cloudflare DNS-01 handler.
     
     Requires Cloudflare API token.
     """
@@ -249,23 +293,31 @@ class CloudflareDNS01Handler(DNS01Handler):
     
     def add_txt_record(self, domain: str, txt_value: str) -> bool:
         """Add TXT record via Cloudflare API."""
+        requests = require_dependency(
+            "requests",
+            package_name="requests",
+            remediation="Install requests: pip install requests",
+        )
+        if requests is None:
+            return False
+
         try:
-            import requests
-            
             headers = {
                 "Authorization": f"Bearer {self.api_token}",
                 "Content-Type": "application/json",
             }
-            
+
             record_name = f"_acme-challenge.{domain}"
-            
-            # Would need to get zone_id from domain if not provided
+
             if not self.zone_id:
-                logger.error("zone_id required for Cloudflare")
-                return False
-            
+                raise ProductionGateError(
+                    gate_name="CLOUDFLARE_ZONE",
+                    message="Cloudflare zone_id is required for DNS-01 challenges.",
+                    remediation="Provide zone_id for CloudflareDNS01Handler.",
+                )
+
             url = f"https://api.cloudflare.com/client/v4/zones/{self.zone_id}/dns_records"
-            
+
             response = requests.post(
                 url,
                 headers=headers,
@@ -277,22 +329,66 @@ class CloudflareDNS01Handler(DNS01Handler):
                 },
                 timeout=30,
             )
-            
+
             if response.ok:
                 logger.info(f"Added Cloudflare TXT record: {record_name}")
                 return True
-            else:
-                logger.error(f"Cloudflare error: {response.text}")
-                return False
-            
+            logger.error(f"Cloudflare error: {response.text}")
+            return False
+
         except Exception as e:
             logger.error(f"Cloudflare error: {e}")
             return False
     
     def remove_txt_record(self, domain: str) -> bool:
         """Remove TXT record via Cloudflare API."""
-        logger.info(f"Would remove Cloudflare TXT record for {domain}")
-        return True
+        requests = require_dependency(
+            "requests",
+            package_name="requests",
+            remediation="Install requests: pip install requests",
+        )
+        if requests is None:
+            return False
+
+        try:
+            if not self.zone_id:
+                raise ProductionGateError(
+                    gate_name="CLOUDFLARE_ZONE",
+                    message="Cloudflare zone_id is required for DNS-01 challenges.",
+                    remediation="Provide zone_id for CloudflareDNS01Handler.",
+                )
+
+            headers = {
+                "Authorization": f"Bearer {self.api_token}",
+                "Content-Type": "application/json",
+            }
+            record_name = f"_acme-challenge.{domain}"
+            list_url = f"https://api.cloudflare.com/client/v4/zones/{self.zone_id}/dns_records"
+            response = requests.get(
+                list_url,
+                headers=headers,
+                params={"type": "TXT", "name": record_name},
+                timeout=30,
+            )
+            response.raise_for_status()
+            results = response.json().get("result", [])
+            if not results:
+                logger.warning(f"No Cloudflare TXT records found for {record_name}")
+                return False
+
+            for record in results:
+                record_id = record["id"]
+                delete_url = f"https://api.cloudflare.com/client/v4/zones/{self.zone_id}/dns_records/{record_id}"
+                delete_response = requests.delete(delete_url, headers=headers, timeout=30)
+                if not delete_response.ok:
+                    logger.error(f"Cloudflare delete failed: {delete_response.text}")
+                    return False
+
+            logger.info(f"Removed Cloudflare TXT record: {record_name}")
+            return True
+        except Exception as e:
+            logger.error(f"Cloudflare error: {e}")
+            return False
 
 
 class ChallengeCoordinator:
