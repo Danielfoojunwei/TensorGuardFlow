@@ -1,14 +1,14 @@
 <script setup>
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import {
-    Activity, Play, Pause, Square, RefreshCw,
-    TrendingUp, TrendingDown, Cpu, Clock, Zap,
+    Activity, RefreshCw,
+    TrendingUp, TrendingDown, Clock, Zap,
     Users, Shield, Database, AlertTriangle, CheckCircle
 } from 'lucide-vue-next'
 
 const isRunning = ref(false)
 const currentRound = ref(0)
-const totalRounds = ref(100)
+const totalRounds = ref(0)
 const activeClients = ref(0)
 const aggregatedUpdates = ref(0)
 const privacyBudget = ref({ epsilon: 0, delta: 1e-5 })
@@ -20,10 +20,9 @@ const metrics = ref({
 })
 const realtimeEvents = ref([])
 const expertWeights = ref({})
-const healthStatus = ref('healthy')
-
-let pollingInterval = null
-let eventSource = null
+const healthStatus = ref('unknown')
+const errorMessage = ref('')
+const lastUpdated = ref(null)
 
 const progress = computed(() => {
     return totalRounds.value > 0 ? (currentRound.value / totalRounds.value) * 100 : 0
@@ -39,89 +38,60 @@ const avgAccuracy = computed(() => {
     return (metrics.value.accuracy.reduce((a, b) => a + b, 0) / metrics.value.accuracy.length * 100).toFixed(1)
 })
 
-const startTraining = async () => {
-    isRunning.value = true
-    realtimeEvents.value.unshift({
-        time: new Date().toLocaleTimeString(),
-        type: 'info',
-        message: 'Training session started'
-    })
-
-    // Start polling for metrics
-    pollingInterval = setInterval(async () => {
-        await fetchMetrics()
-    }, 2000)
-}
-
-const stopTraining = () => {
-    isRunning.value = false
-    if (pollingInterval) {
-        clearInterval(pollingInterval)
-        pollingInterval = null
-    }
-    realtimeEvents.value.unshift({
-        time: new Date().toLocaleTimeString(),
-        type: 'warning',
-        message: 'Training session stopped'
-    })
-}
-
 const fetchMetrics = async () => {
+    errorMessage.value = ''
     try {
-        // Fetch aggregation status
-        const statusRes = await fetch('/api/v1/status')
-        if (statusRes.ok) {
-            const data = await statusRes.json()
-            currentRound.value = data.round || currentRound.value + 1
-            activeClients.value = data.active_clients || Math.floor(Math.random() * 50) + 10
+        const res = await fetch('/api/v1/runs?limit=1')
+        if (!res.ok) {
+            const err = await res.json()
+            errorMessage.value = err.detail || 'Unable to load training telemetry.'
+            return
         }
 
-        // Simulate metrics update (in production, this would come from backend)
-        const newLoss = Math.max(0.01, (metrics.value.loss[metrics.value.loss.length - 1] || 0.5) - Math.random() * 0.02)
-        const newAcc = Math.min(0.99, (metrics.value.accuracy[metrics.value.accuracy.length - 1] || 0.5) + Math.random() * 0.01)
-        const newBw = Math.random() * 0.1 + 0.05
-        const newLatency = Math.random() * 20 + 40
+        const runs = await res.json()
+        const latest = Array.isArray(runs) ? runs[0] : null
 
-        metrics.value.loss.push(newLoss)
-        metrics.value.accuracy.push(newAcc)
-        metrics.value.bandwidth.push(newBw)
-        metrics.value.latency.push(newLatency)
-
-        // Keep only last 50 points
-        if (metrics.value.loss.length > 50) {
-            metrics.value.loss.shift()
-            metrics.value.accuracy.shift()
-            metrics.value.bandwidth.shift()
-            metrics.value.latency.shift()
+        if (!latest) {
+            errorMessage.value = 'No training runs available yet.'
+            return
         }
 
-        // Update privacy budget
-        privacyBudget.value.epsilon = Math.min(10, privacyBudget.value.epsilon + 0.015)
-
-        // Update expert weights
-        expertWeights.value = {
-            'visual_primary': 0.35 + Math.random() * 0.05,
-            'language_semantic': 0.25 + Math.random() * 0.03,
-            'manipulation_grasp': 0.20 + Math.random() * 0.04,
-            'navigation_base': 0.20 + Math.random() * 0.03
+        let parsedMetrics = {}
+        try {
+            parsedMetrics = JSON.parse(latest.metrics_json || '{}')
+        } catch (e) {
+            parsedMetrics = {}
         }
 
-        aggregatedUpdates.value++
+        currentRound.value = parsedMetrics.current_round || parsedMetrics.round || 0
+        totalRounds.value = parsedMetrics.total_rounds || parsedMetrics.rounds || 0
+        activeClients.value = parsedMetrics.active_clients || 0
+        aggregatedUpdates.value = parsedMetrics.aggregated_updates || 0
+        privacyBudget.value = {
+            epsilon: parsedMetrics.epsilon || 0,
+            delta: parsedMetrics.delta || privacyBudget.value.delta
+        }
 
-        // Add event periodically
-        if (currentRound.value % 5 === 0) {
-            realtimeEvents.value.unshift({
-                time: new Date().toLocaleTimeString(),
-                type: 'success',
-                message: `Round ${currentRound.value} completed. ${activeClients.value} clients aggregated.`
-            })
-            if (realtimeEvents.value.length > 20) {
-                realtimeEvents.value.pop()
+        metrics.value.loss = Array.isArray(parsedMetrics.loss) ? parsedMetrics.loss : []
+        metrics.value.accuracy = Array.isArray(parsedMetrics.accuracy) ? parsedMetrics.accuracy : []
+        metrics.value.bandwidth = Array.isArray(parsedMetrics.bandwidth) ? parsedMetrics.bandwidth : []
+        metrics.value.latency = Array.isArray(parsedMetrics.latency) ? parsedMetrics.latency : []
+
+        expertWeights.value = parsedMetrics.expert_weights || {}
+
+        healthStatus.value = parsedMetrics.health_status || latest.status || 'unknown'
+        realtimeEvents.value = [
+            {
+                time: new Date(latest.created_at).toLocaleTimeString(),
+                type: 'info',
+                message: `Latest run ${latest.run_id} status: ${latest.status}`
             }
-        }
-
+        ]
+        lastUpdated.value = new Date().toLocaleTimeString()
+        isRunning.value = latest.status === 'running'
     } catch (e) {
         console.error("Failed to fetch metrics", e)
+        errorMessage.value = 'Unable to reach telemetry APIs. Check backend connectivity.'
     }
 }
 
@@ -146,26 +116,13 @@ const sparklinePoints = (data, height = 40) => {
     }).join(' ')
 }
 
-onMounted(() => {
-    // Initialize with some data points
-    for (let i = 0; i < 10; i++) {
-        metrics.value.loss.push(0.5 - i * 0.02 + Math.random() * 0.05)
-        metrics.value.accuracy.push(0.5 + i * 0.03 + Math.random() * 0.02)
-        metrics.value.bandwidth.push(Math.random() * 0.1 + 0.05)
-        metrics.value.latency.push(Math.random() * 20 + 40)
-    }
-})
-
-onUnmounted(() => {
-    if (pollingInterval) clearInterval(pollingInterval)
-    if (eventSource) eventSource.close()
-})
+onMounted(fetchMetrics)
 </script>
 
 <template>
   <div class="space-y-6 h-full flex flex-col">
     <!-- Header -->
-    <div class="flex items-center justify-between border-b border-[#333] pb-6">
+       <div class="flex items-center justify-between border-b border-[#333] pb-6">
        <div>
          <h2 class="text-2xl font-bold flex items-center gap-3">
              <Activity class="w-7 h-7 text-green-500" :class="isRunning ? 'animate-pulse' : ''" />
@@ -174,13 +131,17 @@ onUnmounted(() => {
          <span class="text-xs text-gray-500">Federated Learning Aggregation & Privacy Metrics</span>
        </div>
        <div class="flex gap-3">
-           <button v-if="!isRunning" @click="startTraining" class="btn btn-primary">
-               <Play class="w-4 h-4 mr-2" /> Start Monitoring
-           </button>
-           <button v-else @click="stopTraining" class="btn bg-red-600 hover:bg-red-700 text-white">
-               <Square class="w-4 h-4 mr-2" /> Stop
+           <button @click="fetchMetrics" class="btn btn-secondary">
+               <RefreshCw class="w-4 h-4 mr-2" /> Refresh
            </button>
        </div>
+    </div>
+
+    <div v-if="errorMessage" class="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+        {{ errorMessage }}
+    </div>
+    <div v-else-if="lastUpdated" class="text-xs text-gray-500">
+        Last updated {{ lastUpdated }}.
     </div>
 
     <!-- Progress Bar -->
@@ -351,7 +312,7 @@ onUnmounted(() => {
             <div class="flex-1 overflow-y-auto p-4 space-y-2">
                 <div v-if="realtimeEvents.length === 0" class="text-center py-8 text-gray-600">
                     <Activity class="w-8 h-8 mx-auto mb-2 opacity-30" />
-                    <p class="text-xs">No events yet. Start monitoring to see live updates.</p>
+                    <p class="text-xs">No telemetry events available yet.</p>
                 </div>
                 <div v-for="(event, idx) in realtimeEvents" :key="idx"
                      class="bg-[#161b22] border border-[#30363d] rounded p-3 text-xs">
