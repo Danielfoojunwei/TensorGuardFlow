@@ -12,6 +12,7 @@ from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
 import logging
 from ...core.keys import vault, KeyScope
+from ...utils.production_gates import is_production, ProductionGateError
 
 logger = logging.getLogger(__name__)
 
@@ -250,6 +251,16 @@ class CSRGenerator:
         """Store key pair securely via Unified Vault."""
         if not HAS_CRYPTOGRAPHY:
             return
+
+        if is_production() and not self.encryption_key:
+            raise ProductionGateError(
+                gate_name="IDENTITY_KEY_ENCRYPTION",
+                message="Encrypted key storage is required in production.",
+                remediation=(
+                    "Configure CSRGenerator with an encryption_key or integrate a KMS/TPM-backed "
+                    "key store before enabling production."
+                ),
+            )
         
         # Serialize with encryption if key provided
         if self.encryption_key:
@@ -283,7 +294,7 @@ class CSRGenerator:
         
         if not HAS_CRYPTOGRAPHY:
             return None
-        
+
         try:
             pem_data, meta = self.vault.load_key_artifact(self.scope, key_id, suffix=".key")
             
@@ -314,6 +325,21 @@ class CSRGenerator:
         except Exception as e:
             logger.error(f"Failed to load key {key_id} from vault: {e}")
             return None
+
+    def export_private_key_pem(self, key_id: str) -> str:
+        """Export a private key as PEM for deployment."""
+        if not HAS_CRYPTOGRAPHY:
+            raise RuntimeError("cryptography library required for key export")
+
+        key_pair = self._get_key(key_id)
+        if not key_pair:
+            raise ValueError(f"Key not found: {key_id}")
+
+        return key_pair.private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        ).decode()
     
     def delete_key(self, key_id: str) -> bool:
         """Delete a key pair from vault."""

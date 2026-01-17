@@ -12,6 +12,7 @@ import {
     Rocket, Eye, CheckCircle, Clock, AlertTriangle,
     ChevronDown, Settings2, TrendingUp, Zap, RotateCcw
 } from 'lucide-vue-next'
+import EvalArena from './EvalArena.vue'
 
 const props = defineProps({
     initialTab: { type: String, default: 'registry' }
@@ -311,16 +312,7 @@ onMounted(fetchData)
 
       <!-- Evaluation Tab -->
       <div v-else-if="activeTab === 'evaluation'" class="h-full overflow-y-auto p-6">
-        <div class="max-w-5xl mx-auto">
-          <div class="text-center py-12">
-            <Scale class="w-12 h-12 text-gray-600 mx-auto mb-4" />
-            <h2 class="text-lg font-semibold text-white mb-2">Evaluation Arena</h2>
-            <p class="text-gray-500 mb-6">Run benchmarks and compare model performance</p>
-            <button class="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg font-medium">
-              Start Evaluation
-            </button>
-          </div>
-        </div>
+        <EvalArena />
       </div>
 
       <!-- Skills Tab -->

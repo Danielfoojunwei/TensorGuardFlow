@@ -692,8 +692,23 @@ async def list_agent_jobs(
             "endpoint_id": j.endpoint_id,
             "challenge_type": j.challenge_type,
             "challenge_token": j.challenge_token,
+            "challenge_key_authorization": j.challenge_key_authorization,
             "challenge_url": j.challenge_url,
             "issued_cert_pem": j.issued_cert_pem if j.status == RenewalJobStatus.ISSUED else None,
+            "endpoint": (
+                {
+                    "id": endpoint.id,
+                    "name": endpoint.name,
+                    "hostname": endpoint.hostname,
+                    "endpoint_type": endpoint.endpoint_type.value,
+                    "k8s_namespace": endpoint.k8s_namespace,
+                    "k8s_secret_name": endpoint.k8s_secret_name,
+                    "k8s_ingress_name": endpoint.k8s_ingress_name,
+                    "tags": endpoint.tags,
+                }
+                if (endpoint := session.get(IdentityEndpoint, j.endpoint_id)) is not None
+                else None
+            ),
         }
         for j in jobs if j.status in agent_action_statuses
     ]

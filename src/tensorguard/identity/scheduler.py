@@ -295,6 +295,7 @@ class RenewalScheduler:
                 job.challenge_token = challenge.token
                 job.challenge_domain = challenge.domain
                 job.challenge_type = challenge.type
+                job.challenge_key_authorization = challenge.key_authorization
                 job.last_acme_status = order.status
                 
                 job.status = RenewalJobStatus.CHALLENGE_PENDING
