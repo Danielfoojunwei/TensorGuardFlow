@@ -13,6 +13,7 @@ const searchQuery = ref('')
 const statusFilter = ref('all')
 const showUploadModal = ref(false)
 const selectedPackage = ref(null)
+const errorMessage = ref('')
 
 const uploadFile = ref(null)
 
@@ -27,61 +28,19 @@ const filteredPackages = computed(() => {
 
 const fetchPackages = async () => {
     loading.value = true
+    errorMessage.value = ''
     try {
         const res = await fetch('/api/v1/tgsp/packages')
         if (res.ok) {
             packages.value = await res.json()
+        } else {
+            const err = await res.json()
+            errorMessage.value = err.detail || 'Failed to load packages from the platform.'
         }
     } catch (e) {
         console.error("Failed to fetch packages", e)
-        // Mock data for demo
-        packages.value = [
-            {
-                id: 'tgsp-001',
-                filename: 'factory-assembly-v2.1.tgsp',
-                producer_id: 'tensorguard-official',
-                created_at: '2025-12-15T10:30:00Z',
-                policy_id: 'prod-safety-tier1',
-                policy_version: '2.1',
-                manifest_hash: 'sha256:a1b2c3d4e5f6...',
-                status: 'verified',
-                metadata_json: {
-                    payloads: ['weights.enc', 'config.json'],
-                    evidence: ['sim-results', 'safety-check'],
-                    base_models: ['openvla-7b', 'pi0']
-                }
-            },
-            {
-                id: 'tgsp-002',
-                filename: 'logistics-picker-v1.0.tgsp',
-                producer_id: 'community/robotics-lab',
-                created_at: '2025-12-18T14:20:00Z',
-                policy_id: 'community-review',
-                policy_version: '1.0',
-                manifest_hash: 'sha256:b2c3d4e5f6g7...',
-                status: 'uploaded',
-                metadata_json: {
-                    payloads: ['weights.enc'],
-                    evidence: [],
-                    base_models: ['pi0']
-                }
-            },
-            {
-                id: 'tgsp-003',
-                filename: 'cleaning-domestic-v0.9.tgsp',
-                producer_id: 'community/home-bots',
-                created_at: '2025-12-20T09:15:00Z',
-                policy_id: 'community-review',
-                policy_version: '0.9',
-                manifest_hash: 'sha256:c3d4e5f6g7h8...',
-                status: 'rejected',
-                metadata_json: {
-                    payloads: ['weights.enc', 'config.json'],
-                    evidence: ['sim-results'],
-                    base_models: ['rt2-x']
-                }
-            }
-        ]
+        errorMessage.value = 'Unable to reach the TGSP API. Check network connectivity and authentication.'
+        packages.value = []
     }
     loading.value = false
 }
@@ -216,6 +175,10 @@ onMounted(fetchPackages)
                 <option value="rejected">Rejected</option>
             </select>
         </div>
+    </div>
+
+    <div v-if="errorMessage" class="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+        {{ errorMessage }}
     </div>
 
     <!-- Stats Cards -->

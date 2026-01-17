@@ -138,7 +138,7 @@ onMounted(fetchExperts)
                       <div v-for="i in 144" :key="i" class="border-[0.5px] border-current"></div>
                   </div>
                   <div class="relative w-full h-full border border-[#333] rounded p-4 flex items-center justify-center text-xs text-gray-600 font-mono">
-                       Baseline render unavailable. Attach a real evaluation trace to visualize.
+                       No baseline trace available yet. Upload a verified trace to visualize.
                   </div>
              </div>
           </div>
@@ -155,14 +155,13 @@ onMounted(fetchExperts)
                  <span v-if="generated" class="text-[10px] text-green-500 font-bold border border-green-500/30 px-2 py-0.5 rounded animate-pulse">EVIDENCE LOGGED</span>
              </div>
              
-             <!-- Mock Sim View Active -->
              <div class="flex-1 relative bg-[#050505] overflow-hidden flex items-center justify-center p-8">
                   <div class="absolute inset-0 grid grid-cols-12 grid-rows-12 gap-1 opacity-20 pointer-events-none text-primary/10">
                       <div v-for="i in 144" :key="i" class="border-[0.5px] border-current"></div>
                   </div>
                   
                   <div v-if="!generated && !evaluating" class="absolute inset-0 flex items-center justify-center text-gray-700 font-mono text-[10px] uppercase tracking-tighter">
-                      Awaiting evaluation evidence...
+                      No evaluation evidence submitted yet.
                   </div>
 
                   <div v-if="evaluating" class="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/60 z-10 backdrop-blur-md">

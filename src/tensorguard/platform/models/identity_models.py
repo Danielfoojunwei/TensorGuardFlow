@@ -358,6 +358,7 @@ class IdentityRenewalJob(SQLModel, table=True):
     csr_pem: Optional[str] = None  # CSR from agent (no private key!)
     challenge_token: Optional[str] = None
     challenge_type: Optional[str] = None
+    challenge_key_authorization: Optional[str] = None
     issued_cert_pem: Optional[str] = None  # Full chain after issuance
     
     # ACME persistence

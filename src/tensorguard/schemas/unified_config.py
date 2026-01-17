@@ -36,6 +36,9 @@ class IdentityConfig(BaseModel):
     auto_renew: bool = True
     auto_deploy: bool = True
 
+    # ACME challenge handling
+    acme_webroot: Optional[str] = None  # Filesystem root served over HTTP for http-01 challenges
+
 
 # === Network (RTPL) Configuration ===
 
