@@ -330,3 +330,19 @@ class CSRGenerator:
         """List all stored key IDs from vault."""
         keys = self.vault.list_keys(self.scope)
         return [k['key_id'].replace(f"{self.scope.value}_", "") for k in keys]
+
+    def export_private_key_pem(self, key_id: str) -> str:
+        """Export a private key PEM for deployment workflows."""
+        if not HAS_CRYPTOGRAPHY:
+            raise RuntimeError("cryptography library required for key export")
+
+        key_pair = self._get_key(key_id)
+        if not key_pair:
+            raise ValueError(f"Key not found: {key_id}")
+
+        pem_data = key_pair.private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+        return pem_data.decode()
