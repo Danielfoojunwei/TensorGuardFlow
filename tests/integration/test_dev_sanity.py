@@ -104,6 +104,79 @@ class TestMakefileTargets:
         assert response.status_code == 200
 
 
+class TestFrontendBackendRouteContract:
+    """Tests for COMMIT 3: Frontend->backend route contract verification."""
+
+    def test_api_v1_health_endpoint_exists(self):
+        """Frontend expects /api/v1/health to exist."""
+        from fastapi.testclient import TestClient
+        from tensorguard.platform.main import app
+
+        client = TestClient(app, raise_server_exceptions=False)
+        response = client.get("/api/v1/health")
+
+        # Should not be 404
+        assert response.status_code == 200
+        data = response.json()
+        assert "status" in data
+
+    def test_api_v1_status_endpoint_exists(self):
+        """Frontend expects /api/v1/status to exist."""
+        from fastapi.testclient import TestClient
+        from tensorguard.platform.main import app
+
+        client = TestClient(app, raise_server_exceptions=False)
+        response = client.get("/api/v1/status")
+
+        # Should not be 404
+        assert response.status_code == 200
+        data = response.json()
+        assert "status" in data
+
+    def test_api_v1_tgsp_packages_endpoint_exists(self):
+        """Frontend expects /api/v1/tgsp/packages to exist."""
+        from fastapi.testclient import TestClient
+        from tensorguard.platform.main import app
+
+        client = TestClient(app, raise_server_exceptions=False)
+        response = client.get("/api/v1/tgsp/packages")
+
+        # Should not be 404 (may be 200 or other status, but not missing)
+        assert response.status_code != 404
+
+    def test_api_v1_fleets_endpoint_exists(self):
+        """Frontend expects /api/v1/fleets to exist."""
+        from fastapi.testclient import TestClient
+        from tensorguard.platform.main import app
+
+        client = TestClient(app, raise_server_exceptions=False)
+        response = client.get("/api/v1/fleets")
+
+        # Should not be 404 (will be 401 without auth, which is expected)
+        assert response.status_code != 404
+
+    def test_api_v1_auth_token_endpoint_exists(self):
+        """Frontend expects /api/v1/auth/token to exist (POST)."""
+        from fastapi.testclient import TestClient
+        from tensorguard.platform.main import app
+
+        client = TestClient(app, raise_server_exceptions=False)
+        response = client.post("/api/v1/auth/token", json={"username": "test", "password": "test"})
+
+        # Should not be 404 (may be 401/422 without valid credentials)
+        assert response.status_code != 404
+
+    def test_root_health_still_works(self):
+        """Root /health endpoint should still work for backward compatibility."""
+        from fastapi.testclient import TestClient
+        from tensorguard.platform.main import app
+
+        client = TestClient(app, raise_server_exceptions=False)
+        response = client.get("/health")
+
+        assert response.status_code == 200
+
+
 class TestBackendStartupWithoutFrontend:
     """Tests for COMMIT 2: Backend must not crash if frontend/dist missing."""
 

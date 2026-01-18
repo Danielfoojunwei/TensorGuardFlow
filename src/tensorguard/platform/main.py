@@ -168,6 +168,35 @@ async def liveness_check():
     return {"alive": True}
 
 
+# --- API v1 Health Aliases (for frontend compatibility) ---
+# Frontend expects /api/v1/health but we have /health at root
+
+@app.get("/api/v1/health", tags=["health"])
+async def health_check_api_v1():
+    """
+    Health check endpoint alias under /api/v1 for frontend compatibility.
+    Delegates to the main /health endpoint.
+    """
+    return await health_check()
+
+
+@app.get("/api/v1/status", tags=["health"])
+async def status_api_v1():
+    """
+    Status endpoint for frontend compatibility.
+    Returns system status summary.
+    """
+    db_health = check_db_health()
+
+    return {
+        "status": "operational" if db_health["status"] == "healthy" else "degraded",
+        "timestamp": datetime.utcnow().isoformat(),
+        "version": "2.3.0",
+        "environment": TG_ENVIRONMENT,
+        "database": db_health["status"],
+    }
+
+
 @app.get("/metrics", tags=["observability"])
 async def prometheus_metrics():
     """
@@ -232,9 +261,11 @@ app.include_router(enablement_endpoints.router, prefix="/api/v1/enablement", tag
 from .api import runs_endpoints
 app.include_router(runs_endpoints.router, prefix="/api/v1", tags=["runs"])
 
-# Community TGSP
+# Community TGSP (mounted at both paths for backward compatibility)
 from .api import community_tgsp
 app.include_router(community_tgsp.router, prefix="/api/community/tgsp", tags=["community-tgsp"])
+# Also mount at /api/v1/tgsp for frontend compatibility
+app.include_router(community_tgsp.router, prefix="/api/v1/tgsp", tags=["tgsp"])
 
 # PEFT Studio
 from .api import peft_endpoints
