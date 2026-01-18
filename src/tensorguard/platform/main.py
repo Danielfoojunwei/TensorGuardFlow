@@ -276,6 +276,10 @@ app.include_router(integrations_endpoints.router, prefix="/api/v1", tags=["integ
 from .api import lineage_endpoints
 app.include_router(lineage_endpoints.router, prefix="/api/v1", tags=["lineage"])
 
+# Dashboard & Status endpoints (real-time metrics)
+from .api import dashboard_endpoints
+app.include_router(dashboard_endpoints.router, prefix="/api/v1", tags=["dashboard"])
+
 # VLA (Vision-Language-Action) for Robotics
 from .api import vla_endpoints
 app.include_router(vla_endpoints.router, prefix="/api/v1", tags=["vla"])

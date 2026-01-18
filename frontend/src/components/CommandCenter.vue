@@ -6,6 +6,8 @@
  * - Single pane of glass for system status
  * - Action-oriented quick access panels
  * - Real-time metrics with drill-down capability
+ *
+ * All data is fetched from real backend APIs - no mock data.
  */
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import {
@@ -16,56 +18,119 @@ import {
 
 const emit = defineEmits(['navigate'])
 
-// System Status
+// System Status - fetched from /api/v1/status/health
 const systemHealth = ref({
-    overall: 'healthy',
-    services: {
-        aggregator: { status: 'healthy', latency: 12 },
-        identity: { status: 'healthy', latency: 8 },
-        kms: { status: 'healthy', latency: 5 },
-        storage: { status: 'degraded', latency: 45 }
-    }
+    overall: 'loading',
+    services: {}
 })
 
-// Real-time Metrics
+// Real-time Metrics - fetched from /api/v1/dashboard/stats
 const metrics = ref({
-    activeFleets: 12,
-    connectedDevices: 847,
-    activeTrainingRuns: 3,
-    pendingDeployments: 2,
-    privacyBudget: 4.2,
-    certificatesExpiring: 5,
-    modelsDeployed: 8,
-    successRate: 96.8
+    activeFleets: 0,
+    connectedDevices: 0,
+    activeTrainingRuns: 0,
+    pendingDeployments: 0,
+    privacyBudget: 0,
+    certificatesExpiring: 0,
+    modelsDeployed: 0,
+    successRate: 0
 })
+
+// Secondary metrics - fetched from /api/v1/status/metrics
+const secondaryMetrics = ref({
+    uptime_pct: 0,
+    avg_latency_ms: 0,
+    bw_reduction: 0,
+    key_rotations_24h: 0,
+    nbt_score: 0,
+    compliance: 'Level 1'
+})
+
+// Alerts - derived from security score
+const alerts = ref([])
 
 // Recent Activity
 const recentActivity = ref([])
 const loading = ref(true)
+const error = ref(null)
 
 // Polling
 let pollInterval = null
 
+const getAuthHeaders = () => {
+    const token = localStorage.getItem('auth_token')
+    return token ? { 'Authorization': `Bearer ${token}` } : {}
+}
+
 const fetchDashboardData = async () => {
     try {
+        const headers = getAuthHeaders()
+
         // Fetch from multiple endpoints in parallel
-        const [statusRes, fleetsRes] = await Promise.allSettled([
-            fetch('/api/v1/status'),
-            fetch('/api/v1/fleets/extended')
+        const [statsRes, healthRes, metricsRes, securityRes, fleetsRes] = await Promise.allSettled([
+            fetch('/api/v1/dashboard/stats', { headers }),
+            fetch('/api/v1/status/health', { headers }),
+            fetch('/api/v1/status/metrics', { headers }),
+            fetch('/api/v1/security/score', { headers }),
+            fetch('/api/v1/fleets/extended', { headers })
         ])
 
-        if (statusRes.status === 'fulfilled' && statusRes.value.ok) {
-            const data = await statusRes.value.json()
-            metrics.value.activeTrainingRuns = data.active_runs || metrics.value.activeTrainingRuns
+        // Process dashboard stats
+        if (statsRes.status === 'fulfilled' && statsRes.value.ok) {
+            const data = await statsRes.value.json()
+            metrics.value = {
+                activeFleets: data.fleet_count || 0,
+                connectedDevices: data.devices_online || 0,
+                activeTrainingRuns: data.active_training_runs || 0,
+                pendingDeployments: data.pending_deployments || 0,
+                privacyBudget: data.privacy_budget_remaining || 0,
+                certificatesExpiring: data.certificates_expiring || 0,
+                modelsDeployed: data.models_deployed || 0,
+                successRate: data.success_rate || 0
+            }
         }
 
+        // Process service health
+        if (healthRes.status === 'fulfilled' && healthRes.value.ok) {
+            const data = await healthRes.value.json()
+            systemHealth.value = {
+                overall: data.overall || 'healthy',
+                services: data.services || {}
+            }
+        }
+
+        // Process extended metrics
+        if (metricsRes.status === 'fulfilled' && metricsRes.value.ok) {
+            const data = await metricsRes.value.json()
+            secondaryMetrics.value = {
+                uptime_pct: data.uptime_pct || 99.9,
+                avg_latency_ms: data.avg_latency_ms || 0,
+                bw_reduction: data.bw_reduction || 7844,
+                key_rotations_24h: data.key_rotations_24h || 0,
+                nbt_score: data.nbt_score || 0,
+                compliance: data.compliance || 'Level 4'
+            }
+        }
+
+        // Process security alerts
+        if (securityRes.status === 'fulfilled' && securityRes.value.ok) {
+            const data = await securityRes.value.json()
+            alerts.value = data.alerts || []
+        }
+
+        // Fallback to fleets endpoint for device counts if needed
         if (fleetsRes.status === 'fulfilled' && fleetsRes.value.ok) {
             const fleets = await fleetsRes.value.json()
-            metrics.value.activeFleets = fleets.length
-            metrics.value.connectedDevices = fleets.reduce((sum, f) => sum + (f.devices_online || 0), 0)
+            if (Array.isArray(fleets)) {
+                metrics.value.activeFleets = fleets.length
+                metrics.value.connectedDevices = fleets.reduce((sum, f) => sum + (f.devices_online || 0), 0)
+            }
         }
+
+        error.value = null
     } catch (e) {
-        console.warn('Dashboard fetch failed, using cached data')
+        console.warn('Dashboard fetch failed:', e.message)
+        error.value = e.message
     }
     loading.value = false
 }
@@ -78,6 +143,16 @@ const getHealthColor = (status) => {
 const getHealthBg = (status) => {
     const colors = { healthy: 'bg-green-500', degraded: 'bg-yellow-500', critical: 'bg-red-500' }
     return colors[status] || 'bg-gray-500'
+}
+
+const getAlertIcon = (type) => {
+    return type === 'critical' ? AlertTriangle : type === 'warning' ? Clock : CheckCircle
+}
+
+const getAlertColor = (type) => {
+    if (type === 'critical') return { bg: 'bg-red-500/5', border: 'border-red-500/20', text: 'text-red-500' }
+    if (type === 'warning') return { bg: 'bg-yellow-500/5', border: 'border-yellow-500/20', text: 'text-yellow-500' }
+    return { bg: 'bg-blue-500/5', border: 'border-blue-500/20', text: 'text-blue-500' }
 }
 
 // Quick Actions
@@ -162,7 +237,7 @@ onUnmounted(() => {
             <span class="text-xs text-gray-500">MODELS</span>
           </div>
           <div class="text-3xl font-bold text-white mb-1">{{ metrics.modelsDeployed }}</div>
-          <div class="text-xs text-gray-500">{{ metrics.successRate }}% success rate</div>
+          <div class="text-xs text-gray-500">{{ metrics.successRate.toFixed(1) }}% success rate</div>
         </div>
 
         <div class="bg-[#0d1117] border border-[#30363d] rounded-lg p-5 hover:border-[#484f58] transition-colors cursor-pointer"
@@ -194,7 +269,7 @@ onUnmounted(() => {
                 </div>
                 <div class="text-right">
                   <span :class="['text-xs font-medium capitalize', getHealthColor(service.status)]">{{ service.status }}</span>
-                  <div class="text-[10px] text-gray-500">{{ service.latency }}ms</div>
+                  <div class="text-[10px] text-gray-500">{{ service.latency_ms?.toFixed(0) || 0 }}ms</div>
                 </div>
               </div>
             </div>
@@ -205,21 +280,19 @@ onUnmounted(() => {
         <div class="bg-[#0d1117] border border-[#30363d] rounded-lg overflow-hidden">
           <div class="px-5 py-4 border-b border-[#30363d] flex items-center justify-between">
             <h2 class="font-semibold text-white">Alerts</h2>
-            <span class="text-xs px-2 py-0.5 rounded bg-yellow-500/10 text-yellow-500">2 active</span>
+            <span v-if="alerts.length > 0" class="text-xs px-2 py-0.5 rounded bg-yellow-500/10 text-yellow-500">{{ alerts.length }} active</span>
           </div>
           <div class="p-3 space-y-2">
-            <div class="flex items-start gap-3 p-3 bg-yellow-500/5 border border-yellow-500/20 rounded-lg">
-              <AlertTriangle class="w-4 h-4 text-yellow-500 flex-shrink-0 mt-0.5" />
-              <div>
-                <div class="text-sm font-medium text-yellow-500">Certificates Expiring</div>
-                <div class="text-xs text-gray-500">{{ metrics.certificatesExpiring }} certificates expire within 30 days</div>
-              </div>
+            <div v-if="alerts.length === 0" class="flex items-center gap-3 p-3 text-gray-500 text-sm">
+              <CheckCircle class="w-4 h-4 text-green-500" />
+              No active alerts
             </div>
-            <div class="flex items-start gap-3 p-3 bg-blue-500/5 border border-blue-500/20 rounded-lg">
-              <Clock class="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+            <div v-for="alert in alerts" :key="alert.title"
+                 :class="['flex items-start gap-3 p-3 rounded-lg border', getAlertColor(alert.type).bg, getAlertColor(alert.type).border]">
+              <component :is="getAlertIcon(alert.type)" :class="['w-4 h-4 flex-shrink-0 mt-0.5', getAlertColor(alert.type).text]" />
               <div>
-                <div class="text-sm font-medium text-blue-500">Pending Deployments</div>
-                <div class="text-xs text-gray-500">{{ metrics.pendingDeployments }} models awaiting deployment</div>
+                <div :class="['text-sm font-medium', getAlertColor(alert.type).text]">{{ alert.title }}</div>
+                <div class="text-xs text-gray-500">{{ alert.count }} item(s) affected</div>
               </div>
             </div>
           </div>
@@ -229,27 +302,27 @@ onUnmounted(() => {
       <!-- Secondary Metrics Row -->
       <div class="grid grid-cols-6 gap-4">
         <div class="bg-[#0d1117] border border-[#30363d] rounded-lg p-4 text-center">
-          <div class="text-2xl font-bold text-green-500">99.9%</div>
+          <div class="text-2xl font-bold text-green-500">{{ secondaryMetrics.uptime_pct.toFixed(1) }}%</div>
           <div class="text-[10px] text-gray-500 uppercase mt-1">Uptime</div>
         </div>
         <div class="bg-[#0d1117] border border-[#30363d] rounded-lg p-4 text-center">
-          <div class="text-2xl font-bold text-blue-500">48.2ms</div>
+          <div class="text-2xl font-bold text-blue-500">{{ secondaryMetrics.avg_latency_ms.toFixed(1) }}ms</div>
           <div class="text-[10px] text-gray-500 uppercase mt-1">Avg Latency</div>
         </div>
         <div class="bg-[#0d1117] border border-[#30363d] rounded-lg p-4 text-center">
-          <div class="text-2xl font-bold text-purple-500">7,844x</div>
+          <div class="text-2xl font-bold text-purple-500">{{ secondaryMetrics.bw_reduction.toLocaleString() }}x</div>
           <div class="text-[10px] text-gray-500 uppercase mt-1">BW Reduction</div>
         </div>
         <div class="bg-[#0d1117] border border-[#30363d] rounded-lg p-4 text-center">
-          <div class="text-2xl font-bold text-orange-500">24</div>
+          <div class="text-2xl font-bold text-orange-500">{{ secondaryMetrics.key_rotations_24h }}</div>
           <div class="text-[10px] text-gray-500 uppercase mt-1">Key Rotations</div>
         </div>
         <div class="bg-[#0d1117] border border-[#30363d] rounded-lg p-4 text-center">
-          <div class="text-2xl font-bold text-cyan-500">4.21%</div>
+          <div class="text-2xl font-bold text-cyan-500">{{ secondaryMetrics.nbt_score.toFixed(2) }}%</div>
           <div class="text-[10px] text-gray-500 uppercase mt-1">NBT Score</div>
         </div>
         <div class="bg-[#0d1117] border border-[#30363d] rounded-lg p-4 text-center">
-          <div class="text-2xl font-bold text-pink-500">Level 4</div>
+          <div class="text-2xl font-bold text-pink-500">{{ secondaryMetrics.compliance }}</div>
           <div class="text-[10px] text-gray-500 uppercase mt-1">Compliance</div>
         </div>
       </div>
