@@ -22,11 +22,11 @@ def import_all_models():
     yield
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="session")
 def test_db_engine():
     """
-    Create a fresh SQLite database for each test function.
-    Uses a temp file to avoid metadata collision issues with in-memory databases.
+    Create a single SQLite database for all tests in the session.
+    Using session scope avoids repeated metadata/index collision issues.
     """
     # Create a temp file for the database
     fd, db_path = tempfile.mkstemp(suffix=".db")
@@ -39,13 +39,8 @@ def test_db_engine():
         poolclass=StaticPool
     )
 
-    # Create all tables with checkfirst to handle any existing indexes
-    # Note: Fresh file DB should not have existing tables, but SQLModel metadata is global
-    with engine.begin() as conn:
-        # Drop all tables first to ensure clean slate
-        SQLModel.metadata.drop_all(conn, checkfirst=True)
-        # Then create all
-        SQLModel.metadata.create_all(conn, checkfirst=True)
+    # Create all tables once at session start
+    SQLModel.metadata.create_all(engine)
 
     yield engine
 

@@ -389,3 +389,113 @@ def get_token_info(token: str) -> Optional[Dict]:
         return jwt.decode(token, options={"verify_signature": False})
     except JWTError:
         return None
+
+
+# ============================================================================
+# FLEET BEARER AUTHENTICATION
+# ============================================================================
+
+from fastapi import Header
+from sqlmodel import select
+import hashlib
+
+def verify_fleet_api_key(raw_key: str, stored_hash: str) -> bool:
+    """
+    Verify a Fleet API key by comparing SHA256 hashes.
+
+    Args:
+        raw_key: The raw API key sent by the client
+        stored_hash: The SHA256 hash stored in the database
+
+    Returns:
+        True if the key is valid, False otherwise
+    """
+    computed_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+    return secrets.compare_digest(computed_hash, stored_hash)
+
+
+async def get_current_fleet(
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+    session: Session = Depends(get_session)
+):
+    """
+    Validate Fleet Bearer token and return the authenticated Fleet.
+
+    Expected header format: Authorization: Fleet <raw_api_key>
+
+    Authentication flow:
+    1. Extract raw_api_key from Authorization header
+    2. Hash the raw key with SHA256
+    3. Compare hash with stored api_key_hash in Fleet table
+    4. Verify fleet is active
+
+    Args:
+        authorization: Authorization header value
+        session: Database session
+
+    Returns:
+        Fleet object if authentication succeeds
+
+    Raises:
+        HTTPException: 401 if authentication fails
+    """
+    from .models.core import Fleet
+
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid Fleet API key",
+        headers={"WWW-Authenticate": "Fleet"},
+    )
+
+    if not authorization:
+        logger.debug("Fleet auth: No Authorization header")
+        raise credentials_exception
+
+    # Parse "Fleet <api_key>" format
+    parts = authorization.split(" ", 1)
+    if len(parts) != 2 or parts[0].lower() != "fleet":
+        logger.debug(f"Fleet auth: Invalid Authorization format: {parts[0] if parts else 'empty'}")
+        raise credentials_exception
+
+    raw_key = parts[1]
+
+    # Find fleet by hashing the raw key and comparing
+    key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+
+    stmt = select(Fleet).where(Fleet.api_key_hash == key_hash)
+    fleet = session.exec(stmt).first()
+
+    if not fleet:
+        logger.warning("Fleet auth: No fleet found with matching API key hash")
+        raise credentials_exception
+
+    if not fleet.is_active:
+        logger.warning(f"Fleet auth: Fleet {fleet.id} is inactive")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Fleet is inactive"
+        )
+
+    logger.debug(f"Fleet auth: Successfully authenticated fleet {fleet.id}")
+    return fleet
+
+
+async def get_current_fleet_optional(
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+    session: Session = Depends(get_session)
+):
+    """
+    Optionally validate Fleet Bearer token.
+
+    Returns None if no auth provided (for endpoints that support both auth modes).
+    """
+    if not authorization:
+        return None
+
+    if not authorization.lower().startswith("fleet "):
+        return None
+
+    try:
+        return await get_current_fleet(authorization, session)
+    except HTTPException:
+        return None
