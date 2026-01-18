@@ -7,7 +7,7 @@ health checks, and environment-based configuration.
 
 from sqlmodel import SQLModel, create_engine, Session
 from sqlalchemy.pool import QueuePool, NullPool
-from sqlalchemy import event
+from sqlalchemy import event, text
 from ..utils.config import settings
 import os
 import logging
@@ -124,7 +124,7 @@ def check_db_health() -> dict:
     """
     try:
         with Session(engine) as session:
-            session.execute("SELECT 1")
+            session.execute(text("SELECT 1"))
 
         pool = engine.pool
         return {

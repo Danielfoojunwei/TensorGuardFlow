@@ -1,7 +1,7 @@
 {
     "agent_name": "dev-agent-001",
     "fleet_id": "dev-fleet",
-    "control_plane_url": "http://localhost:8001",
+    "control_plane_url": "http://localhost:8000",
     "api_key": "test-dev-key",
     "identity": {
         "enabled": true,

@@ -175,16 +175,24 @@ async def get_fleets_extended(session: Session = Depends(get_session), current_u
 async def create_fleet(name: str, session: Session = Depends(get_session), current_user: User = Depends(get_current_user)):
     import secrets
     import hashlib
-    
+    from ..auth import encrypt_api_key
+
     # Generate a real secure API key
     raw_key = f"tg_{secrets.token_hex(16)}"
     key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
-    
-    fleet = Fleet(name=name, tenant_id=current_user.tenant_id, api_key_hash=key_hash)
+    # Encrypt the raw key for HMAC verification (server needs raw key to verify signatures)
+    key_encrypted = encrypt_api_key(raw_key)
+
+    fleet = Fleet(
+        name=name,
+        tenant_id=current_user.tenant_id,
+        api_key_hash=key_hash,
+        api_key_encrypted=key_encrypted
+    )
     session.add(fleet)
     session.commit()
     session.refresh(fleet)
-    
+
     # Return the raw key ONLY once
     return {
         "id": fleet.id,

@@ -105,9 +105,6 @@ def bench(subcommand_args):
     bench_main()
 
 
-    click.echo(f"Compliance bundle exported: {result}")
-
-
 # === PEFT STUDIO ===
 @cli.group()
 def peft():

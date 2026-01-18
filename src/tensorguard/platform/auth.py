@@ -306,6 +306,57 @@ class RoleChecker:
 
 
 # ============================================================================
+# API KEY ENCRYPTION (for HMAC verification)
+# ============================================================================
+
+def _get_fernet_key() -> bytes:
+    """
+    Derive a Fernet-compatible key from TG_SECRET_KEY.
+    Fernet requires a 32-byte URL-safe base64-encoded key.
+    """
+    import hashlib
+    import base64
+    # Use SHA256 to derive a 32-byte key from SECRET_KEY
+    derived = hashlib.sha256(SECRET_KEY.encode()).digest()
+    return base64.urlsafe_b64encode(derived)
+
+
+def encrypt_api_key(raw_key: str) -> str:
+    """
+    Encrypt an API key for secure storage.
+
+    Args:
+        raw_key: The raw API key to encrypt
+
+    Returns:
+        Fernet-encrypted key as a string
+    """
+    from cryptography.fernet import Fernet
+    fernet = Fernet(_get_fernet_key())
+    encrypted = fernet.encrypt(raw_key.encode())
+    return encrypted.decode()
+
+
+def decrypt_api_key(encrypted_key: str) -> str:
+    """
+    Decrypt an encrypted API key.
+
+    Args:
+        encrypted_key: The Fernet-encrypted key
+
+    Returns:
+        The raw API key
+
+    Raises:
+        InvalidToken: If decryption fails (wrong key or corrupted data)
+    """
+    from cryptography.fernet import Fernet
+    fernet = Fernet(_get_fernet_key())
+    decrypted = fernet.decrypt(encrypted_key.encode())
+    return decrypted.decode()
+
+
+# ============================================================================
 # UTILITY FUNCTIONS
 # ============================================================================
 

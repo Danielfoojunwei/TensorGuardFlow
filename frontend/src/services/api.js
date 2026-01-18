@@ -130,27 +130,39 @@ export const integrationsApi = {
     getStatus: () => request('/integrations/status')
 }
 
-// TGSP Marketplace API
+// TGSP Marketplace API (mounted at /api/community/tgsp on backend)
+const TGSP_BASE = '/api/community/tgsp'
+
 export const tgspApi = {
-    listPackages: () => request('/tgsp/packages'),
+    listPackages: async () => {
+        const response = await fetch(`${TGSP_BASE}/packages`)
+        if (!response.ok) throw new ApiError('Failed to list packages', response.status)
+        return response.json()
+    },
     uploadPackage: async (file) => {
         const formData = new FormData()
         formData.append('file', file)
-        const url = `${API_BASE}/tgsp/upload`
-        const response = await fetch(url, { method: 'POST', body: formData })
+        const response = await fetch(`${TGSP_BASE}/upload`, { method: 'POST', body: formData })
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}))
             throw new ApiError(errorData.detail || 'Upload failed', response.status, errorData)
         }
         return response.json()
     },
-    createRelease: (packageId, fleetId, channel = 'stable') =>
-        request('/tgsp/releases', {
+    createRelease: async (packageId, fleetId, channel = 'stable') => {
+        const response = await fetch(`${TGSP_BASE}/releases`, {
             method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ package_id: packageId, fleet_id: fleetId, channel, is_active: true })
-        }),
-    getCurrentFleetPackage: (fleetId, channel = 'stable') =>
-        request(`/tgsp/fleets/${fleetId}/current?channel=${channel}`)
+        })
+        if (!response.ok) throw new ApiError('Failed to create release', response.status)
+        return response.json()
+    },
+    getCurrentFleetPackage: async (fleetId, channel = 'stable') => {
+        const response = await fetch(`${TGSP_BASE}/fleets/${fleetId}/current?channel=${channel}`)
+        if (!response.ok) throw new ApiError('Failed to get fleet package', response.status)
+        return response.json()
+    }
 }
 
 // KMS API
@@ -206,9 +218,15 @@ export const peftApi = {
 }
 
 // Status & Health API
+// Note: Health endpoint is at root level /health, not under /api/v1
 export const statusApi = {
-    getStatus: () => request('/status'),
-    getHealth: () => request('/health')
+    getStatus: () => request('/dashboard/stats'),  // Use dashboard stats for status
+    getHealth: async () => {
+        // Health endpoint is at root level, not under /api/v1
+        const response = await fetch('/health')
+        if (!response.ok) throw new ApiError('Health check failed', response.status)
+        return response.json()
+    }
 }
 
 export { ApiError, request }

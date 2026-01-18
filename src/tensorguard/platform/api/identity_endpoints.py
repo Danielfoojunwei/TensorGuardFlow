@@ -121,9 +121,15 @@ async def verify_fleet_auth(
 ) -> Fleet:
     """
     Verify agent request using Fleet API key + HMAC signature.
-    
-    Signature format: HMAC-SHA256(fleet_api_key, timestamp + nonce + body_hash)
+
+    Signature format: HMAC-SHA256(fleet_api_key, timestamp:nonce:body_hash)
+
+    The server stores the raw API key encrypted (api_key_encrypted field) and
+    decrypts it for HMAC verification. This ensures both agent and server use
+    the same key for signature computation.
     """
+    from ..auth import decrypt_api_key
+
     # Check replay (timestamp within 5 minutes)
     try:
         request_time = int(x_tg_timestamp)
@@ -132,27 +138,36 @@ async def verify_fleet_auth(
             raise HTTPException(status_code=401, detail="Request expired")
     except ValueError:
         raise HTTPException(status_code=401, detail="Invalid timestamp")
-    
+
     # Get fleet
     fleet = session.get(Fleet, x_tg_fleet_id)
     if not fleet or not fleet.is_active:
         raise HTTPException(status_code=401, detail="Invalid fleet")
-    
-    # Compute expected signature
+
+    # Compute expected signature using decrypted raw API key
     body = await request.body()
     body_hash = hashlib.sha256(body).hexdigest()
     message = f"{x_tg_timestamp}:{x_tg_nonce}:{body_hash}"
-    
-    # We need the raw API key, but we only store the hash
-    # In production, agents would use the key they stored at creation
-    # For verification, we compare the signature using the stored hash as key
-    # This is a simplification - in production, use a proper key derivation
+
+    # Decrypt the raw API key for HMAC verification
+    # Fall back to hash-based verification for legacy fleets (pre-encryption)
+    if fleet.api_key_encrypted:
+        try:
+            raw_api_key = decrypt_api_key(fleet.api_key_encrypted)
+        except Exception as e:
+            logger.error(f"Failed to decrypt API key for fleet {x_tg_fleet_id}: {e}")
+            raise HTTPException(status_code=500, detail="Key decryption failed")
+    else:
+        # Legacy fallback: use hash (won't work with proper HMAC, but allows gradual migration)
+        logger.warning(f"Fleet {x_tg_fleet_id} has no encrypted key, using legacy hash-based auth")
+        raw_api_key = fleet.api_key_hash
+
     expected_sig = hmac.new(
-        fleet.api_key_hash.encode(),
+        raw_api_key.encode(),
         message.encode(),
         hashlib.sha256
     ).hexdigest()
-    
+
     if not hmac.compare_digest(expected_sig, x_tg_signature):
         logger.warning(f"Signature mismatch for fleet {x_tg_fleet_id}")
         raise HTTPException(status_code=401, detail="Invalid signature")
@@ -173,7 +188,7 @@ async def verify_fleet_auth(
     )
     session.add(new_nonce)
     session.commit()
-    
+
     return fleet
 
 

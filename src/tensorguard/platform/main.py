@@ -302,28 +302,64 @@ except ImportError:
 
 # Serve UI
 # Single Page Application (SPA) catch-all
-from fastapi.responses import FileResponse
-
-# Use absolute path for public directory
+from fastapi.responses import FileResponse, HTMLResponse
 
 # Use absolute path for public directory (Vue Build)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 PUBLIC_DIR = os.path.join(BASE_DIR, "frontend", "dist")
 
+# Check if frontend build exists
+FRONTEND_AVAILABLE = os.path.isdir(PUBLIC_DIR) and os.path.isfile(os.path.join(PUBLIC_DIR, "index.html"))
+
+if not FRONTEND_AVAILABLE:
+    logger.warning(
+        f"Frontend build not found at {PUBLIC_DIR}. "
+        "Run 'cd frontend && npm install && npm run build' to build the UI."
+    )
+
+
 @app.get("/{full_path:path}")
 async def serve_spa(full_path: str):
     # Skip API routes (though definition order should handle this)
-    if full_path.startswith("api/v1"):
-        return None 
-        
+    if full_path.startswith("api/") or full_path.startswith("health") or full_path.startswith("ready") or full_path.startswith("live") or full_path.startswith("metrics"):
+        return None
+
+    # If frontend is not built, return a helpful message
+    if not FRONTEND_AVAILABLE:
+        return HTMLResponse(
+            content="""
+            <!DOCTYPE html>
+            <html>
+            <head><title>TensorGuard Platform</title></head>
+            <body style="font-family: sans-serif; padding: 2rem;">
+                <h1>TensorGuard Platform API</h1>
+                <p>The frontend has not been built yet.</p>
+                <p>To build the UI, run:</p>
+                <pre style="background: #f4f4f4; padding: 1rem; border-radius: 4px;">
+cd frontend
+npm install
+npm run build
+                </pre>
+                <p>API endpoints are available at <a href="/docs">/docs</a></p>
+            </body>
+            </html>
+            """,
+            status_code=200
+        )
+
     file_path = os.path.join(PUBLIC_DIR, full_path)
     if os.path.isfile(file_path):
         return FileResponse(file_path)
     # Default to index.html for SPA
-    return FileResponse(os.path.join(PUBLIC_DIR, "index.html"))
+    index_path = os.path.join(PUBLIC_DIR, "index.html")
+    if os.path.isfile(index_path):
+        return FileResponse(index_path)
+    return HTMLResponse(content="<h1>Not Found</h1>", status_code=404)
 
-# StaticFiles mounting for structured assets if needed
-app.mount("/static", StaticFiles(directory=PUBLIC_DIR), name="static")
+
+# StaticFiles mounting for structured assets (only if frontend exists)
+if FRONTEND_AVAILABLE:
+    app.mount("/static", StaticFiles(directory=PUBLIC_DIR), name="static")
 
 if __name__ == "__main__":
     import uvicorn
