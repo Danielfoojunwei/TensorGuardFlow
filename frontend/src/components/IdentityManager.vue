@@ -15,6 +15,7 @@ const scanning = ref(false)
 const migratingEku = ref(false)
 const selectedEndpoint = ref(null)
 const showPolicyModal = ref(false)
+const errorMessage = ref('')
 
 // New policy form
 const newPolicy = ref({
@@ -38,6 +39,7 @@ const presetPolicies = [
 
 const fetchInventory = async () => {
     loading.value = true
+    errorMessage.value = ''
     try {
         const [invRes, polRes, renRes] = await Promise.all([
             fetch('/api/v1/identity/inventory'),
@@ -45,32 +47,19 @@ const fetchInventory = async () => {
             fetch('/api/v1/identity/renewals')
         ])
 
-        if (invRes.ok) inventory.value = await invRes.json()
-        if (polRes.ok) policies.value = await polRes.json()
-        if (renRes.ok) renewals.value = await renRes.json()
+        if (!invRes.ok || !polRes.ok || !renRes.ok) {
+            throw new Error('Backend unavailable')
+        }
+
+        inventory.value = await invRes.json()
+        policies.value = await polRes.json()
+        renewals.value = await renRes.json()
     } catch (e) {
         console.error("Failed to fetch identity data", e)
-        // Mock data for demo
-        inventory.value = {
-            endpoints: [
-                { id: 'ep-001', name: 'api.tensorguard.io', hostname: 'api.tensorguard.io', endpoint_type: 'kubernetes', environment: 'production', criticality: 'high' },
-                { id: 'ep-002', name: 'fleet-gateway-1', hostname: 'gw1.fleet.local', endpoint_type: 'vm', environment: 'production', criticality: 'medium' },
-                { id: 'ep-003', name: 'staging-api', hostname: 'staging.tensorguard.io', endpoint_type: 'kubernetes', environment: 'staging', criticality: 'low' }
-            ],
-            certificates: [
-                { id: 'cert-001', endpoint_id: 'ep-001', subject: 'CN=api.tensorguard.io', issuer: 'CN=Let\'s Encrypt R3', not_after: '2026-03-15T00:00:00Z', days_to_expiry: 63, has_eku_conflict: false },
-                { id: 'cert-002', endpoint_id: 'ep-002', subject: 'CN=gw1.fleet.local', issuer: 'CN=Internal CA', not_after: '2026-02-01T00:00:00Z', days_to_expiry: 21, has_eku_conflict: true },
-                { id: 'cert-003', endpoint_id: 'ep-003', subject: 'CN=staging.tensorguard.io', issuer: 'CN=Let\'s Encrypt R3', not_after: '2026-01-25T00:00:00Z', days_to_expiry: 14, has_eku_conflict: false }
-            ],
-            expiry_summary: { critical: 1, warning: 1, healthy: 1 }
-        }
-        policies.value = [
-            { id: 'pol-001', name: 'Default Public TLS', max_validity_days: 90, renewal_window_days: 30, is_preset: true, preset_name: 'public' },
-            { id: 'pol-002', name: 'Internal mTLS', max_validity_days: 365, renewal_window_days: 60, is_preset: true, preset_name: 'mtls' }
-        ]
-        renewals.value = [
-            { id: 'job-001', endpoint_id: 'ep-002', status: 'pending', status_message: 'Awaiting agent', retry_count: 0, created_at: '2026-01-10T10:00:00Z' }
-        ]
+        inventory.value = { endpoints: [], certificates: [], expiry_summary: {} }
+        policies.value = []
+        renewals.value = []
+        errorMessage.value = 'Unable to load identity data. Check backend connectivity and authentication.'
     }
     loading.value = false
 }
@@ -219,6 +208,10 @@ onMounted(() => {
             </div>
             <div class="text-2xl font-bold text-green-500">{{ renewals.filter(r => r.status === 'pending' || r.status === 'in_progress').length }}</div>
         </div>
+    </div>
+
+    <div v-if="errorMessage" class="bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-sm text-red-200">
+        {{ errorMessage }}
     </div>
 
     <!-- Chrome Jun 2026 Warning -->

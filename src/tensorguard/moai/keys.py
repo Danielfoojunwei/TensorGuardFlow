@@ -7,6 +7,7 @@ import os
 import json
 import base64
 import secrets
+import logging
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from pathlib import Path
@@ -14,6 +15,9 @@ from typing import Dict, Optional, Tuple
 
 from .moai_config import MoaiConfig
 from ..core.keys import vault, KeyScope
+from ..utils.production_gates import is_production, ProductionGateError
+
+logger = logging.getLogger(__name__)
 
 @dataclass
 class CkksKeyMetadata:
@@ -109,6 +113,13 @@ class MoaiKeyManager:
         try:
             eval_data, _ = self.vault.load_key_artifact(self.scope, key_id, suffix=".eval")
         except FileNotFoundError:
+            if is_production():
+                raise ProductionGateError(
+                    gate_name="MISSING_EVAL_KEYS",
+                    message="MOAI eval keys are required in production.",
+                    remediation="Generate and store eval keys in the vault with suffix .eval.",
+                )
+            logger.warning("Eval keys missing for %s; falling back to empty keys in development.", key_id)
             eval_data = b"" # Fallback to empty if not explicitly saved
             
         return pk_data, eval_data
