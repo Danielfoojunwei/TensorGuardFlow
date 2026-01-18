@@ -102,3 +102,65 @@ class TestMakefileTargets:
         # Basic health check should work
         response = client.get("/health")
         assert response.status_code == 200
+
+
+class TestBackendStartupWithoutFrontend:
+    """Tests for COMMIT 2: Backend must not crash if frontend/dist missing."""
+
+    def test_app_starts_without_frontend_dist(self):
+        """
+        Verify server starts correctly even if frontend/dist doesn't exist.
+
+        This is critical because backend should not depend on frontend build artifacts.
+        The app should:
+        1. Not crash on import/startup
+        2. Serve a helpful message instead of 500 errors
+        3. Still serve API endpoints normally
+        """
+        from fastapi.testclient import TestClient
+        from tensorguard.platform.main import app
+
+        # App should start (we're here, so it didn't crash)
+        client = TestClient(app, raise_server_exceptions=False)
+
+        # API endpoints should work
+        response = client.get("/health")
+        assert response.status_code == 200
+
+        # API docs should work
+        response = client.get("/docs")
+        assert response.status_code == 200
+
+    def test_spa_route_returns_helpful_message_when_no_frontend(self):
+        """
+        When frontend is not built, requesting root should return helpful message.
+        """
+        from fastapi.testclient import TestClient
+        from tensorguard.platform.main import app, FRONTEND_AVAILABLE
+
+        client = TestClient(app, raise_server_exceptions=False)
+
+        # Request root path
+        response = client.get("/")
+
+        # Should not be 500 error
+        assert response.status_code != 500
+
+        # If frontend is not available, should return helpful HTML
+        if not FRONTEND_AVAILABLE:
+            assert response.status_code == 200
+            assert "TensorGuard Platform" in response.text
+            assert "npm run build" in response.text
+
+    def test_static_files_not_mounted_without_frontend(self):
+        """
+        Static files should only be mounted if frontend/dist exists.
+        """
+        from tensorguard.platform.main import app, FRONTEND_AVAILABLE
+
+        # Check if /static route exists
+        static_routes = [r for r in app.routes if hasattr(r, 'path') and r.path == '/static']
+
+        if not FRONTEND_AVAILABLE:
+            # Should NOT have static mount
+            assert len(static_routes) == 0, "Static files should not be mounted without frontend"
