@@ -1,10 +1,14 @@
 """
 Agent Telemetry Emitter
 
-Emits telemetry events to the Control Plane using HMAC-authenticated requests.
+Emits telemetry events to the Control Plane using Fleet Bearer authentication.
 Handles pipeline stage events, system metrics, and adapter swap notifications.
 
 This module is called from edge_manager.py after each pipeline stage completes.
+
+Authentication: Uses Fleet Bearer token (Authorization: Fleet <api_key>).
+The raw API key is sent to the backend, which hashes it with SHA256 and
+compares against the stored api_key_hash in the Fleet table.
 """
 
 import time
@@ -13,7 +17,6 @@ import logging
 import os
 import json
 import hashlib
-import hmac
 import secrets
 import requests
 from typing import Optional, Dict, Any, List
@@ -367,33 +370,22 @@ class TelemetryEmitter:
             logger.error(f"Telemetry send error: {e}")
 
     # =========================================================================
-    # Internal - HMAC Authentication
+    # Internal - Fleet Bearer Authentication
     # =========================================================================
 
     def _build_headers(self, body: bytes) -> Dict[str, str]:
-        """Build request headers with HMAC authentication."""
-        timestamp = str(int(time.time()))
-        nonce = secrets.token_hex(16)
-        signature = self._compute_hmac_signature(timestamp, nonce, body)
+        """Build request headers with Fleet Bearer authentication.
 
+        Uses the simple Fleet Bearer token scheme:
+        Authorization: Fleet <raw_api_key>
+
+        The backend hashes this key with SHA256 and compares against
+        the stored api_key_hash in the Fleet table.
+        """
         return {
             "Content-Type": "application/json",
-            "X-TG-Fleet-Id": self.fleet_id,
-            "X-TG-Timestamp": timestamp,
-            "X-TG-Nonce": nonce,
-            "X-TG-Signature": signature,
+            "Authorization": f"Fleet {self.api_key}",
         }
-
-    def _compute_hmac_signature(self, timestamp: str, nonce: str, body: bytes) -> str:
-        """Compute HMAC-SHA256 signature for verify_fleet_auth."""
-        body_hash = hashlib.sha256(body).hexdigest()
-        message = f"{timestamp}:{nonce}:{body_hash}"
-        signature = hmac.new(
-            self.api_key.encode(),
-            message.encode(),
-            hashlib.sha256
-        ).hexdigest()
-        return signature
 
     # =========================================================================
     # Internal - System Metrics Collection
