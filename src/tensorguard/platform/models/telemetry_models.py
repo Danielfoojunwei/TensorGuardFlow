@@ -78,7 +78,7 @@ class FleetDevice(SQLModel, table=True):
     __table_args__ = (
         Index('ix_fleet_device_tenant_fleet', 'tenant_id', 'fleet_id'),
         Index('ix_fleet_device_fleet_lastseen', 'fleet_id', 'last_seen_at'),
-        Index('ix_fleet_device_device_id', 'device_id'),
+        # Note: device_id index is already created by Field(index=True, unique=True)
     )
 
     id: str = Field(

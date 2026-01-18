@@ -44,6 +44,20 @@ async def login_for_access_token(form_data: LoginData, session: Session = Depend
 async def read_users_me(current_user: User = Depends(get_current_user)):
     return current_user
 
+
+@router.get("/auth/me")
+async def get_current_user_info(current_user: User = Depends(get_current_user)):
+    """
+    Get current user info - alias for /users/me for frontend compatibility.
+    Returns user info without sensitive fields.
+    """
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "role": current_user.role,
+        "tenant_id": current_user.tenant_id,
+    }
+
 # --- Tenants ---
 @router.post("/onboarding/init", response_model=Tenant)
 async def init_tenant(name: str, admin_email: str, admin_pass: str, session: Session = Depends(get_session)):
