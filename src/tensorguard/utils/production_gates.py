@@ -352,6 +352,41 @@ def assert_production_invariants() -> Dict[str, Any]:
     return results
 
 
+def warn_incomplete_feature(
+    feature_name: str,
+    description: str,
+    issue_url: Optional[str] = None,
+) -> None:
+    """
+    Warn about an incomplete/simplified feature implementation.
+
+    In production mode, logs a CRITICAL warning and may optionally
+    require an explicit acknowledgment via environment variable.
+
+    Args:
+        feature_name: Name of the feature
+        description: Description of what's incomplete
+        issue_url: Optional link to tracking issue
+    """
+    ack_var = f"TG_ACK_{feature_name.upper().replace(' ', '_').replace('-', '_')}"
+    acknowledged = os.getenv(ack_var, "false").lower() == "true"
+
+    msg = f"INCOMPLETE FEATURE: {feature_name} - {description}"
+    if issue_url:
+        msg += f" See: {issue_url}"
+
+    if is_production():
+        if not acknowledged:
+            logger.critical(
+                f"{msg}\n"
+                f"To acknowledge this limitation in production, set {ack_var}=true"
+            )
+        else:
+            logger.warning(f"{msg} (acknowledged via {ack_var})")
+    else:
+        logger.info(f"[DEV MODE] {msg}")
+
+
 def assert_feature_available(
     feature_name: str,
     required_modules: List[str],

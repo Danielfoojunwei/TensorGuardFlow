@@ -19,6 +19,7 @@ from ..auth import get_current_user
 from ..models.core import User
 from ..models.settings_models import IntegrationConnection, IntegrationStatus
 from ...utils.production_gates import is_production, ProductionGateError
+from ...utils.config_encryption import encrypt_sensitive_fields
 
 router = APIRouter()
 
@@ -400,9 +401,12 @@ async def connect_integration(
         .where(IntegrationConnection.service == req.service)
     ).first()
 
+    # Encrypt sensitive fields in config (api_key, password, token, etc.)
+    encrypted_config = encrypt_sensitive_fields(req.config)
+
     if existing:
         existing.status = health["status"]
-        existing.config_json = json.dumps(req.config)  # TODO: encrypt sensitive fields
+        existing.config_json = encrypted_config
         existing.last_health_check = datetime.utcnow()
         existing.health_check_latency_ms = health.get("latency_ms")
         existing.error_message = health["message"] if health["status"] != IntegrationStatus.CONNECTED.value else None
@@ -415,7 +419,7 @@ async def connect_integration(
             tenant_id=current_user.tenant_id,
             service=req.service,
             status=health["status"],
-            config_json=json.dumps(req.config),
+            config_json=encrypted_config,
             last_health_check=datetime.utcnow(),
             health_check_latency_ms=health.get("latency_ms"),
             error_message=health["message"] if health["status"] != IntegrationStatus.CONNECTED.value else None,

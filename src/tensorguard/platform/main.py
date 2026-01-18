@@ -3,7 +3,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
-from .database import init_db, check_db_health, SessionLocal
+from .database import check_db_health, SessionLocal
 import os
 import logging
 from datetime import datetime

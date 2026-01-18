@@ -28,6 +28,7 @@ from tensorguard.core.production import (
     CompressionMetrics,
     ModelQualityMetrics,
 )
+from tensorguard.core.privacy.rdp_accountant import RDPAccountant
 from tensorguard.schemas.common import Demonstration
 from tensorguard.utils.production_gates import ProductionGateError, is_production, require_dependency
 
@@ -80,6 +81,13 @@ class TrainingWorker(fl.client.NumPyClient if fl is not None else object):
             epsilon_budget=self.config.dp_epsilon
         )
         self.observability = ObservabilityCollector() if enable_observability else None
+
+        # Production RDP Accountant for tight privacy composition
+        self._rdp_accountant = RDPAccountant(
+            target_delta=self.dp_profile.delta,
+            epsilon_budget=self.dp_profile.epsilon_budget,
+        )
+        self._total_dataset_size = 1000  # Default, should be configured per deployment
         
         # Pipeline Components
         self._clipper = GradientClipper(self.dp_profile.clipping_norm)
@@ -108,6 +116,30 @@ class TrainingWorker(fl.client.NumPyClient if fl is not None else object):
         self._adapter = adapter
         logger.info(f"Adapter configured: {type(adapter).__name__}")
 
+    def configure_dataset_size(self, total_size: int) -> None:
+        """
+        Configure total dataset size for privacy amplification computation.
+
+        The sample rate (q) for RDP accounting is computed as batch_size / total_size.
+        Larger datasets provide better privacy amplification through subsampling.
+
+        Args:
+            total_size: Total number of examples in the training dataset
+        """
+        if total_size <= 0:
+            raise ValueError(f"Dataset size must be positive, got {total_size}")
+        self._total_dataset_size = total_size
+        logger.info(f"Dataset size configured: {total_size} examples")
+
+    def get_privacy_status(self) -> dict:
+        """
+        Get current privacy budget status from RDP accountant.
+
+        Returns:
+            Dictionary with epsilon, delta, budget, remaining, and exhausted status
+        """
+        return self._rdp_accountant.summary()
+
     def add_demonstration(self, demo: Any):
         """Buffer a demonstration."""
         if len(self._current_round_demos) >= self._MAX_BUFFER_SIZE:
@@ -124,39 +156,52 @@ class TrainingWorker(fl.client.NumPyClient if fl is not None else object):
             logger.error("No adapter configured")
             return None
 
-        # --- DP ENFORCEMENT ---
-        # WARNING: This is a SIMPLIFIED DP implementation for demonstration.
-        # A production DP system requires:
-        # 1. Rényi Differential Privacy (RDP) accountant for tight composition
-        # 2. Calibrated Gaussian noise based on sensitivity and privacy budget
-        # 3. Per-sample gradient clipping with known sensitivity bounds
-        # 4. Subsampling amplification tracking
-        #
-        # Current implementation uses fixed epsilon consumption as a placeholder.
-        # For production, integrate: opacus, tensorflow-privacy, or dp-accounting
-        #
-        # TODO(security): Implement proper RDP accountant before production
-        # See: https://arxiv.org/abs/1702.07476 (Rényi DP)
-        # See: https://github.com/pytorch/opacus (Reference implementation)
+        # --- DP ENFORCEMENT (Production RDP Accountant) ---
+        # Using Rényi Differential Privacy (RDP) composition with:
+        # 1. Tight privacy composition via RDP
+        # 2. Optimal RDP → (ε, δ)-DP conversion (Mironov 2017)
+        # 3. Subsampling amplification for privacy amplification
+        # 4. Per-round budget tracking with hard stop
 
-        # Compute epsilon for this round based on noise multiplier and sampling rate
-        # In a real implementation: epsilon = rdp_accountant.get_epsilon(delta, steps)
         noise_multiplier = getattr(self.dp_profile, 'noise_multiplier', 1.0)
-        sample_rate = min(len(self._current_round_demos) / 1000.0, 1.0)  # Assume 1000 total
+        batch_size = len(self._current_round_demos)
+        sample_rate = min(batch_size / self._total_dataset_size, 1.0)
 
-        # Simplified epsilon estimation (NOT production-ready)
-        # Real formula involves RDP→(ε,δ)-DP conversion
-        round_epsilon = 2.0 * sample_rate / (noise_multiplier ** 2) if noise_multiplier > 0 else float('inf')
-        round_epsilon = max(0.1, min(round_epsilon, 1.0))  # Clamp for stability
+        # Check budget before computing
+        if self._rdp_accountant.is_budget_exhausted():
+            logger.critical(
+                f"FATAL: DP Epsilon Budget Exhausted. "
+                f"Current ε={self._rdp_accountant.get_epsilon():.4f} >= budget={self.dp_profile.epsilon_budget:.2f}. "
+                f"Privacy Guard enforced. Aborting round."
+            )
+            return None
 
-        logger.warning(
-            f"DP NOTICE: Using simplified epsilon estimation (ε={round_epsilon:.3f}). "
-            f"Production requires RDP accountant integration."
+        # Add this round to RDP accountant (1 step per round)
+        current_epsilon = self._rdp_accountant.add_step(
+            noise_multiplier=noise_multiplier,
+            sample_rate=sample_rate,
+            num_steps=1,
+            mechanism="dp_sgd_round",
         )
 
-        if not self.dp_profile.consume_epsilon(round_epsilon):
-            logger.critical(f"FATAL: DP Epsilon Budget Exhausted. Privacy Guard enforced. Aborting round.")
+        # Sync with legacy DPPolicyProfile for compatibility
+        self.dp_profile.epsilon_consumed = current_epsilon
+
+        # Check if this round would exceed budget
+        if current_epsilon > self.dp_profile.epsilon_budget:
+            logger.critical(
+                f"FATAL: DP Epsilon Budget Exceeded after round. "
+                f"ε={current_epsilon:.4f} > budget={self.dp_profile.epsilon_budget:.2f}. "
+                f"Privacy Guard enforced."
+            )
             return None
+
+        remaining = self.dp_profile.epsilon_budget - current_epsilon
+        logger.info(
+            f"DP RDP Accountant: round={self._current_round}, "
+            f"σ={noise_multiplier:.2f}, q={sample_rate:.4f}, "
+            f"ε={current_epsilon:.4f}, remaining={remaining:.4f}"
+        )
         # ----------------------
 
         self._current_round += 1
