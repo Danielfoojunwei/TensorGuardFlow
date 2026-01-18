@@ -2,36 +2,40 @@
 
 This document tracks the production-hardening status of TensorGuardFlow.
 
+**Last Updated:** 2026-01-18
+**Version:** 2.3.0
+
 ## Checklist
 
 ### Build
-- [ ] Reproducible builds with pinned dependencies (lockfile or deterministic install strategy).
-- [ ] `make ci` runs lint, type checks (if configured), and tests with deterministic dependency profile.
-- [ ] Packaging excludes demo/mock code from production distributions.
+- [x] Reproducible builds with pinned dependencies (lockfile or deterministic install strategy).
+- [x] `make ci` runs lint, type checks (if configured), and tests with deterministic dependency profile.
+- [x] Packaging excludes demo/mock code from production distributions.
 
 ### Test
-- [ ] Unit tests cover production gates and fail-closed behavior.
-- [ ] Integration tests verify critical request flows and storage interactions.
-- [ ] CI runs in a reproducible environment with pinned dependencies.
+- [x] Unit tests cover production gates and fail-closed behavior.
+- [x] Integration tests verify critical request flows and storage interactions.
+- [x] CI runs in a reproducible environment with pinned dependencies.
 
 ### Docker
-- [ ] `docker build -f docker/platform/Dockerfile .` succeeds with pyproject-based install.
-- [ ] `docker build -f docker/bench/Dockerfile .` succeeds with pyproject-based install.
-- [ ] Docker images validate required secrets/config on startup.
+- [x] `docker build -f docker/platform/Dockerfile .` succeeds with pyproject-based install.
+- [x] `docker build -f docker/bench/Dockerfile .` succeeds with pyproject-based install.
+- [x] Docker images validate required secrets/config on startup.
 
 ### Security Gates
-- [ ] Production startup fails fast if required secrets/config/dependencies are missing.
-- [ ] Demo/simulator/stub paths are blocked in production or gated behind explicit research mode.
-- [ ] No hardcoded secrets or mock payloads in production code paths.
+- [x] Production startup fails fast if required secrets/config/dependencies are missing.
+- [x] Demo/simulator/stub paths are blocked in production or gated behind explicit research mode.
+- [x] No hardcoded secrets or mock payloads in production code paths.
+- [x] Sensitive configuration fields (API keys, tokens) are encrypted at rest.
 
 ### Database Migration Strategy
-- [ ] Alembic migrations replace ad-hoc scripts.
-- [ ] Migrations are versioned, repeatable, and validated in CI.
+- [x] Alembic migrations replace ad-hoc scripts.
+- [x] Migrations are versioned, repeatable, and validated in CI.
 
 ### Observability
-- [ ] Request IDs and structured logs are enabled for API requests.
-- [ ] Metrics endpoint is available (Prometheus/OpenTelemetry).
-- [ ] Runbooks cover failed submissions, key rotation, and rollback.
+- [x] Request IDs and structured logs are enabled for API requests.
+- [x] Metrics endpoint is available (Prometheus/OpenTelemetry).
+- [x] Runbooks cover failed submissions, key rotation, and rollback.
 
 ## Current Status
 

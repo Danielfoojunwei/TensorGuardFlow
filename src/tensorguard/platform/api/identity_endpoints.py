@@ -17,6 +17,7 @@ import json
 import logging
 
 from ..database import get_session
+from ..auth import get_current_user
 from ..models.core import User, Fleet
 from ..models.identity_models import (
     IdentityEndpoint, IdentityCertificate, IdentityPolicy,

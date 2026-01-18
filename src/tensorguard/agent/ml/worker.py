@@ -28,6 +28,7 @@ from tensorguard.core.production import (
     CompressionMetrics,
     ModelQualityMetrics,
 )
+from tensorguard.utils.production_gates import warn_incomplete_feature
 from tensorguard.schemas.common import Demonstration
 from tensorguard.utils.production_gates import ProductionGateError, is_production, require_dependency
 
@@ -135,9 +136,15 @@ class TrainingWorker(fl.client.NumPyClient if fl is not None else object):
         # Current implementation uses fixed epsilon consumption as a placeholder.
         # For production, integrate: opacus, tensorflow-privacy, or dp-accounting
         #
-        # TODO(security): Implement proper RDP accountant before production
-        # See: https://arxiv.org/abs/1702.07476 (Rényi DP)
-        # See: https://github.com/pytorch/opacus (Reference implementation)
+        # Reference: https://arxiv.org/abs/1702.07476 (Rényi DP)
+        # Reference: https://github.com/pytorch/opacus (Production implementation)
+
+        # Log production warning for incomplete DP implementation
+        warn_incomplete_feature(
+            feature_name="RDP_ACCOUNTANT",
+            description="Using simplified DP epsilon estimation. Production requires RDP accountant (opacus/tensorflow-privacy).",
+            issue_url="https://github.com/pytorch/opacus",
+        )
 
         # Compute epsilon for this round based on noise multiplier and sampling rate
         # In a real implementation: epsilon = rdp_accountant.get_epsilon(delta, steps)

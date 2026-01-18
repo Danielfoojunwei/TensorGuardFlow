@@ -39,7 +39,7 @@ class Tenant(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     users: List["User"] = Relationship(back_populates="tenant")
-    fleets: List["Fleet"] = Relationship(back_populates="fleets")
+    fleets: List["Fleet"] = Relationship(back_populates="tenant")
 
 
 class User(SQLModel, table=True):
