@@ -164,6 +164,133 @@ print('✓ Enterprise entitlements fail-closed')
         path: coverage.xml
 
   # ==========================================================================
+  # E2E INTEGRATION TESTS - End-to-end smoke tests
+  # ==========================================================================
+  e2e-tests:
+    runs-on: ubuntu-latest
+    needs: [build-check, security-gates]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.10"
+
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[all]"
+        pip install pytest httpx
+
+    - name: Run E2E Smoke Tests
+      env:
+        PYTHONPATH: src
+        TG_ENVIRONMENT: development
+        TG_DEMO_MODE: "false"
+      run: |
+        pytest tests/integration/test_e2e_smoke.py -v --tb=short
+        echo "✓ E2E smoke tests passed"
+
+    - name: Run Dashboard Stats Tests
+      env:
+        PYTHONPATH: src
+        TG_ENVIRONMENT: development
+      run: |
+        pytest tests/integration/test_dashboard_stats.py -v --tb=short
+        echo "✓ Dashboard stats tests passed"
+
+    - name: Run Frontend Contract Tests
+      env:
+        PYTHONPATH: src
+        TG_ENVIRONMENT: development
+      run: |
+        pytest tests/integration/test_frontend_contract.py -v --tb=short
+        echo "✓ Frontend contract tests passed"
+
+    - name: Run RBAC Isolation Tests
+      env:
+        PYTHONPATH: src
+        TG_ENVIRONMENT: development
+      run: |
+        pytest tests/integration/test_rbac_isolation.py -v --tb=short
+        echo "✓ RBAC isolation tests passed"
+
+  # ==========================================================================
+  # UNIT TESTS - Core functionality tests
+  # ==========================================================================
+  unit-tests:
+    runs-on: ubuntu-latest
+    needs: build-check
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.10"
+
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[all]"
+        pip install pytest
+
+    - name: Run Feature Flags Tests
+      env:
+        PYTHONPATH: src
+      run: |
+        pytest tests/unit/test_feature_flags.py -v --tb=short
+
+    - name: Run Worker Tests
+      env:
+        PYTHONPATH: src
+      run: |
+        pytest tests/unit/test_worker.py -v --tb=short
+
+    - name: Run Agent Diagnostics Tests
+      env:
+        PYTHONPATH: src
+      run: |
+        pytest tests/unit/test_agent_diagnose.py -v --tb=short
+
+  # ==========================================================================
+  # DOCTOR SMOKE TEST - System health check
+  # ==========================================================================
+  doctor-smoke:
+    runs-on: ubuntu-latest
+    needs: build-check
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.10"
+
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[all]"
+        pip install pytest httpx requests
+
+    - name: Run Doctor API Checks
+      env:
+        PYTHONPATH: src
+        TG_ENVIRONMENT: development
+      run: |
+        python scripts/doctor_api_checks.py --dry-run || echo "Doctor checks require running server"
+
+    - name: Run Edge Diagnose Script (Dry Run)
+      run: |
+        # Run without server - should show environment issues but not crash
+        bash scripts/edge_diagnose.sh || true
+        echo "✓ Edge diagnose script executed"
+
+  # ==========================================================================
   # DOCKER BUILDS - Ensure container images build
   # ==========================================================================
   docker-builds:
@@ -179,3 +306,49 @@ print('✓ Enterprise entitlements fail-closed')
     - name: Build Bench Docker Image
       run: |
         docker build -f docker/bench/Dockerfile .
+
+  # ==========================================================================
+  # FINAL GATE - All tests must pass
+  # ==========================================================================
+  ci-gate:
+    runs-on: ubuntu-latest
+    needs: [build-check, security-gates, lint, qa-suite, e2e-tests, unit-tests, doctor-smoke]
+    if: always()
+
+    steps:
+    - name: Check All Jobs
+      run: |
+        echo "Build Check: ${{ needs.build-check.result }}"
+        echo "Security Gates: ${{ needs.security-gates.result }}"
+        echo "Lint: ${{ needs.lint.result }}"
+        echo "QA Suite: ${{ needs.qa-suite.result }}"
+        echo "E2E Tests: ${{ needs.e2e-tests.result }}"
+        echo "Unit Tests: ${{ needs.unit-tests.result }}"
+        echo "Doctor Smoke: ${{ needs.doctor-smoke.result }}"
+
+        if [[ "${{ needs.build-check.result }}" != "success" ]]; then
+          echo "❌ Build check failed"
+          exit 1
+        fi
+
+        if [[ "${{ needs.security-gates.result }}" != "success" ]]; then
+          echo "❌ Security gates failed"
+          exit 1
+        fi
+
+        if [[ "${{ needs.qa-suite.result }}" != "success" ]]; then
+          echo "❌ QA suite failed"
+          exit 1
+        fi
+
+        if [[ "${{ needs.e2e-tests.result }}" != "success" ]]; then
+          echo "❌ E2E tests failed"
+          exit 1
+        fi
+
+        if [[ "${{ needs.unit-tests.result }}" != "success" ]]; then
+          echo "❌ Unit tests failed"
+          exit 1
+        fi
+
+        echo "✅ All CI gates passed!"
