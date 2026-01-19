@@ -25,8 +25,8 @@ from pydantic import BaseModel
 from sqlmodel import Session, select, func
 
 from ..database import get_session, check_db_health
-from ..auth import get_current_user
-from ..models.core import User, Fleet, AuditLog
+from ..auth import get_current_user, OrgAuthContext, require_org_role
+from ..models.core import User, Fleet, AuditLog, OrganizationRole
 from ..models.identity_models import IdentityCertificate, IdentityRenewalJob
 from ..models.telemetry_models import (
     FleetDevice,
@@ -84,10 +84,12 @@ class SecurityScoreResponse(BaseModel):
 @router.get("/dashboard/stats", response_model=DashboardStatsResponse)
 async def get_dashboard_stats(
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    auth: OrgAuthContext = Depends(require_org_role(OrganizationRole.READONLY)),
 ):
     """
     Get aggregated dashboard statistics from real database data.
+
+    Required role: READONLY or higher
 
     Returns:
     - System health status
@@ -97,7 +99,7 @@ async def get_dashboard_stats(
     - Privacy budget remaining
     - Training and deployment stats
     """
-    tenant_id = current_user.tenant_id
+    tenant_id = auth.organization.id
     now = datetime.utcnow()
     online_threshold = now - timedelta(minutes=5)
     day_ago = now - timedelta(hours=24)
@@ -212,10 +214,12 @@ async def get_dashboard_stats(
 @router.get("/status/health", response_model=SystemHealthResponse)
 async def get_system_health(
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    auth: OrgAuthContext = Depends(require_org_role(OrganizationRole.READONLY)),
 ):
     """
     Get detailed service health status with latency measurements.
+
+    Required role: READONLY or higher
 
     Checks real service health:
     - Database connectivity and query latency
@@ -223,7 +227,7 @@ async def get_system_health(
     - Identity service status (via certificate checks)
     - KMS service status (via key checks)
     """
-    tenant_id = current_user.tenant_id
+    tenant_id = auth.organization.id
     now = datetime.utcnow()
     services = {}
 
@@ -321,10 +325,12 @@ async def get_system_health(
 @router.get("/status/metrics")
 async def get_extended_metrics(
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    auth: OrgAuthContext = Depends(require_org_role(OrganizationRole.READONLY)),
 ):
     """
     Get extended system metrics for secondary dashboard display.
+
+    Required role: READONLY or higher
 
     Returns real computed values:
     - Uptime percentage
@@ -334,7 +340,7 @@ async def get_extended_metrics(
     - NBT (Network Bandwidth Threshold) score
     - Compliance level
     """
-    tenant_id = current_user.tenant_id
+    tenant_id = auth.organization.id
     now = datetime.utcnow()
     day_ago = now - timedelta(hours=24)
 
@@ -411,10 +417,12 @@ async def get_extended_metrics(
 @router.get("/training/metrics")
 async def stream_training_metrics(
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    auth: OrgAuthContext = Depends(require_org_role(OrganizationRole.READONLY)),
 ):
     """
     Stream real-time training metrics via Server-Sent Events (SSE).
+
+    Required role: READONLY or higher
 
     Streams:
     - Loss and accuracy values
@@ -424,7 +432,7 @@ async def stream_training_metrics(
 
     All data comes from real telemetry, no simulation.
     """
-    tenant_id = current_user.tenant_id
+    tenant_id = auth.organization.id
 
     async def event_generator():
         round_num = 0
@@ -519,10 +527,12 @@ async def stream_training_metrics(
 @router.get("/security/score", response_model=SecurityScoreResponse)
 async def get_security_score(
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    auth: OrgAuthContext = Depends(require_org_role(OrganizationRole.READONLY)),
 ):
     """
     Calculate security posture score from real data.
+
+    Required role: READONLY or higher
 
     Scoring components:
     - Certificate health (expiry, EKU conflicts)
@@ -530,7 +540,7 @@ async def get_security_score(
     - Compliance (error rates, audit completeness)
     - Attestation (device attestation status)
     """
-    tenant_id = current_user.tenant_id
+    tenant_id = auth.organization.id
     now = datetime.utcnow()
 
     # Certificate score (0-100)
@@ -666,7 +676,7 @@ async def get_security_score(
 @router.get("/flow/nodes")
 async def get_flow_nodes(
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    auth: OrgAuthContext = Depends(require_org_role(OrganizationRole.READONLY)),
 ):
     """
     Get available flow automation nodes.

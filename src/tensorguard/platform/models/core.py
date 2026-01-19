@@ -96,7 +96,10 @@ class User(SQLModel, table=True):
     is_active: bool = Field(default=True)  # For account deactivation
 
     tenant: Tenant = Relationship(back_populates="users")
-    memberships: List["OrganizationMembership"] = Relationship(back_populates="user")
+    memberships: List["OrganizationMembership"] = Relationship(
+        back_populates="user",
+        sa_relationship_kwargs={"foreign_keys": "OrganizationMembership.user_id"}
+    )
 
 
 class OrganizationMembership(SQLModel, table=True):
