@@ -3,7 +3,7 @@
 Edge Agent CLI Entrypoint
 
 Starts the spooler and uploader for telemetry ingestion to the Control Plane.
-Uses HMAC authentication compatible with verify_fleet_auth.
+Uses Fleet Bearer authentication (Authorization: Fleet <api_key>).
 
 Usage:
     python -m tensorguard.edge_agent.main \
