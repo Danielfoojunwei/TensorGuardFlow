@@ -7,7 +7,7 @@ import secrets
 import hashlib
 
 from ..database import get_session
-from ..models.core import Tenant, User, Fleet, Job, UserRole
+from ..models.core import Tenant, User, Fleet, Job, UserRole, OrganizationRole, OrganizationMembership
 from ..models.telemetry_models import FleetDevice, TelemetryStageEvent, StageStatus
 from ..auth import get_current_user, create_access_token, verify_password, get_password_hash, ACCESS_TOKEN_EXPIRE_MINUTES
 from .identity_endpoints import verify_fleet_auth
@@ -61,33 +61,57 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
 # --- Tenants ---
 @router.post("/onboarding/init", response_model=Tenant)
 async def init_tenant(name: str, admin_email: str, admin_pass: str, session: Session = Depends(get_session)):
-    """Initialize a new tenant and admin user."""
+    """
+    Initialize a new tenant (organization) and admin user.
+
+    Creates:
+    - New tenant/organization
+    - Admin user with ORG_ADMIN role (legacy)
+    - Organization membership with OWNER role (new RBAC)
+
+    The first user to onboard an organization becomes the OWNER.
+    """
     try:
         # Check if user exists
         existing_user = session.exec(select(User).where(User.email == admin_email)).first()
         if existing_user:
             raise HTTPException(status_code=400, detail="Email already registered")
-            
+
+        # Create tenant
         tenant = Tenant(name=name, plan="Enterprise")
         session.add(tenant)
         session.commit()
         session.refresh(tenant)
-        
+
+        # Create admin user
         user = User(
-            email=admin_email, 
+            email=admin_email,
             hashed_password=get_password_hash(admin_pass),
-            role=UserRole.ORG_ADMIN,
+            role=UserRole.ORG_ADMIN,  # Legacy role
             tenant_id=tenant.id
         )
         session.add(user)
         session.commit()
-        
+        session.refresh(user)
+
+        # Create organization membership with OWNER role
+        membership = OrganizationMembership(
+            user_id=user.id,
+            organization_id=tenant.id,
+            role=OrganizationRole.OWNER,
+            is_accepted=True
+        )
+        session.add(membership)
+        session.commit()
+
         return tenant
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"ERROR in init_tenant: {e}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        session.rollback()
+        import logging
+        logging.getLogger(__name__).error(f"Error in init_tenant: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to create organization")
 
 # --- Fleets ---
 @router.get("/fleets", response_model=List[Fleet])
