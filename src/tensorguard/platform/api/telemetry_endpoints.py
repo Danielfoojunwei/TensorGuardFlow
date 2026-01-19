@@ -22,8 +22,8 @@ from pydantic import BaseModel, Field
 from sqlmodel import Session, select, func, col
 
 from ..database import get_session
-from ..auth import get_current_user, get_current_fleet
-from ..models.core import User, Fleet
+from ..auth import get_current_user, get_current_fleet, OrgAuthContext, require_org_role
+from ..models.core import User, Fleet, OrganizationRole
 from ..models.telemetry_models import (
     FleetDevice,
     TelemetryStageEvent,
@@ -332,40 +332,40 @@ async def get_pipeline_telemetry(
     time_range: str = Query(default="15m", regex="^(15m|1h|24h)$"),
     stage: Optional[str] = None,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    auth: OrgAuthContext = Depends(require_org_role(OrganizationRole.READONLY)),
 ):
     """
     Get aggregated pipeline telemetry metrics.
 
-    Auth: Bearer token (get_current_user)
+    Required role: READONLY or higher
 
     Computes from real telemetry_stage_event data:
     - p50/p90/p99 latency per stage
     - degraded/error rates per stage
     - safe_mode derived from error rates crossing thresholds
-
-    Replaces the simulated endpoint in endpoints.py.
     """
     # Parse time range
     minutes = {"15m": 15, "1h": 60, "24h": 1440}[time_range]
     since = datetime.utcnow() - timedelta(minutes=minutes)
 
+    org_id = auth.organization.id
+
     # Build query
     query = select(TelemetryStageEvent).where(
-        TelemetryStageEvent.tenant_id == current_user.tenant_id,
+        TelemetryStageEvent.tenant_id == org_id,
         TelemetryStageEvent.ts >= since,
     )
 
     if fleet_id:
-        # Verify fleet belongs to tenant
+        # Verify fleet belongs to org
         fleet = session.get(Fleet, fleet_id)
-        if not fleet or fleet.tenant_id != current_user.tenant_id:
+        if not fleet or fleet.tenant_id != org_id:
             raise HTTPException(status_code=404, detail="Fleet not found")
         query = query.where(TelemetryStageEvent.fleet_id == fleet_id)
     else:
-        # Get first fleet for tenant if not specified
+        # Get first fleet for org if not specified
         fleets = session.exec(
-            select(Fleet).where(Fleet.tenant_id == current_user.tenant_id).limit(1)
+            select(Fleet).where(Fleet.tenant_id == org_id).limit(1)
         ).all()
         if fleets:
             fleet_id = fleets[0].id
@@ -478,26 +478,26 @@ async def get_edge_telemetry(
     limit: int = Query(default=100, le=1000),
     offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    auth: OrgAuthContext = Depends(require_org_role(OrganizationRole.READONLY)),
 ):
     """
     Get latest gating stage events per device.
 
-    Auth: Bearer token (get_current_user)
+    Required role: READONLY or higher
 
     Returns real telemetry data from edge agents, never simulated.
-    Replaces simulated GET /edge/telemetry in edge_gating_endpoints.py.
     """
     since = datetime.utcnow() - timedelta(minutes=since_minutes)
+    org_id = auth.organization.id
 
     query = select(TelemetryStageEvent).where(
-        TelemetryStageEvent.tenant_id == current_user.tenant_id,
+        TelemetryStageEvent.tenant_id == org_id,
         TelemetryStageEvent.ts >= since,
     )
 
     if fleet_id:
         fleet = session.get(Fleet, fleet_id)
-        if not fleet or fleet.tenant_id != current_user.tenant_id:
+        if not fleet or fleet.tenant_id != org_id:
             raise HTTPException(status_code=404, detail="Fleet not found")
         query = query.where(TelemetryStageEvent.fleet_id == fleet_id)
 
@@ -545,23 +545,24 @@ async def get_system_telemetry(
     since_minutes: int = Query(default=60, le=1440),
     limit: int = Query(default=100, le=1000),
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    auth: OrgAuthContext = Depends(require_org_role(OrganizationRole.READONLY)),
 ):
     """
     Get system resource telemetry from edge devices.
 
-    Auth: Bearer token (get_current_user)
+    Required role: READONLY or higher
     """
     since = datetime.utcnow() - timedelta(minutes=since_minutes)
+    org_id = auth.organization.id
 
     query = select(TelemetrySystemEvent).where(
-        TelemetrySystemEvent.tenant_id == current_user.tenant_id,
+        TelemetrySystemEvent.tenant_id == org_id,
         TelemetrySystemEvent.ts >= since,
     )
 
     if fleet_id:
         fleet = session.get(Fleet, fleet_id)
-        if not fleet or fleet.tenant_id != current_user.tenant_id:
+        if not fleet or fleet.tenant_id != org_id:
             raise HTTPException(status_code=404, detail="Fleet not found")
         query = query.where(TelemetrySystemEvent.fleet_id == fleet_id)
 
@@ -606,23 +607,24 @@ async def get_model_behavior_telemetry(
     since_minutes: int = Query(default=60, le=1440),
     limit: int = Query(default=100, le=1000),
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    auth: OrgAuthContext = Depends(require_org_role(OrganizationRole.READONLY)),
 ):
     """
     Get model behavior telemetry for shadow/A-B analysis.
 
-    Auth: Bearer token (get_current_user)
+    Required role: READONLY or higher
     """
     since = datetime.utcnow() - timedelta(minutes=since_minutes)
+    org_id = auth.organization.id
 
     query = select(TelemetryModelBehaviorEvent).where(
-        TelemetryModelBehaviorEvent.tenant_id == current_user.tenant_id,
+        TelemetryModelBehaviorEvent.tenant_id == org_id,
         TelemetryModelBehaviorEvent.ts >= since,
     )
 
     if fleet_id:
         fleet = session.get(Fleet, fleet_id)
-        if not fleet or fleet.tenant_id != current_user.tenant_id:
+        if not fleet or fleet.tenant_id != org_id:
             raise HTTPException(status_code=404, detail="Fleet not found")
         query = query.where(TelemetryModelBehaviorEvent.fleet_id == fleet_id)
 
@@ -672,25 +674,24 @@ async def get_forensics_events(
     since_minutes: int = Query(default=1440, le=10080),  # Default 24h, max 1 week
     limit: int = Query(default=100, le=1000),
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    auth: OrgAuthContext = Depends(require_org_role(OrganizationRole.READONLY)),
 ):
     """
     Get forensics events for incident investigation.
 
-    Auth: Bearer token (get_current_user)
-
-    Replaces mock forensics/incidents endpoint.
+    Required role: READONLY or higher
     """
     since = datetime.utcnow() - timedelta(minutes=since_minutes)
+    org_id = auth.organization.id
 
     query = select(ForensicsEvent).where(
-        ForensicsEvent.tenant_id == current_user.tenant_id,
+        ForensicsEvent.tenant_id == org_id,
         ForensicsEvent.ts >= since,
     )
 
     if fleet_id:
         fleet = session.get(Fleet, fleet_id)
-        if not fleet or fleet.tenant_id != current_user.tenant_id:
+        if not fleet or fleet.tenant_id != org_id:
             raise HTTPException(status_code=404, detail="Fleet not found")
         query = query.where(ForensicsEvent.fleet_id == fleet_id)
 
@@ -735,20 +736,22 @@ async def get_fleet_devices(
     fleet_id: Optional[str] = None,
     limit: int = Query(default=100, le=1000),
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    auth: OrgAuthContext = Depends(require_org_role(OrganizationRole.READONLY)),
 ):
     """
     Get registered devices with version information.
 
-    Auth: Bearer token (get_current_user)
+    Required role: READONLY or higher
     """
+    org_id = auth.organization.id
+
     query = select(FleetDevice).where(
-        FleetDevice.tenant_id == current_user.tenant_id,
+        FleetDevice.tenant_id == org_id,
     )
 
     if fleet_id:
         fleet = session.get(Fleet, fleet_id)
-        if not fleet or fleet.tenant_id != current_user.tenant_id:
+        if not fleet or fleet.tenant_id != org_id:
             raise HTTPException(status_code=404, detail="Fleet not found")
         query = query.where(FleetDevice.fleet_id == fleet_id)
 
