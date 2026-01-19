@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 from sqlmodel import Session, select, func, col
 
 from ..database import get_session
-from ..auth import get_current_user
+from ..auth import get_current_user, get_current_fleet
 from ..models.core import User, Fleet
 from ..models.telemetry_models import (
     FleetDevice,
@@ -34,7 +34,6 @@ from ..models.telemetry_models import (
     StageStatus,
     EventSeverity,
 )
-from .identity_endpoints import verify_fleet_auth
 
 logger = logging.getLogger(__name__)
 
@@ -106,13 +105,13 @@ class PipelineMetrics(BaseModel):
 async def ingest_telemetry(
     batch: TelemetryBatch,
     session: Session = Depends(get_session),
-    fleet: Fleet = Depends(verify_fleet_auth),
+    fleet: Fleet = Depends(get_current_fleet),
 ):
     """
     Ingest telemetry batch from edge agents.
 
-    Auth: HMAC signature via verify_fleet_auth (X-TG-Fleet-Id, X-TG-Timestamp,
-          X-TG-Nonce, X-TG-Signature headers).
+    Auth: Fleet Bearer token (Authorization: Fleet <api_key>).
+    The raw API key is hashed with SHA256 and matched against stored api_key_hash.
 
     Accepts batches with topics:
     - telemetry.stage: Pipeline stage events

@@ -306,6 +306,57 @@ class RoleChecker:
 
 
 # ============================================================================
+# API KEY ENCRYPTION (for HMAC verification)
+# ============================================================================
+
+def _get_fernet_key() -> bytes:
+    """
+    Derive a Fernet-compatible key from TG_SECRET_KEY.
+    Fernet requires a 32-byte URL-safe base64-encoded key.
+    """
+    import hashlib
+    import base64
+    # Use SHA256 to derive a 32-byte key from SECRET_KEY
+    derived = hashlib.sha256(SECRET_KEY.encode()).digest()
+    return base64.urlsafe_b64encode(derived)
+
+
+def encrypt_api_key(raw_key: str) -> str:
+    """
+    Encrypt an API key for secure storage.
+
+    Args:
+        raw_key: The raw API key to encrypt
+
+    Returns:
+        Fernet-encrypted key as a string
+    """
+    from cryptography.fernet import Fernet
+    fernet = Fernet(_get_fernet_key())
+    encrypted = fernet.encrypt(raw_key.encode())
+    return encrypted.decode()
+
+
+def decrypt_api_key(encrypted_key: str) -> str:
+    """
+    Decrypt an encrypted API key.
+
+    Args:
+        encrypted_key: The Fernet-encrypted key
+
+    Returns:
+        The raw API key
+
+    Raises:
+        InvalidToken: If decryption fails (wrong key or corrupted data)
+    """
+    from cryptography.fernet import Fernet
+    fernet = Fernet(_get_fernet_key())
+    decrypted = fernet.decrypt(encrypted_key.encode())
+    return decrypted.decode()
+
+
+# ============================================================================
 # UTILITY FUNCTIONS
 # ============================================================================
 
@@ -337,4 +388,114 @@ def get_token_info(token: str) -> Optional[Dict]:
         # Decode without verification for inspection
         return jwt.decode(token, options={"verify_signature": False})
     except JWTError:
+        return None
+
+
+# ============================================================================
+# FLEET BEARER AUTHENTICATION
+# ============================================================================
+
+from fastapi import Header
+from sqlmodel import select
+import hashlib
+
+def verify_fleet_api_key(raw_key: str, stored_hash: str) -> bool:
+    """
+    Verify a Fleet API key by comparing SHA256 hashes.
+
+    Args:
+        raw_key: The raw API key sent by the client
+        stored_hash: The SHA256 hash stored in the database
+
+    Returns:
+        True if the key is valid, False otherwise
+    """
+    computed_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+    return secrets.compare_digest(computed_hash, stored_hash)
+
+
+async def get_current_fleet(
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+    session: Session = Depends(get_session)
+):
+    """
+    Validate Fleet Bearer token and return the authenticated Fleet.
+
+    Expected header format: Authorization: Fleet <raw_api_key>
+
+    Authentication flow:
+    1. Extract raw_api_key from Authorization header
+    2. Hash the raw key with SHA256
+    3. Compare hash with stored api_key_hash in Fleet table
+    4. Verify fleet is active
+
+    Args:
+        authorization: Authorization header value
+        session: Database session
+
+    Returns:
+        Fleet object if authentication succeeds
+
+    Raises:
+        HTTPException: 401 if authentication fails
+    """
+    from .models.core import Fleet
+
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid Fleet API key",
+        headers={"WWW-Authenticate": "Fleet"},
+    )
+
+    if not authorization:
+        logger.debug("Fleet auth: No Authorization header")
+        raise credentials_exception
+
+    # Parse "Fleet <api_key>" format
+    parts = authorization.split(" ", 1)
+    if len(parts) != 2 or parts[0].lower() != "fleet":
+        logger.debug(f"Fleet auth: Invalid Authorization format: {parts[0] if parts else 'empty'}")
+        raise credentials_exception
+
+    raw_key = parts[1]
+
+    # Find fleet by hashing the raw key and comparing
+    key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+
+    stmt = select(Fleet).where(Fleet.api_key_hash == key_hash)
+    fleet = session.exec(stmt).first()
+
+    if not fleet:
+        logger.warning("Fleet auth: No fleet found with matching API key hash")
+        raise credentials_exception
+
+    if not fleet.is_active:
+        logger.warning(f"Fleet auth: Fleet {fleet.id} is inactive")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Fleet is inactive"
+        )
+
+    logger.debug(f"Fleet auth: Successfully authenticated fleet {fleet.id}")
+    return fleet
+
+
+async def get_current_fleet_optional(
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+    session: Session = Depends(get_session)
+):
+    """
+    Optionally validate Fleet Bearer token.
+
+    Returns None if no auth provided (for endpoints that support both auth modes).
+    """
+    if not authorization:
+        return None
+
+    if not authorization.lower().startswith("fleet "):
+        return None
+
+    try:
+        return await get_current_fleet(authorization, session)
+    except HTTPException:
         return None

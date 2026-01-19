@@ -168,6 +168,35 @@ async def liveness_check():
     return {"alive": True}
 
 
+# --- API v1 Health Aliases (for frontend compatibility) ---
+# Frontend expects /api/v1/health but we have /health at root
+
+@app.get("/api/v1/health", tags=["health"])
+async def health_check_api_v1():
+    """
+    Health check endpoint alias under /api/v1 for frontend compatibility.
+    Delegates to the main /health endpoint.
+    """
+    return await health_check()
+
+
+@app.get("/api/v1/status", tags=["health"])
+async def status_api_v1():
+    """
+    Status endpoint for frontend compatibility.
+    Returns system status summary.
+    """
+    db_health = check_db_health()
+
+    return {
+        "status": "operational" if db_health["status"] == "healthy" else "degraded",
+        "timestamp": datetime.utcnow().isoformat(),
+        "version": "2.3.0",
+        "environment": TG_ENVIRONMENT,
+        "database": db_health["status"],
+    }
+
+
 @app.get("/metrics", tags=["observability"])
 async def prometheus_metrics():
     """
@@ -232,9 +261,11 @@ app.include_router(enablement_endpoints.router, prefix="/api/v1/enablement", tag
 from .api import runs_endpoints
 app.include_router(runs_endpoints.router, prefix="/api/v1", tags=["runs"])
 
-# Community TGSP
+# Community TGSP (mounted at both paths for backward compatibility)
 from .api import community_tgsp
 app.include_router(community_tgsp.router, prefix="/api/community/tgsp", tags=["community-tgsp"])
+# Also mount at /api/v1/tgsp for frontend compatibility
+app.include_router(community_tgsp.router, prefix="/api/v1/tgsp", tags=["tgsp"])
 
 # PEFT Studio
 from .api import peft_endpoints
@@ -302,28 +333,64 @@ except ImportError:
 
 # Serve UI
 # Single Page Application (SPA) catch-all
-from fastapi.responses import FileResponse
-
-# Use absolute path for public directory
+from fastapi.responses import FileResponse, HTMLResponse
 
 # Use absolute path for public directory (Vue Build)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 PUBLIC_DIR = os.path.join(BASE_DIR, "frontend", "dist")
 
+# Check if frontend build exists
+FRONTEND_AVAILABLE = os.path.isdir(PUBLIC_DIR) and os.path.isfile(os.path.join(PUBLIC_DIR, "index.html"))
+
+if not FRONTEND_AVAILABLE:
+    logger.warning(
+        f"Frontend build not found at {PUBLIC_DIR}. "
+        "Run 'cd frontend && npm install && npm run build' to build the UI."
+    )
+
+
 @app.get("/{full_path:path}")
 async def serve_spa(full_path: str):
     # Skip API routes (though definition order should handle this)
-    if full_path.startswith("api/v1"):
-        return None 
-        
+    if full_path.startswith("api/") or full_path.startswith("health") or full_path.startswith("ready") or full_path.startswith("live") or full_path.startswith("metrics"):
+        return None
+
+    # If frontend is not built, return a helpful message
+    if not FRONTEND_AVAILABLE:
+        return HTMLResponse(
+            content="""
+            <!DOCTYPE html>
+            <html>
+            <head><title>TensorGuard Platform</title></head>
+            <body style="font-family: sans-serif; padding: 2rem;">
+                <h1>TensorGuard Platform API</h1>
+                <p>The frontend has not been built yet.</p>
+                <p>To build the UI, run:</p>
+                <pre style="background: #f4f4f4; padding: 1rem; border-radius: 4px;">
+cd frontend
+npm install
+npm run build
+                </pre>
+                <p>API endpoints are available at <a href="/docs">/docs</a></p>
+            </body>
+            </html>
+            """,
+            status_code=200
+        )
+
     file_path = os.path.join(PUBLIC_DIR, full_path)
     if os.path.isfile(file_path):
         return FileResponse(file_path)
     # Default to index.html for SPA
-    return FileResponse(os.path.join(PUBLIC_DIR, "index.html"))
+    index_path = os.path.join(PUBLIC_DIR, "index.html")
+    if os.path.isfile(index_path):
+        return FileResponse(index_path)
+    return HTMLResponse(content="<h1>Not Found</h1>", status_code=404)
 
-# StaticFiles mounting for structured assets if needed
-app.mount("/static", StaticFiles(directory=PUBLIC_DIR), name="static")
+
+# StaticFiles mounting for structured assets (only if frontend exists)
+if FRONTEND_AVAILABLE:
+    app.mount("/static", StaticFiles(directory=PUBLIC_DIR), name="static")
 
 if __name__ == "__main__":
     import uvicorn

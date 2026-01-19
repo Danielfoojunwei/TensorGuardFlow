@@ -3,14 +3,28 @@ from sqlmodel import Session, select
 from typing import List, Optional, Dict, Any
 from ..database import get_session
 from ..models.evidence_models import Run, RunArtifact, RunPolicyResult
-from ..policy_engine import PolicyEngine
 import json
 import os
 import shutil
 import uuid
 
 router = APIRouter()
-policy_engine = PolicyEngine() # Initialize engine (loads packs)
+
+# Lazy-load policy engine to avoid DB queries at import time
+_policy_engine = None
+
+
+def get_policy_engine():
+    """Get or create policy engine instance (lazy initialization)."""
+    global _policy_engine
+    if _policy_engine is None:
+        from ..policy_engine import PolicyEngine
+        try:
+            _policy_engine = PolicyEngine()
+        except Exception:
+            # If DB not ready, return a minimal engine
+            _policy_engine = None
+    return _policy_engine
 
 @router.post("/runs", response_model=Run)
 def create_run(run_data: Dict[str, Any], session: Session = Depends(get_session)):
@@ -101,13 +115,18 @@ def evaluate_run(
         report_data = {"metrics": json.loads(run.metrics_json)}
         
     try:
-        result = policy_engine.evaluate(run_id, report_data, pack_id)
+        engine = get_policy_engine()
+        if engine is None:
+            raise HTTPException(status_code=503, detail="Policy engine not available")
+        result = engine.evaluate(run_id, report_data, pack_id)
         session.add(result)
         run.status = "evaluated"
         session.add(run)
         session.commit()
         session.refresh(result)
         return result
+    except HTTPException:
+        raise
     except Exception as e:
         import traceback
         traceback.print_exc()

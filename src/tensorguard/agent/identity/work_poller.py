@@ -16,7 +16,7 @@ class WorkPoller:
     """
     def __init__(self, config, fleet_id: str, api_key: str, csr_generator: CSRGenerator):
         self.config = config
-        self.client = IdentityAgentClient(config.platform_url, fleet_id, api_key)
+        self.client = IdentityAgentClient(config.control_plane_url, fleet_id, api_key)
         self.csr_generator = csr_generator
         self.running = False
         self._job_key_map_path = os.path.join(self.config.data_dir, "identity_job_keys.json")

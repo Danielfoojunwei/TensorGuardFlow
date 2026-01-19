@@ -2,10 +2,13 @@
 Edge Agent Uploader
 
 Reliably uploads spooled telemetry messages to the Control Plane.
-Implements HMAC authentication, exponential backoff, and batching.
+Implements Fleet Bearer authentication, exponential backoff, and batching.
 
-Uses the production telemetry ingestion endpoint with proper HMAC signatures
-as required by verify_fleet_auth.
+Uses the production telemetry ingestion endpoint with Fleet Bearer auth:
+Authorization: Fleet <raw_api_key>
+
+The backend hashes the raw key with SHA256 and compares against
+the stored api_key_hash in the Fleet table.
 """
 
 import time
@@ -13,8 +16,6 @@ import threading
 import logging
 import requests
 import json
-import hashlib
-import hmac
 import secrets
 import os
 from typing import Optional
@@ -26,10 +27,10 @@ logger = logging.getLogger(__name__)
 
 class Uploader(threading.Thread):
     """
-    Batched uploader with HMAC authentication for secure telemetry ingestion.
+    Batched uploader with Fleet Bearer authentication for secure telemetry ingestion.
 
-    Uses verify_fleet_auth signature format:
-    HMAC-SHA256(fleet_api_key, timestamp:nonce:body_hash)
+    Uses simple Fleet Bearer authentication:
+    Authorization: Fleet <raw_api_key>
     """
 
     def __init__(
@@ -58,33 +59,11 @@ class Uploader(threading.Thread):
         self.ros_distro = os.environ.get("ROS_DISTRO")
         self.firmware_version = os.environ.get("TG_FIRMWARE_VERSION")
 
-    def _compute_hmac_signature(self, timestamp: str, nonce: str, body: bytes) -> str:
-        """
-        Compute HMAC-SHA256 signature for verify_fleet_auth.
-
-        Signature format: HMAC-SHA256(api_key, timestamp:nonce:body_hash)
-        """
-        body_hash = hashlib.sha256(body).hexdigest()
-        message = f"{timestamp}:{nonce}:{body_hash}"
-        signature = hmac.new(
-            self.api_key.encode(),
-            message.encode(),
-            hashlib.sha256
-        ).hexdigest()
-        return signature
-
     def _build_headers(self, body: bytes) -> dict:
-        """Build request headers with HMAC authentication."""
-        timestamp = str(int(time.time()))
-        nonce = secrets.token_hex(16)
-        signature = self._compute_hmac_signature(timestamp, nonce, body)
-
+        """Build request headers with Fleet Bearer authentication."""
         return {
             "Content-Type": "application/json",
-            "X-TG-Fleet-Id": self.fleet_id,
-            "X-TG-Timestamp": timestamp,
-            "X-TG-Nonce": nonce,
-            "X-TG-Signature": signature,
+            "Authorization": f"Fleet {self.api_key}",
         }
 
     def _transform_to_telemetry_format(self, batch: list) -> dict:
@@ -141,7 +120,7 @@ class Uploader(threading.Thread):
                 payload = self._transform_to_telemetry_format(batch)
                 body = json.dumps(payload).encode()
 
-                # 3. Build headers with HMAC auth
+                # 3. Build headers with Fleet Bearer auth
                 headers = self._build_headers(body)
 
                 # 4. Upload to telemetry ingest endpoint

@@ -130,7 +130,7 @@ export const integrationsApi = {
     getStatus: () => request('/integrations/status')
 }
 
-// TGSP Marketplace API
+// TGSP Marketplace API (standard /api/v1/tgsp path)
 export const tgspApi = {
     listPackages: () => request('/tgsp/packages'),
     uploadPackage: async (file) => {
@@ -206,6 +206,7 @@ export const peftApi = {
 }
 
 // Status & Health API
+// Backend now has /api/v1/health and /api/v1/status for frontend compatibility
 export const statusApi = {
     getStatus: () => request('/status'),
     getHealth: () => request('/health')

@@ -44,6 +44,20 @@ async def login_for_access_token(form_data: LoginData, session: Session = Depend
 async def read_users_me(current_user: User = Depends(get_current_user)):
     return current_user
 
+
+@router.get("/auth/me")
+async def get_current_user_info(current_user: User = Depends(get_current_user)):
+    """
+    Get current user info - alias for /users/me for frontend compatibility.
+    Returns user info without sensitive fields.
+    """
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "role": current_user.role,
+        "tenant_id": current_user.tenant_id,
+    }
+
 # --- Tenants ---
 @router.post("/onboarding/init", response_model=Tenant)
 async def init_tenant(name: str, admin_email: str, admin_pass: str, session: Session = Depends(get_session)):
@@ -175,16 +189,24 @@ async def get_fleets_extended(session: Session = Depends(get_session), current_u
 async def create_fleet(name: str, session: Session = Depends(get_session), current_user: User = Depends(get_current_user)):
     import secrets
     import hashlib
-    
+    from ..auth import encrypt_api_key
+
     # Generate a real secure API key
     raw_key = f"tg_{secrets.token_hex(16)}"
     key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
-    
-    fleet = Fleet(name=name, tenant_id=current_user.tenant_id, api_key_hash=key_hash)
+    # Encrypt the raw key for HMAC verification (server needs raw key to verify signatures)
+    key_encrypted = encrypt_api_key(raw_key)
+
+    fleet = Fleet(
+        name=name,
+        tenant_id=current_user.tenant_id,
+        api_key_hash=key_hash,
+        api_key_encrypted=key_encrypted
+    )
     session.add(fleet)
     session.commit()
     session.refresh(fleet)
-    
+
     # Return the raw key ONLY once
     return {
         "id": fleet.id,

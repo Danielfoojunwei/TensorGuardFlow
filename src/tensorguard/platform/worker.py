@@ -3,9 +3,14 @@ TensorGuard Platform Worker.
 
 Standalone process for running background jobs, detached from the web API.
 Prevents duplicate execution in multi-worker/multi-replica deployments.
+
+Usage:
+    python -m tensorguard.platform.worker
+
+Or with PYTHONPATH:
+    PYTHONPATH=src python -m tensorguard.platform.worker
 """
 
-import sys
 import os
 import time
 import signal
@@ -13,14 +18,9 @@ import logging
 from datetime import datetime
 from sqlmodel import select
 
-# Ensure we can import from src
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-if BASE_DIR not in sys.path:
-    sys.path.insert(0, BASE_DIR)
-
-from src.tensorguard.platform.database import SessionLocal
-from src.tensorguard.identity.scheduler import RenewalScheduler
-from src.tensorguard.platform.models.identity_models import IdentityRenewalJob, RenewalJobStatus
+from tensorguard.platform.database import SessionLocal
+from tensorguard.identity.scheduler import RenewalScheduler
+from tensorguard.platform.models.identity_models import IdentityRenewalJob, RenewalJobStatus
 
 # Configure logging
 logging.basicConfig(

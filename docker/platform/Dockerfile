@@ -40,5 +40,5 @@ HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
 
 EXPOSE 8000
 
-# Default to API runner. Use 'python -m src.tensorguard.platform.worker' for worker deployments.
+# Default to API runner. For worker: python -m tensorguard.platform.worker
 CMD ["uvicorn", "tensorguard.platform.main:app", "--host", "0.0.0.0", "--port", "8000"]

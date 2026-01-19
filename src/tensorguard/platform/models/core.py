@@ -64,6 +64,8 @@ class Fleet(SQLModel, table=True):
     name: str = Field(index=True)
     tenant_id: str = Field(foreign_key="tenant.id", index=True)
     api_key_hash: str
+    # Encrypted raw API key for HMAC verification (Fernet encrypted with TG_SECRET_KEY)
+    api_key_encrypted: Optional[str] = Field(default=None)
     is_active: bool = Field(default=True)
     region: Optional[str] = Field(default=None, index=True)  # For regional queries
 
