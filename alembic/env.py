@@ -5,7 +5,7 @@ from sqlalchemy import pool
 
 from alembic import context
 from sqlmodel import SQLModel
-from src.tensorguard.platform.database import DATABASE_URL, engine as platform_engine
+from tensorguard.platform.database import DATABASE_URL, engine as platform_engine
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

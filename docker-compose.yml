@@ -1,0 +1,127 @@
+# TensorGuardFlow Docker Compose
+#
+# Services:
+#   - api: FastAPI backend (port 8000)
+#   - worker: Background job processor
+#   - db: PostgreSQL database (production) or omitted for SQLite (dev)
+#
+# Usage:
+#   Development (SQLite): docker compose up api
+#   Production: docker compose --profile production up
+#
+# Note: For development, you can also use 'make dev' to run locally.
+
+version: "3.8"
+
+services:
+  # ==========================================================================
+  # API Server
+  # ==========================================================================
+  api:
+    build:
+      context: .
+      dockerfile: docker/platform/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - TG_ENVIRONMENT=development
+      - DATABASE_URL=sqlite:///./tg_platform.db
+      - SECRET_KEY=${SECRET_KEY:-tensorguard-dev-secret-key-change-in-production}
+    volumes:
+      - ./data:/app/data
+      - db-data:/app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # ==========================================================================
+  # Background Worker
+  # ==========================================================================
+  worker:
+    build:
+      context: .
+      dockerfile: docker/platform/Dockerfile
+    command: ["python", "-m", "tensorguard.platform.worker"]
+    environment:
+      - TG_ENVIRONMENT=development
+      - DATABASE_URL=sqlite:///./tg_platform.db
+      - TG_WORKER_INTERVAL=10
+    volumes:
+      - db-data:/app
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ==========================================================================
+  # PostgreSQL (Production Profile)
+  # ==========================================================================
+  db:
+    image: postgres:15-alpine
+    profiles:
+      - production
+    environment:
+      - POSTGRES_USER=tensorguard
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-tensorguard}
+      - POSTGRES_DB=tensorguard
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tensorguard"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ==========================================================================
+  # API Server (Production Profile with PostgreSQL)
+  # ==========================================================================
+  api-prod:
+    build:
+      context: .
+      dockerfile: docker/platform/Dockerfile
+    profiles:
+      - production
+    ports:
+      - "8000:8000"
+    environment:
+      - TG_ENVIRONMENT=production
+      - DATABASE_URL=postgresql://tensorguard:${POSTGRES_PASSWORD:-tensorguard}@db:5432/tensorguard
+      - SECRET_KEY=${SECRET_KEY:?SECRET_KEY is required for production}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # ==========================================================================
+  # Worker (Production Profile with PostgreSQL)
+  # ==========================================================================
+  worker-prod:
+    build:
+      context: .
+      dockerfile: docker/platform/Dockerfile
+    profiles:
+      - production
+    command: ["python", "-m", "tensorguard.platform.worker"]
+    environment:
+      - TG_ENVIRONMENT=production
+      - DATABASE_URL=postgresql://tensorguard:${POSTGRES_PASSWORD:-tensorguard}@db:5432/tensorguard
+      - TG_WORKER_INTERVAL=10
+    depends_on:
+      api-prod:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  db-data:
+  postgres-data:

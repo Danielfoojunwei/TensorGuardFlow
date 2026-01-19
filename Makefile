@@ -1,7 +1,7 @@
 # Makefile for TensorGuardFlow
 # Automation for build, test, development, and deployment
 
-.PHONY: install test agent bench clean lint setup ci typecheck dev dev-backend dev-frontend db-init worker help
+.PHONY: install test agent bench clean lint setup ci typecheck dev dev-backend dev-frontend db-init worker docker docker-prod db-migrate help
 
 # Default target
 all: help
@@ -32,6 +32,11 @@ help:
 	@echo "  make server     - Start production server"
 	@echo "  make worker     - Start background worker (identity renewal, etc)"
 	@echo "  make agent      - Start unified agent daemon"
+	@echo ""
+	@echo "Docker:"
+	@echo "  make docker     - Start with docker compose (dev mode)"
+	@echo "  make docker-prod - Start with docker compose (production)"
+	@echo "  make db-migrate  - Run database migrations (alembic)"
 	@echo ""
 
 # ============================================================================
@@ -96,6 +101,25 @@ agent:
 worker:
 	@echo "--- Starting TensorGuard Background Worker ---"
 	TG_ENVIRONMENT=development PYTHONPATH=src python -m tensorguard.platform.worker
+
+# ============================================================================
+# DOCKER
+# ============================================================================
+
+# Start with docker compose (development mode, SQLite)
+docker:
+	@echo "--- Starting TensorGuard with Docker Compose (dev) ---"
+	docker compose up --build
+
+# Start with docker compose (production mode, PostgreSQL)
+docker-prod:
+	@echo "--- Starting TensorGuard with Docker Compose (production) ---"
+	docker compose --profile production up --build
+
+# Run database migrations
+db-migrate:
+	@echo "--- Running Database Migrations ---"
+	PYTHONPATH=src alembic upgrade head
 
 # ============================================================================
 # TESTING
