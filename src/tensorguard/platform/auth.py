@@ -499,3 +499,327 @@ async def get_current_fleet_optional(
         return await get_current_fleet(authorization, session)
     except HTTPException:
         return None
+
+
+# ============================================================================
+# ORGANIZATION RBAC (Multi-tenant Role-Based Access Control)
+# ============================================================================
+
+from dataclasses import dataclass
+from .models.core import OrganizationRole, OrganizationMembership, Tenant
+
+
+@dataclass
+class OrgAuthContext:
+    """
+    Authentication context for organization-scoped operations.
+
+    Provides:
+    - user: The authenticated user
+    - organization: The target organization (tenant)
+    - membership: The user's membership in this org
+    - role: The user's role in this org (convenience accessor)
+
+    Usage in endpoints:
+        async def my_endpoint(auth: OrgAuthContext = Depends(require_org_role(OrganizationRole.ADMIN))):
+            print(f"User {auth.user.email} has role {auth.role} in org {auth.organization.name}")
+    """
+    user: User
+    organization: Tenant
+    membership: OrganizationMembership
+    role: OrganizationRole
+
+
+def get_user_org_membership(
+    user_id: str,
+    org_id: str,
+    session: Session
+) -> Optional[OrganizationMembership]:
+    """
+    Get a user's membership in a specific organization.
+
+    Args:
+        user_id: The user's ID
+        org_id: The organization's ID
+        session: Database session
+
+    Returns:
+        OrganizationMembership if found and accepted, None otherwise
+    """
+    stmt = select(OrganizationMembership).where(
+        OrganizationMembership.user_id == user_id,
+        OrganizationMembership.organization_id == org_id,
+        OrganizationMembership.is_accepted == True
+    )
+    return session.exec(stmt).first()
+
+
+def get_user_org_role(
+    user_id: str,
+    org_id: str,
+    session: Session
+) -> Optional[OrganizationRole]:
+    """
+    Get a user's role in a specific organization.
+
+    Args:
+        user_id: The user's ID
+        org_id: The organization's ID
+        session: Database session
+
+    Returns:
+        OrganizationRole if user is a member, None otherwise
+    """
+    membership = get_user_org_membership(user_id, org_id, session)
+    if membership:
+        return membership.role
+    return None
+
+
+class OrgRoleChecker:
+    """
+    RBAC dependency for organization-scoped operations.
+
+    Validates:
+    1. User is authenticated (JWT valid)
+    2. User has membership in the target organization
+    3. User's role meets minimum required level
+
+    The organization is determined by:
+    - org_id path/query parameter, or
+    - User's primary tenant_id (fallback for backward compatibility)
+
+    Usage:
+        @app.get("/org/{org_id}/fleets")
+        async def list_fleets(
+            org_id: str,
+            auth: OrgAuthContext = Depends(require_org_role(OrganizationRole.READONLY))
+        ):
+            # auth.organization.id == org_id
+            # auth.role >= OrganizationRole.READONLY
+            ...
+    """
+
+    def __init__(self, min_role: OrganizationRole):
+        self.min_role = min_role
+
+    async def __call__(
+        self,
+        request: Request,
+        org_id: Optional[str] = None,
+        current_user: User = Depends(get_current_user),
+        session: Session = Depends(get_session)
+    ) -> OrgAuthContext:
+        # Determine target organization
+        # Priority: path param > query param > user's primary tenant
+        target_org_id = org_id
+        if not target_org_id:
+            # Try to get from path params
+            target_org_id = request.path_params.get("org_id")
+        if not target_org_id:
+            # Fallback to user's primary tenant (backward compat)
+            target_org_id = current_user.tenant_id
+
+        # Fetch the organization
+        organization = session.get(Tenant, target_org_id)
+        if not organization:
+            logger.warning(f"RBAC: Organization not found: {target_org_id}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Organization not found"
+            )
+
+        # Check user's membership
+        membership = get_user_org_membership(current_user.id, target_org_id, session)
+
+        # Fallback: if no membership exists but user's primary tenant matches,
+        # check for legacy role mapping (backward compatibility)
+        if not membership and current_user.tenant_id == target_org_id:
+            # Create synthetic membership based on legacy role
+            legacy_role_map = {
+                UserRole.ORG_ADMIN: OrganizationRole.OWNER,
+                UserRole.SITE_ADMIN: OrganizationRole.ADMIN,
+                UserRole.OPERATOR: OrganizationRole.OPERATOR,
+                UserRole.AUDITOR: OrganizationRole.READONLY,
+                UserRole.SERVICE_ACCOUNT: OrganizationRole.OPERATOR,
+            }
+            synthetic_role = legacy_role_map.get(current_user.role, OrganizationRole.READONLY)
+
+            # Log this for migration tracking
+            logger.info(
+                f"RBAC: Using legacy role mapping for user={current_user.email} "
+                f"in org={target_org_id}: {current_user.role} -> {synthetic_role}"
+            )
+
+            membership = OrganizationMembership(
+                id="legacy-synthetic",
+                user_id=current_user.id,
+                organization_id=target_org_id,
+                role=synthetic_role,
+                is_accepted=True
+            )
+
+        if not membership:
+            logger.warning(
+                f"RBAC: User {current_user.email} has no access to org {target_org_id}"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access to this organization"
+            )
+
+        # Check role level
+        user_role = membership.role
+        if not user_role.has_privilege(self.min_role):
+            logger.warning(
+                f"RBAC denied: user={current_user.email} role={user_role.value} "
+                f"required={self.min_role.value} org={target_org_id}"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"This operation requires {self.min_role.value} role or higher"
+            )
+
+        return OrgAuthContext(
+            user=current_user,
+            organization=organization,
+            membership=membership,
+            role=user_role
+        )
+
+
+def require_org_role(min_role: OrganizationRole) -> OrgRoleChecker:
+    """
+    Factory function to create an organization role checker dependency.
+
+    Usage:
+        @app.post("/fleets")
+        async def create_fleet(
+            auth: OrgAuthContext = Depends(require_org_role(OrganizationRole.OPERATOR))
+        ):
+            # Only users with OPERATOR, ADMIN, or OWNER can create fleets
+            ...
+
+    Args:
+        min_role: Minimum role required for access
+
+    Returns:
+        OrgRoleChecker dependency
+    """
+    return OrgRoleChecker(min_role)
+
+
+# Pre-configured organization role checkers for common use cases
+require_org_owner = OrgRoleChecker(OrganizationRole.OWNER)
+require_org_admin = OrgRoleChecker(OrganizationRole.ADMIN)
+require_org_operator = OrgRoleChecker(OrganizationRole.OPERATOR)
+require_org_readonly = OrgRoleChecker(OrganizationRole.READONLY)
+
+
+async def ensure_org_access(
+    org_id: str,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+) -> Tenant:
+    """
+    Verify user has any level of access to the specified organization.
+
+    This is a lighter check than require_org_role - just verifies membership exists.
+    Use when you need org-level scoping but don't care about specific role.
+
+    Args:
+        org_id: Organization ID to check access for
+        current_user: Authenticated user
+        session: Database session
+
+    Returns:
+        Tenant object if access is granted
+
+    Raises:
+        HTTPException 403 if user has no access to the org
+        HTTPException 404 if org doesn't exist
+    """
+    organization = session.get(Tenant, org_id)
+    if not organization:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Organization not found"
+        )
+
+    membership = get_user_org_membership(current_user.id, org_id, session)
+
+    # Backward compatibility: allow access if user's primary tenant matches
+    if not membership and current_user.tenant_id == org_id:
+        return organization
+
+    if not membership:
+        logger.warning(
+            f"Access denied: user={current_user.email} attempted to access org={org_id}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have access to this organization"
+        )
+
+    return organization
+
+
+def ensure_fleet_access(
+    fleet_id: str,
+    current_user: User,
+    session: Session,
+    min_role: OrganizationRole = OrganizationRole.READONLY
+) -> "Fleet":
+    """
+    Verify user has access to a fleet through organization membership.
+
+    Args:
+        fleet_id: Fleet ID to check access for
+        current_user: Authenticated user
+        session: Database session
+        min_role: Minimum role required (default: READONLY)
+
+    Returns:
+        Fleet object if access is granted
+
+    Raises:
+        HTTPException 403 if user doesn't have required role
+        HTTPException 404 if fleet doesn't exist
+    """
+    from .models.core import Fleet
+
+    fleet = session.get(Fleet, fleet_id)
+    if not fleet:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Fleet not found"
+        )
+
+    # Check user's role in the fleet's organization
+    membership = get_user_org_membership(current_user.id, fleet.tenant_id, session)
+
+    # Backward compatibility
+    if not membership and current_user.tenant_id == fleet.tenant_id:
+        legacy_role_map = {
+            UserRole.ORG_ADMIN: OrganizationRole.OWNER,
+            UserRole.SITE_ADMIN: OrganizationRole.ADMIN,
+            UserRole.OPERATOR: OrganizationRole.OPERATOR,
+            UserRole.AUDITOR: OrganizationRole.READONLY,
+            UserRole.SERVICE_ACCOUNT: OrganizationRole.OPERATOR,
+        }
+        user_role = legacy_role_map.get(current_user.role, OrganizationRole.READONLY)
+    elif membership:
+        user_role = membership.role
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have access to this fleet"
+        )
+
+    if not user_role.has_privilege(min_role):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"This operation requires {min_role.value} role or higher"
+        )
+
+    return fleet
