@@ -64,9 +64,58 @@ class DeviceInfo(BaseModel):
 
 class TelemetryBatch(BaseModel):
     """Batch of telemetry messages from edge agent."""
-    batch_id: str = Field(..., description="Unique batch identifier")
+    batch_id: str = Field(..., description="Unique batch identifier for idempotency")
     device_info: Optional[DeviceInfo] = Field(None, description="Device information for upsert")
-    messages: List[TelemetryMessage] = Field(..., description="Telemetry messages")
+    messages: List[TelemetryMessage] = Field(..., description="Telemetry messages", max_items=1000)
+
+
+# Configuration for ingest limits
+MAX_BATCH_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB max payload
+MAX_MESSAGES_PER_BATCH = 1000
+BATCH_ID_CACHE_SIZE = 10000  # Number of batch IDs to cache for deduplication
+BATCH_ID_CACHE_TTL_SECONDS = 3600  # 1 hour TTL
+
+# In-memory cache for batch ID deduplication
+# Key: (fleet_id, batch_id), Value: timestamp
+from collections import OrderedDict
+from threading import Lock
+
+_batch_id_cache: OrderedDict = OrderedDict()
+_batch_id_cache_lock = Lock()
+
+
+def _check_batch_id_duplicate(fleet_id: str, batch_id: str) -> bool:
+    """
+    Check if a batch_id has been processed recently.
+
+    Returns True if duplicate (already processed), False if new.
+    Thread-safe with LRU eviction.
+    """
+    from time import time
+
+    cache_key = (fleet_id, batch_id)
+    current_time = time()
+
+    with _batch_id_cache_lock:
+        # Check if exists and not expired
+        if cache_key in _batch_id_cache:
+            stored_time = _batch_id_cache[cache_key]
+            if current_time - stored_time < BATCH_ID_CACHE_TTL_SECONDS:
+                # Move to end (most recently used)
+                _batch_id_cache.move_to_end(cache_key)
+                return True
+            else:
+                # Expired, remove it
+                del _batch_id_cache[cache_key]
+
+        # Add new entry
+        _batch_id_cache[cache_key] = current_time
+
+        # Evict oldest if cache too large
+        while len(_batch_id_cache) > BATCH_ID_CACHE_SIZE:
+            _batch_id_cache.popitem(last=False)
+
+        return False
 
 
 class IngestResult(BaseModel):
@@ -74,6 +123,7 @@ class IngestResult(BaseModel):
     accepted: int
     rejected: int
     rejections: List[Dict[str, Any]] = []
+    is_duplicate: bool = False  # True if batch was already processed
 
 
 class StageMetrics(BaseModel):
@@ -104,6 +154,7 @@ class PipelineMetrics(BaseModel):
 @router.post("/telemetry/ingest", response_model=IngestResult)
 async def ingest_telemetry(
     batch: TelemetryBatch,
+    request: Request,
     session: Session = Depends(get_session),
     fleet: Fleet = Depends(get_current_fleet),
 ):
@@ -113,20 +164,31 @@ async def ingest_telemetry(
     Auth: Fleet Bearer token (Authorization: Fleet <api_key>).
     The raw API key is hashed with SHA256 and matched against stored api_key_hash.
 
-    Accepts batches with topics:
-    - telemetry.stage: Pipeline stage events
-    - telemetry.system: System resource events
-    - telemetry.model_behavior: Model decision events
-    - telemetry.forensics: Safety/security events
+    Features:
+    - Idempotency: Duplicate batch_id submissions are safely ignored
+    - Validation: Max 1000 messages per batch, 10MB payload limit
+    - Topics: telemetry.stage, telemetry.system, telemetry.model_behavior, telemetry.forensics
 
     Returns accepted/rejected counts with rejection reasons.
     """
+    fleet_id = fleet.id
+    tenant_id = fleet.tenant_id
+
+    # Check for duplicate batch (idempotency)
+    if _check_batch_id_duplicate(fleet_id, batch.batch_id):
+        logger.info(f"Duplicate batch ignored: fleet={fleet_id} batch_id={batch.batch_id}")
+        return IngestResult(accepted=0, rejected=0, rejections=[], is_duplicate=True)
+
+    # Validate message count
+    if len(batch.messages) > MAX_MESSAGES_PER_BATCH:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Too many messages: {len(batch.messages)} exceeds limit of {MAX_MESSAGES_PER_BATCH}"
+        )
+
     accepted = 0
     rejected = 0
     rejections = []
-
-    tenant_id = fleet.tenant_id
-    fleet_id = fleet.id
 
     # Upsert device info if provided
     device_id = None
