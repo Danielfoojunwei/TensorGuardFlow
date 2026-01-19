@@ -1,7 +1,7 @@
 # Makefile for TensorGuardFlow
 # Automation for build, test, development, and deployment
 
-.PHONY: install test agent bench clean lint setup ci typecheck dev dev-backend dev-frontend db-init help
+.PHONY: install test agent bench clean lint setup ci typecheck dev dev-backend dev-frontend db-init worker help
 
 # Default target
 all: help
@@ -30,6 +30,7 @@ help:
 	@echo ""
 	@echo "Production:"
 	@echo "  make server     - Start production server"
+	@echo "  make worker     - Start background worker (identity renewal, etc)"
 	@echo "  make agent      - Start unified agent daemon"
 	@echo ""
 
@@ -90,6 +91,11 @@ server:
 agent:
 	@echo "--- Starting TensorGuard Unified Agent ---"
 	PYTHONPATH=src python -m tensorguard.agent.daemon
+
+# Start background worker for identity renewal and other jobs
+worker:
+	@echo "--- Starting TensorGuard Background Worker ---"
+	TG_ENVIRONMENT=development PYTHONPATH=src python -m tensorguard.platform.worker
 
 # ============================================================================
 # TESTING
