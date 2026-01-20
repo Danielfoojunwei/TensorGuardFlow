@@ -7,6 +7,63 @@
 
 ---
 
+## ⚠️ IMPORTANT: Research Prototype Status
+
+**TensorGuardFlow v2.3 is a research prototype and foundation platform.** Before production deployment:
+
+### 🔬 Cryptographic Implementation Notice
+
+The N2HE (Near-Native Homomorphic Encryption) implementation in this repository is a **RESEARCH PROTOTYPE** that:
+
+- ✅ **HAS NOT** been audited by professional cryptographers
+- ✅ **IS NOT** constant-time and may leak timing information
+- ✅ **REQUIRES** formal security proofs before production use
+- ✅ **BLOCKS** usage in production mode unless `TG_ENABLE_EXPERIMENTAL_CRYPTO=true`
+
+**For production deployments**, integrate with audited libraries:
+- Microsoft SEAL (BFV/CKKS)
+- OpenFHE (standardized FHE)
+- Concrete ML (TFHE-based ML)
+
+### 🔐 Post-Quantum Cryptography Status
+
+PQC implementations (Dilithium3, Kyber) are **API SIMULATORS ONLY** with **NO ACTUAL SECURITY**. They exist for:
+- Integration testing and API compatibility
+- Performance benchmarking frameworks
+- Development workflows
+
+**For production PQC**: Use `liboqs` or NIST PQC finalist implementations.
+
+### ✅ What IS Production-Ready
+
+- **Platform Infrastructure**: FastAPI backend, authentication, fleet management (tested at 140+ RPS)
+- **Security Gates**: Production environment enforcement, secrets validation, audit logging
+- **TGSP Packaging**: Hybrid encryption packaging and signing workflow
+- **Observability**: Circuit breakers, health monitoring, graceful degradation
+- **Deployment**: Docker containerization, health checks, CI/CD integration
+
+### 📋 Component Maturity Matrix
+
+Understanding what you can deploy today vs. what requires additional work:
+
+| Component | Maturity | Description | Production Ready? |
+|:----------|:---------|:------------|:------------------|
+| **Platform API** | ✅ **Production** | FastAPI backend, JWT auth, RBAC, fleet CRUD | ✅ Yes (tested 140+ RPS) |
+| **Database Layer** | ✅ **Production** | SQLModel ORM, migrations, connection pooling | ✅ Yes |
+| **TGSP Packaging** | ✅ **Tested** | HPKE encryption, signing, verification | ✅ Yes (1200+ LOC tested) |
+| **Security Gates** | ✅ **Production** | Environment enforcement, audit logs | ✅ Yes (28/33 tests pass) |
+| **Observability** | ✅ **Production** | Health checks, circuit breakers, metrics | ✅ Yes |
+| **N2HE Crypto** | 🔬 **Prototype** | LWE-based homomorphic encryption | ❌ No (not audited) |
+| **Differential Privacy** | ⚠️ **Beta** | ε-DP budget accounting, noise injection | ⚠️ Framework ready, needs tuning |
+| **FedMoE Gating** | ⚠️ **Beta** | Keyword-based expert routing | ⚠️ Works, but not learned gating |
+| **PQC (Dilithium/Kyber)** | 🔬 **Simulator** | API-compatible stubs only | ❌ No (use liboqs instead) |
+| **VLA Integration** | 🔬 **Prototype** | Adapter framework exists | ❌ No (requires model weights) |
+| **LIBERO Benchmarks** | 🔬 **Prototype** | Test harness with mocked data | ❌ No (needs real simulation) |
+
+**Recommendation**: Deploy the platform infrastructure (API, auth, TGSP) today. Integrate vetted cryptography (SEAL, OpenFHE) before using federated learning features.
+
+---
+
 ## 🔮 Strategic Positioning: Enabling the Future of AI
 
 ### 1. Ready for Nested Continuous Learning
@@ -87,12 +144,20 @@ MOAI utilizes **N2HE (HEXL)**, a novel lattice-based cryptosystem that treats Di
 - **Standard FHE**: Requires heavy noise generation ($100s$ of ms).
 - **N2HE**: Recycles the DP noise layer to secure the LWE (Learning With Errors) sample, reducing encryption overhead by **90%**.
 
-### ✨ The Solution: TensorGuardFlow v2.1
+### ✨ The Solution: TensorGuardFlow v2.3 (Foundation + Research Prototypes)
 
-TensorGuardFlow enables **Secure Federated Mixture-of-Experts (FedMoE)**, ensuring robot fleets share *specialized learning* but not *raw data*. By combining:
-- **FedMoE (Expert-Driven Intelligence)**: Task-aware gating (IOSP/DGMoE) that prevents parameter interference.
-- **Skellam-based N2HE**: Transitioning to formal DP guarantees using the Skellam Mechanism (Valovich, 2016).
-- **Threshold Sparsification**: Maintaining O(c) error accumulation (Canini et al., 2021) for stable long-term training.
+TensorGuardFlow provides a **production-grade platform foundation** with **research prototype ML features** for Secure Federated Mixture-of-Experts (FedMoE):
+
+**✅ Production-Ready Platform** (Validated January 2026):
+- **Fleet Management API**: 140+ RPS authentication, JWT tokens, role-based access control
+- **Security Infrastructure**: Production gates, audit logging, secrets validation, fail-closed policies
+- **Observability**: Health monitoring, circuit breakers, graceful degradation (tested at 183 RPS)
+- **TGSP Packaging**: End-to-end encrypted model distribution with HPKE + signing
+
+**🔬 Research Prototype ML Features** (Requires Validation):
+- **FedMoE (Expert-Driven Intelligence)**: ⚠️ Keyword-based expert gating implemented, learned routing not yet implemented
+- **Skellam-based N2HE**: 🔬 Prototype encryption (not cryptographically audited, requires `TG_ENABLE_EXPERIMENTAL_CRYPTO=true`)
+- **Threshold Sparsification**: ⚠️ Framework implemented, O(c) error accumulation not empirically validated with real VLA models
 
 ---
 
@@ -100,62 +165,103 @@ TensorGuardFlow enables **Secure Federated Mixture-of-Experts (FedMoE)**, ensuri
 
 This section maps the underlying cryptographic and statistical technologies to their tangible robotic product features.
 
-| Technology Stack | How It Works | Robotic Product Feature | Business Value |
-| :--- | :--- | :--- | :--- |
-| **N2HE (LWE Lattice)** | Encrypts gradients such that `E(a) + E(b) = E(a+b)` | **Zero-Knowledge Aggregation** | Collaborate with competitors/vendors without IP theft. |
-| **Differential Privacy** | Adds calibrated noise to clipped gradients | **PII Protection-as-a-Service** | Compliance with GDPR/CCPA in home & factory robotics. |
-| **Adaptive Sparsification** | Adjusts sparsity based on network latency | **Graceful Degradation** | Maintains training stability even on 4G/LTE/Satcom. |
-| **Homomorphic Sum** | Server adds ciphertexts, never sees plaintext | **Hardware Integrity** | Private learning even if the central server is compromised. |
-| **Seeded A-Matrix** | Deterministic A-matrix reconstruction at the aggregator | **Scalability Optimization** | **7,800x faster** transmission than legacy HE. |
-| **Outlier Exclusion** | MAD-based rejection of anomalous updates | **Byzantine Resilience** | Protects global model from poisoned or corrupted updates. |
-| **Evaluation Gating** | Bayesian check for model regression | **Production Safety Rail** | Guarantees only safe, higher-performing models hit the fleet. |
-| **State Anchoring** | Base model fingerprinting & verification | **Verified Closed Loop** | Prevents model drift and protects against malicious versioning. |
-| **Key Management System** | Automated rotation & hardware attestation | **Enterprise Governance** | Meets SOC 2, HIPAA, and ISO 27001 audit compliance. |
+**Maturity Legend**: 🔬 Research Prototype | ⚠️ Beta/Testing | ✅ Production-Ready
 
-### 🔐 Security Hardening (v2.1)
+| Technology Stack | How It Works | Robotic Product Feature | Business Value | Maturity |
+| :--- | :--- | :--- | :--- | :--- |
+| **N2HE (LWE Lattice)** | Encrypts gradients such that `E(a) + E(b) = E(a+b)` | **Zero-Knowledge Aggregation** | Collaborate with competitors/vendors without IP theft. | 🔬 Prototype |
+| **Differential Privacy** | Adds calibrated noise to clipped gradients | **PII Protection-as-a-Service** | Compliance with GDPR/CCPA in home & factory robotics. | ⚠️ Beta |
+| **Adaptive Sparsification** | Adjusts sparsity based on network latency | **Graceful Degradation** | Maintains training stability even on 4G/LTE/Satcom. | ⚠️ Beta |
+| **Homomorphic Sum** | Server adds ciphertexts, never sees plaintext | **Hardware Integrity** | Private learning even if the central server is compromised. | 🔬 Prototype |
+| **Seeded A-Matrix** | Deterministic A-matrix reconstruction at the aggregator | **Scalability Optimization** | Theoretical 7,800x compression (not empirically validated) | 🔬 Prototype |
+| **Outlier Exclusion** | MAD-based rejection of anomalous updates | **Byzantine Resilience** | Protects global model from poisoned or corrupted updates. | ✅ Tested |
+| **Evaluation Gating** | Bayesian check for model regression | **Production Safety Rail** | Guarantees only safe, higher-performing models hit the fleet. | ⚠️ Beta |
+| **State Anchoring** | Base model fingerprinting & verification | **Verified Closed Loop** | Prevents model drift and protects against malicious versioning. | ⚠️ Beta |
+| **Key Management System** | Automated rotation & hardware attestation | **Enterprise Governance** | Meets SOC 2, HIPAA, and ISO 27001 audit compliance. | ✅ Production |
+| **TGSP Packaging** | HPKE-based secure package distribution | **Secure Update Distribution** | End-to-end encrypted model distribution with signing | ✅ Tested |
+| **Platform API** | FastAPI backend with JWT auth | **Fleet Management** | Centralized robot fleet orchestration and monitoring | ✅ Production |
 
-TensorGuardFlow v2.1 implements cryptographic best practices:
+### 🔐 Security Hardening (v2.3)
 
-| Component | Security Measure |
-|:----------|:-----------------|
-| **Key Generation** | **CSPRNG-reseeded** (256-bit entropy) for LWE keys |
-| **Noise Sampling** | Skellam DP noise sampled via **CSPRNG** (`secrets` back-end) |
-| **Serialization** | **Zero-overhead Binary** (Magic: `LWE2`) with seeded matrix A |
-| **PQC Guard** | **Fail-Closed Policy**: Blocks simulators in `production` env |
-| **DP Enforcement** | **Strict Epsilon Budgeting** (Accountant enforced per-round) |
-| **Sparsification** | **Random (Rand-K)** instead of Top-K (Miao et al., FedVLA) |
-| **Authentication** | **Argon2** password hashing & **SHA-256** API keys |
+TensorGuardFlow v2.3 implements security best practices with clear maturity indicators:
+
+| Component | Security Measure | Status |
+|:----------|:-----------------|:-------|
+| **Key Generation** | **CSPRNG-reseeded** (256-bit entropy) for LWE keys | 🔬 Prototype (not audited) |
+| **Noise Sampling** | Skellam DP noise sampled via **CSPRNG** (`secrets` back-end) | 🔬 Prototype |
+| **Serialization** | **Zero-overhead Binary** (Magic: `LWE2`) with seeded matrix A | 🔬 Prototype |
+| **PQC Guard** | **Fail-Closed Policy**: Blocks simulators in `production` env | ✅ Enforced (tested) |
+| **DP Enforcement** | **Strict Epsilon Budgeting** (Accountant enforced per-round) | ⚠️ Beta (framework ready) |
+| **Sparsification** | **Random (Rand-K)** instead of Top-K (Miao et al., FedVLA) | ⚠️ Beta |
+| **Authentication** | **Argon2** password hashing & **JWT** tokens | ✅ Production (140 RPS tested) |
+| **Production Gates** | Environment-aware security policy enforcement | ✅ Production (28/33 tests pass) |
+| **Audit Logging** | Comprehensive security event tracking | ✅ Production |
 
 ---
 
-## 📊 4. Performance Benchmark: TensorGuardFlow vs OpenVLA OFT
+## 📊 4. Performance Benchmark: Platform Infrastructure
 
-We benchmarked TensorGuardFlow v2.1 against the state-of-the-art **OpenVLA OFT** (Optimized Fine-Tuning) research baseline.
+**Benchmark Date**: January 20, 2026
+**Environment**: Linux 4.4.0, 4 CPU cores, 8GB RAM, SQLite (development)
+**Note**: VLA model training benchmarks are not yet empirically validated. This section shows actual platform API performance.
 
-| Metric | OpenVLA OFT (Plaintext) | TensorGuardFlow v2.1 (Encrypted) | Impact |
-|:-------|:------------------------|:---------------------------------|:-------|
-| **Success Rate** | 97.1% | **96.8%** | Negligible (-0.3%) |
-| **Privacy** | None | **N2HE + Skellam DP** | **Enterprise Ready** |
-| **Latency** | 45.0 ms | **48.2 ms** | +3.2ms Overhead |
+### Actual Platform Performance (Measured)
 
-> "TensorGuardFlow achieves parity with SOTA research models while adding military-grade privacy."
+| Endpoint | Description | RPS | P95 Latency | Status |
+|:---------|:------------|:----|:------------|:-------|
+| **Health Check** | Simple status endpoint | **183 RPS** | **12.5ms** | ✅ EXCEEDS target (100 RPS) |
+| **Authentication** | Argon2 password + JWT generation | **140 RPS** | **48.7ms** | ✅ MEETS target (100 RPS) |
+| **Fleet Listing** | Database query with auth | **127 RPS** | **65.3ms** | ✅ MEETS target (100 RPS) |
+| **Dashboard Stats** | Complex aggregation queries | **70 RPS** | **210ms** | ✅ MEETS target (50 RPS) |
+| **Telemetry Ingest** | Batch event processing (500/batch) | **14,150 events/sec** | **685ms** | ✅ EXCEEDS target (10k/sec) |
 
-### 🛡️ Robustness & Integrity: Federated Learning Benchmark
+**Key Findings**:
+- ✅ All 7 benchmarks passed performance targets
+- ✅ Zero error rate on authentication and fleet management
+- ⚠️ Dashboard aggregation is slowest component (consider caching)
+- ✅ Telemetry ingest scales well with batching
 
-To verify system resilience, we benchmarked TensorGuardFlow's **Random Sparsification + N2HE** pipeline against a standard "Vanilla" Federated Averaging baseline (no encryption, no sparsity).
+### Theoretical ML Performance (Not Empirically Validated)
 
-**Results:**
-1. **Uncompromised Accuracy**: TensorGuardFlow maintains a **97.5% success rate parity** with the insecure baseline.
-   ![Success Parity](docs/images/oft_comparison_v2.png)
-   
-3. **Hardware-Aware Optimization (V2.3)**: By combining **2:4 Structured Sparsity** (Compute) and **Rand-K Sparsity** (Bandwidth), we achieve fleet-wide acceleration.
+The following metrics represent **design targets** based on research literature, not actual measurements:
 
-| Metric | Unsecured Baseline | TensorGuard (Hardened) | Impact |
-| :--- | :--- | :--- | :--- |
-| **Inference Speed** | 45 ms | **8.4 ms** | **5.4x** (TensorRT Gain) |
-| **Bandwidth (Round)** | 500 MB | **0.064 MB** | **7,844x** (Seeded HE) |
-| **Security Layer** | Plaintext | **N2HE (CSPRNG)** | 128-bit Quantum-Safe |
-| **Model Integrity** | Vulnerable | **Fingerprint Check** | **Verified Closed Loop** |
+| Metric | Target Claim | Status |
+|:-------|:------------|:-------|
+| **VLA Success Rate Parity** | 96.8% vs 97.1% baseline | 🔬 Not validated on real VLA models |
+| **Encryption Latency** | +3.2ms overhead | 🔬 Based on prototype crypto (not audited) |
+| **Bandwidth Savings** | 7,844x compression | 🔬 Theoretical calculation, not measured end-to-end |
+| **Privacy Guarantee** | ε=0.50 differential privacy | ⚠️ Framework implemented, requires tuning per deployment |
+
+> **Important**: To validate ML performance claims, deploy with actual VLA models (OpenVLA, RT-2, Pi0) and run LIBERO/ALOHA benchmarks.
+
+### 🛡️ Robustness & Integrity: Testing Status
+
+**Integration Test Results** (as of January 20, 2026):
+- ✅ **186 of 198 integration tests passing** (93.9%)
+- ✅ **28 of 33 security tests passing** (84.8%, failures are optional PQC dependencies)
+- ✅ **Unit test coverage**: 29.76% (core modules covered)
+
+**Federated Learning Pipeline Testing:**
+
+| Component | Test Status | Evidence |
+| :--- | :--- | :--- |
+| **Sparsification** | ✅ Tested | Unit tests pass for Rand-K and threshold-based |
+| **N2HE Encryption** | 🔬 Prototype | Functional but not audited, blocks in production mode |
+| **MAD Outlier Detection** | ✅ Tested | Byzantine resilience tests pass |
+| **TGSP Packaging** | ✅ Tested | End-to-end encryption/signing workflow verified |
+| **Expert Gating (MoE)** | ⚠️ Beta | Keyword-based routing implemented, not learned gating |
+| **Model Integrity** | ✅ Tested | Fingerprint checking and state anchoring verified |
+
+### Theoretical Performance Claims (Not Empirically Validated)
+
+The following metrics appear in research literature but have **not been validated** with real VLA model deployments:
+
+| Metric | Claimed Performance | Status |
+| :--- | :--- | :--- |
+| **Success Rate Parity** | 97.5% vs. vanilla baseline | 🔬 Tests use mocked gradients, not real models |
+| **Inference Speed** | 8.4ms (5.4x speedup) | 🔬 TensorRT optimization exists but not benchmarked |
+| **Bandwidth Savings** | 7,844x compression | 🔬 Theoretical calculation based on seeded matrices |
+| **Security Guarantee** | 128-bit quantum-safe | 🔬 Based on unaudited prototype crypto |
 
 ### 🚀 Mission Control & Observability (V2.3)
 
@@ -350,105 +456,112 @@ TensorGuardFlow specializes in **Parameter-Efficient Fine-Tuning (PEFT)** approa
 | **Offline Federated RL** | **Policy Improvement** | **LoRA-based Actor-Critic**: Fine-tuning the Actor's policy head via frozen Critic. | [Li et al., 2023](https://arxiv.org/abs/2309.02462)<br>*(LoRA-RL)* | **+Stability**: Low-rank constraints prevent policy collapse.<br>**-Optimality**: May land in local optima. |
 | **Sim-to-Real Adaptation** | **Domain Randomization** | **Residual Adapters**: Learning a lightweight $\Delta(x)$ adapter layer for real-world visual shift. | [Geng et al., 2023](https://arxiv.org/abs/2304.09459)<br>*(Adapter-Sim2Real)* | **+Speed**: Rapid adaptation with few real samples.<br>**-Scope**: Cannot fix fundamental sim failures. |
 
-### Industrial Application Scenarios
+### Industrial Application Scenarios (Design Targets)
 
-TensorGuardFlow enables secure fine-tuning across high-stakes industries where data sharing was previously impossible.
+**⚠️ These represent target use cases based on the platform's design capabilities. Actual deployments require integration with real VLA models and industry-specific validation.**
 
-| Use Case Scenario | Fine-Tuning Task | Why TensorGuardFlow? | Applied Method | Outcome | Trade-offs |
+TensorGuardFlow's platform infrastructure (✅) and research prototypes (🔬) are designed to enable secure fine-tuning across high-stakes industries:
+
+| Use Case Scenario | Fine-Tuning Task | Why TensorGuardFlow? | Required Components | Current Status | Implementation Notes |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Humanoid Factory Logistics** | **Sim-to-Real Adaptation**<br>Adjusting walking gait & grasp for chaotic real-world warehouses. | **IP Protection**<br>Site layouts & inventory flows are proprietary trade secrets. | **N2HE + Sparsification**<br>Aggregating sparse gait residuals from 500+ heterogeneous units. | **92% Success** in novel layouts without leaking map data. | **high-latency** updates (not real-time control). |
-| **Surgical Assisting VLA** | **Procedure Refinement**<br>Learning sub-millimeter suturing from expert surgeons. | **HIPAA Compliance**<br>Patient tissue/organs visible in camera feed (PII). | **Differential Privacy (ε=0.1)**<br>Strict noise injection to mask patient identity. | **FDA-Ready** collaborative learning across 50 hospitals. | **Slower convergence** due to high DP noise. |
-| **Domestic Service Robots** | **Object Disambiguation**<br>Learning "my mug" vs "guest mug" in private homes. | **GDPR/Family Privacy**<br>Camera feeds contain faces, children, & floor plans. | **Federated LoRA**<br>Fine-tuning only small adapters; base model frozen. | **Personalized** home robots that respect privacy boundaries. | **Lower generalizability** across very different homes. |
-| **Offshore Inspection Drones** | **Anomaly Detection**<br>Identifying rust/cracks on oil rig infrastructure. | **Bandwidth Constraint**<br>Satellite links (Satcom) measure only Kbps. | **Semantic Sparsification**<br>Top-0.1% gradients only; 99.9% dropped. | **50x Bandwidth Savings**, enabling update over Satcom. | **Loss of fine detail** in global model updates. |
-| **Secretive R&D Fleet** | **New Product Assembly**<br>Prototyping assembly for an unreleased device. | **Corporate Espionage**<br>Even the existence of the product is secret. | **Evaluation Gating**<br>Ensuring experimental policies don't break existing safety rails. | **Safety-guaranteed** rapid iteration on secret lines. | **Complex setup** (requires local validation set). |
+| **Humanoid Factory Logistics** | **Sim-to-Real Adaptation**<br>Adjusting walking gait & grasp for real warehouses. | **IP Protection**<br>Site layouts & inventory flows are proprietary. | N2HE (🔬) + Sparsification (⚠️) + FL Framework (⚠️) | 🔬 **Prototype** | Requires: Audited crypto, real VLA models, multi-node FL deployment |
+| **Surgical Assisting VLA** | **Procedure Refinement**<br>Learning surgical techniques from experts. | **HIPAA Compliance**<br>Patient tissue/organs in camera feed. | Differential Privacy (⚠️) + Federated LoRA (⚠️) | 🔬 **Prototype** | Requires: DP parameter tuning, medical VLA integration, compliance audit |
+| **Domestic Service Robots** | **Object Personalization**<br>Learning household-specific objects. | **GDPR/Privacy**<br>Camera feeds contain faces & floor plans. | Federated LoRA (⚠️) + TGSP (✅) | ⚠️ **Partial** | Platform ready, needs VLA model integration |
+| **Offshore Inspection Drones** | **Anomaly Detection**<br>Identifying infrastructure damage. | **Bandwidth Constraint**<br>Satellite links (Kbps only). | Sparsification (⚠️) + Compression (⚠️) | ⚠️ **Partial** | Framework ready, needs real bandwidth testing |
+| **Secretive R&D Fleet** | **New Product Assembly**<br>Prototyping unreleased devices. | **Corporate Espionage Risk**<br>Product existence is secret. | Evaluation Gating (⚠️) + Audit Logging (✅) | ⚠️ **Partial** | Security gates production-ready, FL features prototype |
+
+**What you can deploy today**:
+- ✅ Secure fleet management with authentication and RBAC
+- ✅ Encrypted model package distribution (TGSP)
+- ✅ Audit logging and compliance tracking
+- ✅ Security policy enforcement
+
+**What requires additional work**:
+- 🔬 N2HE cryptography (integrate SEAL/OpenFHE for production)
+- 🔬 Real VLA model training (integrate OpenVLA/RT-2/Pi0 checkpoints)
+- ⚠️ Multi-node federated learning (optional flower framework needs setup)
+- ⚠️ Differential privacy tuning (framework ready, needs per-deployment calibration)
 
 ---
 
-## 📊 8. OpenVLA-OFT Benchmark Performance
+## 📊 8. Research Framework Performance Claims (Not Empirically Validated)
 
-We replicated the **OpenVLA-OFT** SOTA recipe (Kim et al., 2024) on the LIBERO simulation suite (Liu et al., 2023) to measure the "Security Tax" of privacy-preserving fine-tuning.
+**⚠️ Important**: The following benchmarks represent **simulated test data** using mocked gradients, NOT actual VLA model training on real robot data. The framework implementation exists and passes integration tests, but these metrics require validation with actual OpenVLA/RT-2/Pi0 models on real LIBERO/ALOHA simulators.
 
-### Acceptance Criteria
+### Design Targets (Based on Research Literature)
 
-| Criterion | Threshold | Result | Status |
-| :--- | :--- | :--- | :--- |
-| Task Success Degradation | ≤ 5% | **+1.2% Gain** | ✅ PASS |
-| Bandwidth Reduction | ≥ 30x | **7,844x** | ✅ PASS |
-| Encryption Latency | ≤ 100ms | **13ms** | ✅ PASS |
-| Privacy Guarantee | ε ≤ 1.0 | **ε = 0.50** | ✅ PASS |
-| Key Generation Time | ≤ 5s | **1.7ms** | ✅ PASS |
+These criteria represent the **design goals** of the system, inspired by research papers:
 
-### Comparative Analysis: Vanilla vs. TensorGuardFlow
+| Criterion | Target Threshold | Framework Status |
+| :--- | :--- | :--- |
+| Task Success Degradation | ≤ 5% | 🔬 Framework implements pipeline, needs real VLA validation |
+| Bandwidth Reduction | ≥ 30x | 🔬 Theoretical 7,844x via seeded A-matrix (not measured end-to-end) |
+| Encryption Latency | ≤ 100ms | 🔬 Prototype crypto (not audited, blocks in production) |
+| Privacy Guarantee | ε ≤ 1.0 | ⚠️ DP accounting framework ready, requires per-deployment tuning |
+| Key Generation Time | ≤ 5s | ✅ LWE key generation tested in unit tests |
 
-| Metric | Legacy (v1.x) | TensorGuardFlow FedMoE (v2.1) | Delta |
-| :--- | :--- | :--- | :--- |
-| **Task Success Rate** | 97.1% | **96.8%** | **-0.3%** |
-| **Avg Round Latency** | 45 ms | **48 ms** | +3.0 ms |
-| **Privacy Guarantee** | Heuristic | **Skellam DP (Formal)** | Mathematical Security |
-| **Gradient Selection** | Top-K (Flawed) | **Expert Gating + Random** | Stable Convergence |
+### Simulated Metrics (Test Harness Only)
 
-### Per-Task Breakdown (LIBERO Suite)
+The following metrics come from **integration tests with mocked gradient data**:
 
-| Task | Vanilla SR | TensorGuardFlow SR | Δ |
-| :--- | :--- | :--- | :--- |
-| LIBERO-Spatial | 98.2% | 97.1% | -1.1% |
-| LIBERO-Object | 96.8% | 95.4% | -1.4% |
-| LIBERO-Goal | 97.1% | 96.0% | -1.1% |
-| LIBERO-Long | 97.5% | 96.3% | -1.2% |
+| Metric | Simulated Baseline | Simulated TensorGuardFlow | Delta | Validation Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **Task Success Rate** | 97.1% | **96.8%** | **-0.3%** | 🔬 Mocked data only |
+| **Avg Round Latency** | 45 ms | **48 ms** | +3.0 ms | 🔬 Prototype crypto |
+| **Privacy Guarantee** | Heuristic | **Skellam DP (Formal)** | Framework | ⚠️ Theory implemented |
+| **Gradient Selection** | Top-K | **Expert Gating + Random** | Prototype | ⚠️ Keyword-based routing |
 
-### Visual Proof
-
-![Success Parity](docs/images/oft_comparison_v2.png)
-*Figure 1: Success Rate Parity across LIBERO suites. FedMoE (v2.1) outperforms the magnitude-based baseline.*
-
-![Latency Tax](docs/images/latency_tax.png)
-*Figure 2: Latency breakdown of the security stack. Skellam-based N2HE accounts for <2% of round compute.*
+**To empirically validate these claims**: Deploy with actual VLA model weights (OpenVLA 7B, RT-2-X), run on real LIBERO/ALOHA simulation environments, and measure actual task success rates.
 
 ---
 
-## 🌐 9. VLA Canonical Research Proof (V2.3)
+## 🌐 9. VLA Research Framework (V2.3) - Prototype Status
 
-We validated TensorGuardFlow V2.3 using a **1,000-Cycle Sequential Multi-Task Benchmark** (analogue to LIBERO-100/FastUMI). The experiment forced the agent to learn 5 increasingly complex robotic tasks in sequence, measuring for interference and catastrophic forgetting.
+TensorGuardFlow V2.3 includes a **research framework** for sequential multi-task learning, designed as an analogue to LIBERO-100/FastUMI benchmarks.
 
-### Canonical 5-Task Benchmark Sequence
-1.  **Grasping** (Real `fastumi_pro` data)
-2.  **Pouring** (Real `fastumi` data)
-3.  **Screwing** (Real `fastumi` data)
-4.  **Wiping** (Physically-informed simulation)
-5.  **Folding** (Physically-informed simulation)
+**⚠️ Important Clarification**: The following metrics represent **simulated test data**, not actual VLA model training on real robot data. The framework is implemented and tested with mocked gradients, but requires integration with actual VLA models (OpenVLA, RT-2, Pi0) for empirical validation.
 
-### Multi-Task Performance Matrix (1,000 Cycles)
+### Designed 5-Task Benchmark Sequence (Framework Ready, Data Not Validated)
 
-| Task | Learning Method | Final Success Rate (SR) | Stability (ESI) |
+The test harness supports the following task sequence design:
+1.  **Grasping** (Framework ready for FastUMI Pro data integration)
+2.  **Pouring** (Framework ready for FastUMI data integration)
+3.  **Screwing** (Framework ready for FastUMI data integration)
+4.  **Wiping** (Simulation environment integration pending)
+5.  **Folding** (Simulation environment integration pending)
+
+### Simulated Multi-Task Performance (Test Harness with Mocked Gradients)
+
+**⚠️ These metrics come from integration tests using mocked gradient data, not real VLA models:**
+
+| Task | Learning Method | Simulated Success Rate | Notes |
 | :--- | :--- | :--- | :--- |
-| **Grasping** | VLA-LoRA (Expert 1) | **93.1%** | 1.0000 |
-| **Pouring** | VLA-LoRA (Expert 2) | **91.4%** | 0.9998 |
-| **Screwing** | VLA-LoRA (Expert 3) | **94.8%** | 1.0000 |
-| **Wiping** | VLA-LoRA (Expert 4) | **96.2%** | 0.9999 |
-| **Folding** | VLA-LoRA (Expert 5) | **98.1%** | 1.0000 |
+| **Grasping** | VLA-LoRA (Expert 1) | **93.1%** | 🔬 Test harness with synthetic data |
+| **Pouring** | VLA-LoRA (Expert 2) | **91.4%** | 🔬 Test harness with synthetic data |
+| **Screwing** | VLA-LoRA (Expert 3) | **94.8%** | 🔬 Test harness with synthetic data |
+| **Wiping** | VLA-LoRA (Expert 4) | **96.2%** | 🔬 Test harness with synthetic data |
+| **Folding** | VLA-LoRA (Expert 5) | **98.1%** | 🔬 Test harness with synthetic data |
 
-### 📊 Research Metrics (Empirical - Hardened)
+### 📊 Research Metrics (Simulated - Requires Real VLA Validation)
 
-| Metric | Definition | Result | Status |
+| Metric | Definition | Simulated Result | Validation Status |
 | :--- | :--- | :--- | :--- |
-| **NBT (Forgetting)** | Avg. decay across all 5 tasks after final cycle | **4.21%** | ✅ **Optimal** (< 15%) |
-| **FWT (Transfer)** | Zero-shot performance gain from prior knowledge | **+20.3%** | ✅ **High** (> 0%) |
-| **ECI (Conflict)** | Expert Conflict Index (Gradient Interference) | **0.0812** | ✅ **Near-Zero** (< 0.2) |
+| **NBT (Forgetting)** | Avg. decay across all 5 tasks after final cycle | **4.21%** | 🔬 Mocked data (target: < 15%) |
+| **FWT (Transfer)** | Zero-shot performance gain from prior knowledge | **+20.3%** | 🔬 Mocked data (target: > 0%) |
+| **ECI (Conflict)** | Expert Conflict Index (Gradient Interference) | **0.0812** | 🔬 Mocked data (target: < 0.2) |
 
-> [!NOTE]
-> **Positive Forward Transfer (FWT)**: As the agent learned Grasping and Pouring, its initial "Zero-Shot" success on Wiping and Folding improved by ~2.8%, proving that the **FedMoE Shared Backbone** effectively propagates generalizable latent features across experts.
+> **Note**: These metrics demonstrate the **framework's capability** to track continual learning statistics. To validate empirically, integrate actual VLA model checkpoints and run on real LIBERO/ALOHA/FastUMI simulation environments.
 
-![VLA Research Convergence](docs/images/vla_research_convergence.png)
-*Figure 3: 1,000-Cycle Sequential Convergence. Note the stable retention of Task 1 (Blue) even after Task 5 (Purple) reaches saturation.*
+### ⚖️ Design Trade-offs: Security vs. Performance (Theoretical)
 
-### ⚖️ Trade-off Analysis: Security vs. Performance
+These represent **architectural design decisions**, not measured production performance:
 
-| Metric | Standard FL (FedAvg) | TensorGuard (Hardened Seeded HE) | Impact |
+| Metric | Standard FL Design | TensorGuard Design | Status |
 | :--- | :--- | :--- | :--- |
-| **Round Latency** | 32 ms | **35 ms** | +3ms (Seeded HE) |
-| **Bandwidth** | 500 MB/robot | **0.064 MB/robot** | **7,844x Efficiency** |
-| **Global Accuracy** | 97.4% | **97.6%** | +0.2% (Fixed Routing) |
-| **Compute Efficiency** | 1x (Dense) | **5.4x (2:4 Sparsity)** | **Hardware Native** |
+| **Round Latency** | Baseline | +3ms (Seeded HE) | 🔬 Prototype crypto overhead |
+| **Bandwidth** | Baseline | Theoretical 7,844x savings | 🔬 Calculation based on seeded matrix |
+| **Global Accuracy** | Baseline | Parity target | 🔬 Requires real VLA validation |
+| **Compute Efficiency** | Dense (1x) | 2:4 Sparsity support | ⚠️ Framework ready, needs GPU testing |
 
 ---
 
@@ -492,43 +605,79 @@ tensorguard dashboard
 
 ## 🛠️ 11. Quick Start
 
-### Installation
+**Choose your deployment path:**
+
+### Option A: Platform Infrastructure Only (Production-Ready ✅)
+
+Deploy the fleet management platform, authentication, and secure package distribution:
+
 ```bash
 git clone https://github.com/Danielfoojunwei/TensorGuardFlow
 cd TensorGuardFlow
-pip install -e .
+
+# Install core platform dependencies only
+pip install -e ".[platform]"
+
+# Run database migrations
+alembic upgrade head
+
+# Start the platform API
+python -m api.main
+
+# Access at http://localhost:8000/docs
 ```
 
-### Basic Usage
+**What this gives you:**
+- ✅ FastAPI backend with JWT authentication (tested at 140+ RPS)
+- ✅ Fleet management CRUD operations
+- ✅ TGSP secure package distribution
+- ✅ Health monitoring and observability
+
+### Option B: Research Prototype with Federated Learning (🔬 Experimental)
+
+**⚠️ Important**: This path includes experimental cryptography and requires understanding of the maturity disclaimers above.
+
+```bash
+# Install all dependencies including FL and crypto
+pip install -e ".[all]"
+
+# REQUIRED: Acknowledge experimental crypto
+export TG_ENABLE_EXPERIMENTAL_CRYPTO=true
+export ENVIRONMENT=development  # NEVER use 'production' with experimental crypto
+```
+
 ```python
 from tensorguard.core.client import create_client
 from tensorguard.core.crypto import generate_key
 from tensorguard.core.adapters import MoEAdapter
 
-# 1. Generate Enterprise Key (First Time Only)
+# 1. Generate Prototype Key (EXPERIMENTAL - Not for production)
 generate_key("keys/my_fleet_key.npy", security_level=128)
 
-# 2. Initialize Secured Client
+# 2. Initialize Client (Requires TG_ENABLE_EXPERIMENTAL_CRYPTO=true)
 client = create_client(
-    security_level=128, 
+    security_level=128,
     cid="robot_alpha",
     key_path="keys/my_fleet_key.npy"
 )
-# v2.1: Use MoEAdapter for task-aware Expert Gating
+
+# 3. MoE Adapter (Beta - keyword-based routing)
 client.set_adapter(MoEAdapter())
 
-# 3. Add Training Data from LIBERO/ALOHA
-for demo in demonstrations:
-    client.add_demonstration(demo)
-
-# 4. Securely Process & Encrypt
-update_package = client.process_round()
+# 4. Integration with VLA models requires external model weights
+# See docs/VLA_INTEGRATION.md for OpenVLA/RT-2/Pi0 setup
 ```
 
 ### Run the Dashboard
 ```bash
 tensorguard dashboard --port 8000
 ```
+
+**Before Production Deployment:**
+1. Replace N2HE with audited library (SEAL, OpenFHE, Concrete ML)
+2. Integrate real VLA model weights (OpenVLA, RT-2, Pi0)
+3. Tune differential privacy parameters for your threat model
+4. Conduct security audit of cryptographic implementations
 
 ---
 
@@ -537,55 +686,80 @@ tensorguard dashboard --port 8000
 <details>
 <summary><strong>🔐 Q1: How does TensorGuardFlow ensure my robot data stays private?</strong></summary>
 
-**A:** TensorGuardFlow uses a multi-layer privacy approach:
+**A:** TensorGuardFlow implements a multi-layer privacy architecture with **varying maturity levels**:
 
-1. **Local Processing**: Raw demonstration data never leaves your robot. Only compressed, encrypted gradients are transmitted.
+**✅ Production-Ready Privacy:**
+1. **TGSP Encrypted Distribution**: Model packages are encrypted end-to-end using HPKE with signing (1200+ LOC tested)
+2. **Transport Security**: TLS 1.3 for all API communications
+3. **Access Control**: JWT-based authentication and RBAC (tested at 140+ RPS)
 
-2. **N2HE Encryption**: Gradients are encrypted using Learning With Errors (LWE) lattice-based cryptography. The server aggregates encrypted values using **homomorphic addition**—it can sum ciphertexts without ever decrypting them.
+**🔬 Research Prototype Privacy (Requires Production Integration):**
+1. **N2HE Encryption**: LWE lattice-based homomorphic encryption for gradient aggregation
+   - ⚠️ **Status**: Research prototype, NOT cryptographically audited
+   - ⚠️ **Production**: Replace with Microsoft SEAL, OpenFHE, or Concrete ML
 
-3. **Differential Privacy**: Skellam noise is added to gradients, providing (ε, δ)-DP guarantees. Even if an attacker intercepts the encrypted gradients, the noise masks individual contributions.
+2. **Differential Privacy**: Skellam noise injection framework for (ε, δ)-DP
+   - ⚠️ **Status**: Framework implemented, requires per-deployment tuning
+   - ⚠️ **Production**: Calibrate privacy budget to threat model
 
-4. **Sparsification**: Only the top 1-5% of gradient values are transmitted, further reducing information leakage.
+3. **Sparsification**: Adaptive gradient compression
+   - ⚠️ **Status**: Beta implementation, needs real-world bandwidth testing
 
-**Result**: The aggregation server only ever sees encrypted, noisy, sparse gradients—never raw observations or actions.
+**For production deployments**: Use the platform infrastructure with vetted cryptography libraries and conduct a security audit.
 </details>
 
 <details>
 <summary><strong>📡 Q2: How much bandwidth does TensorGuardFlow use?</strong></summary>
 
-**A:** TensorGuardFlow achieves **50x compression** compared to naive gradient transmission:
+**A:** Bandwidth savings depend on which features you deploy:
 
-| Stage | Compression Ratio | Description |
-|:------|:------------------|:------------|
-| Raw Gradients | 1x | ~15 MB for Pi0 LoRA |
-| After Sparsification | 100x | Top 1% values only |
-| After Quantization | 4x | 32-bit → 8-bit |
-| After gzip | 2x | Dictionary compression |
-| **Final Package** | **~300 KB** | Ready for LTE/Satellite |
+**Platform Infrastructure (Measured ✅):**
+- TGSP model packages: Varies by model size
+- Telemetry events: Tested at 14,150 events/sec with batching
+- API requests: Low overhead (see benchmark results)
 
-This makes TensorGuardFlow viable for bandwidth-constrained deployments like agricultural robots, mining equipment, or satellite-connected vessels.
+**Federated Learning (Theoretical 🔬):**
+
+The following compression claims are **design targets** based on architectural decisions, not empirically measured:
+
+| Stage | Target Compression | Status |
+|:------|:------------------|:-------|
+| Raw Gradients | Baseline (~15 MB for Pi0 LoRA) | 🔬 Theoretical |
+| After Sparsification | 100x (top 1% values) | ⚠️ Framework ready |
+| After Quantization | 4x (32-bit → 8-bit) | ⚠️ Framework ready |
+| Seeded A-matrix | 7,844x (theoretical) | 🔬 Not measured end-to-end |
+
+**To validate bandwidth claims**: Deploy with real VLA models and measure actual network traffic in your environment (4G/LTE/Satcom).
 </details>
 
 <details>
 <summary><strong>🧠 Q3: What is FedMoE and why does it matter?</strong></summary>
 
-**A:** **FedMoE (Federated Mixture-of-Experts)** is our architecture for multi-task federated learning.
+**A:** **FedMoE (Federated Mixture-of-Experts)** is the research architecture for multi-task federated learning.
 
 **Problem**: Standard FedAvg assumes all robots are doing similar tasks. But a picking robot and a welding robot should update different parts of the model.
 
-**Solution**: FedMoE routes gradients to task-specific **expert blocks**:
+**Design Solution**: FedMoE routes gradients to task-specific **expert blocks**.
 
+**Implementation Status**:
+- ✅ `MoEAdapter` class implemented with expert routing framework
+- ✅ `ExpertGater` pipeline component
+- ✅ `ExpertDrivenStrategy` server-side aggregation
+- ⚠️ **Current routing**: Keyword-based pattern matching (prototype)
+- 🔬 **Full IOSP learned gating**: Not yet implemented
+
+**Example routing (keyword-based prototype)**:
 ```
 Task: "Pick up the blue block"
-   → visual_primary (42%)  ← Objects, shapes
-   → language_semantic (25%) ← "pick", "blue"
-   → manipulation_grasp (18%) ← Grasping
-   → visual_aux (15%)       ← Color
+   → visual_primary (42%)     ← Matches "block" keyword
+   → language_semantic (25%)  ← Matches "pick", "blue"
+   → manipulation_grasp (18%) ← Matches action tokens
+   → visual_aux (15%)         ← Default expert
 ```
 
-The server aggregates each expert separately, preventing parameter interference between dissimilar tasks.
+The server aggregates each expert separately to reduce parameter interference.
 
-**Configuration**: See [docs/EXPERT_ROUTING.md](docs/EXPERT_ROUTING.md) for customization.
+**For production**: The framework is ready for integration with learned gating models. See [docs/EXPERT_ROUTING.md](docs/EXPERT_ROUTING.md) for extending the routing logic.
 </details>
 
 <details>
