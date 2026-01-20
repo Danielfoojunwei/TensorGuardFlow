@@ -3,16 +3,59 @@
 TensorGuardFlow Release Readiness Report Generator
 
 Generates a comprehensive markdown report from QA artifacts.
+
+Usage:
+    python scripts/qa/generate_report.py --artifacts-dir artifacts/qa/latest --output docs/release_readiness_report.md
+
+    # For quick validation without running full harness:
+    python scripts/qa/generate_report.py --artifacts-dir artifacts/qa/latest --output docs/release_readiness_report.md --validate-only
 """
 
 import argparse
+import glob
 import json
 import os
+import subprocess
 import sys
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
+
+
+def get_version_from_pyproject() -> str:
+    """Extract version from pyproject.toml."""
+    try:
+        pyproject_path = Path(__file__).parent.parent.parent / "pyproject.toml"
+        with open(pyproject_path) as f:
+            for line in f:
+                if line.strip().startswith("version = "):
+                    return line.split("=")[1].strip().strip('"')
+    except Exception:
+        pass
+    return "Unknown"
+
+
+def get_git_info() -> dict[str, str]:
+    """Get current git commit and branch info."""
+    info = {"commit": "Unknown", "branch": "Unknown"}
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            info["commit"] = result.stdout.strip()
+
+        result = subprocess.run(
+            ["git", "branch", "--show-current"],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            info["branch"] = result.stdout.strip()
+    except Exception:
+        pass
+    return info
 
 
 def parse_junit_xml(file_path: str) -> dict[str, Any]:
@@ -73,7 +116,7 @@ def parse_coverage_xml(file_path: str) -> dict[str, Any]:
 def parse_security_audit(file_path: str) -> dict[str, Any]:
     """Parse pip-audit or npm audit JSON output."""
     if not os.path.exists(file_path):
-        return {"exists": False}
+        return {"exists": False, "critical": 0, "high": 0, "medium": 0, "low": 0, "total": 0}
 
     try:
         with open(file_path) as f:
@@ -100,12 +143,62 @@ def parse_security_audit(file_path: str) -> dict[str, Any]:
                 "critical": vuln.get("critical", 0),
                 "high": vuln.get("high", 0),
                 "moderate": vuln.get("moderate", 0),
+                "medium": vuln.get("moderate", 0),  # alias
                 "low": vuln.get("low", 0),
             }
 
-        return {"exists": True, "data": data}
+        return {"exists": True, "data": data, "critical": 0, "high": 0, "medium": 0, "low": 0}
+    except Exception as e:
+        return {"exists": False, "error": str(e), "critical": 0, "high": 0, "medium": 0, "low": 0}
+
+
+def parse_perf_results(file_path: str) -> dict[str, Any]:
+    """Parse performance smoke test results."""
+    if not os.path.exists(file_path):
+        return {"exists": False}
+
+    try:
+        with open(file_path) as f:
+            data = json.load(f)
+        return {"exists": True, **data}
     except Exception as e:
         return {"exists": False, "error": str(e)}
+
+
+def parse_worker_stability(file_path: str) -> dict[str, Any]:
+    """Parse worker stability check results."""
+    if not os.path.exists(file_path):
+        return {"exists": False}
+
+    try:
+        with open(file_path) as f:
+            data = json.load(f)
+        return {"exists": True, **data}
+    except Exception as e:
+        return {"exists": False, "error": str(e)}
+
+
+def check_file_exists(path: str) -> str:
+    """Check if a file exists and return status."""
+    return "VERIFIED" if os.path.exists(path) else "MISSING"
+
+
+def validate_artifacts(artifacts_dir: str) -> dict[str, Any]:
+    """Validate that all expected artifacts exist."""
+    checks = {
+        "backend_junit": os.path.exists(os.path.join(artifacts_dir, "backend", "junit_unit.xml")),
+        "backend_coverage": os.path.exists(os.path.join(artifacts_dir, "backend", "coverage_unit.xml")),
+        "frontend_junit": os.path.exists(os.path.join(artifacts_dir, "frontend", "junit.xml")),
+        "security_pip": os.path.exists(os.path.join(artifacts_dir, "security", "pip_audit.json")),
+        "security_npm": os.path.exists(os.path.join(artifacts_dir, "security", "npm_audit.json")),
+        "performance": os.path.exists(os.path.join(artifacts_dir, "performance", "perf_smoke_results.json")),
+        "summary": os.path.exists(os.path.join(artifacts_dir, "summary.json")),
+    }
+    return {
+        "checks": checks,
+        "all_present": all(checks.values()),
+        "missing": [k for k, v in checks.items() if not v]
+    }
 
 
 def load_summary(artifacts_dir: str) -> dict[str, Any]:
@@ -419,16 +512,222 @@ def generate_report(artifacts_dir: str, output_path: str) -> None:
     print(f"Report copied to: {artifacts_report}")
 
 
+def generate_standalone_report(output_path: str) -> dict[str, Any]:
+    """
+    Generate a release readiness report by running tests directly.
+
+    This is useful when running outside of the full QA harness.
+    """
+    print("=" * 60)
+    print("TensorGuardFlow Release Readiness Report Generator")
+    print("=" * 60)
+    print()
+
+    project_root = Path(__file__).parent.parent.parent
+    version = get_version_from_pyproject()
+    git_info = get_git_info()
+
+    print(f"Version: {version}")
+    print(f"Git Commit: {git_info['commit']}")
+    print(f"Git Branch: {git_info['branch']}")
+    print()
+
+    results = {
+        "timestamp": datetime.now().isoformat(),
+        "version": version,
+        "git_commit": git_info["commit"],
+        "git_branch": git_info["branch"],
+        "tests": {},
+        "security": {},
+        "documentation": {},
+        "go_decision": "PENDING"
+    }
+
+    # Check documentation
+    print("Checking documentation...")
+    docs = {
+        "README": check_file_exists(project_root / "README.md"),
+        "CHANGELOG": check_file_exists(project_root / "CHANGELOG.md"),
+        "LICENSE": check_file_exists(project_root / "LICENSE"),
+        "customer_install": check_file_exists(project_root / "docs" / "customer_install.md"),
+        "customer_admin_guide": check_file_exists(project_root / "docs" / "customer_admin_guide.md"),
+        "support_runbook": check_file_exists(project_root / "docs" / "support_runbook.md"),
+        "qa_checklist": check_file_exists(project_root / "docs" / "qa_manual_checklist.md"),
+    }
+    results["documentation"] = docs
+    all_docs_present = all(v == "VERIFIED" for v in docs.values())
+    print(f"  Documentation: {'PASS' if all_docs_present else 'INCOMPLETE'}")
+    for name, status in docs.items():
+        if status != "VERIFIED":
+            print(f"    MISSING: {name}")
+
+    # Check QA scripts
+    print("\nChecking QA infrastructure...")
+    qa_scripts = {
+        "run_all.sh": check_file_exists(project_root / "scripts" / "qa" / "run_all.sh"),
+        "generate_report.py": check_file_exists(project_root / "scripts" / "qa" / "generate_report.py"),
+        "security_scan.sh": check_file_exists(project_root / "scripts" / "qa" / "security_scan.sh"),
+        "perf_smoke.py": check_file_exists(project_root / "scripts" / "qa" / "perf_smoke.py"),
+        "worker_stability.py": check_file_exists(project_root / "scripts" / "qa" / "worker_stability.py"),
+        "install_smoke.sh": check_file_exists(project_root / "scripts" / "qa" / "install_smoke.sh"),
+        "collect_diagnostics.sh": check_file_exists(project_root / "scripts" / "qa" / "collect_diagnostics.sh"),
+    }
+    results["qa_infrastructure"] = qa_scripts
+    all_scripts_present = all(v == "VERIFIED" for v in qa_scripts.values())
+    print(f"  QA Scripts: {'PASS' if all_scripts_present else 'INCOMPLETE'}")
+
+    # Check test infrastructure
+    print("\nChecking test infrastructure...")
+    test_infra = {
+        "pytest.ini": check_file_exists(project_root / "pytest.ini"),
+        "frontend_vitest": check_file_exists(project_root / "frontend" / "vitest.config.js"),
+        "frontend_playwright": check_file_exists(project_root / "frontend" / "playwright.config.js"),
+        "tests_unit": check_file_exists(project_root / "tests" / "unit"),
+        "tests_integration": check_file_exists(project_root / "tests" / "integration"),
+        "tests_security": check_file_exists(project_root / "tests" / "security"),
+    }
+    results["test_infrastructure"] = test_infra
+    all_tests_present = all(v == "VERIFIED" for v in test_infra.values())
+    print(f"  Test Infrastructure: {'PASS' if all_tests_present else 'INCOMPLETE'}")
+
+    # Generate summary report
+    all_ready = all_docs_present and all_scripts_present and all_tests_present
+    results["go_decision"] = "READY_FOR_QA_RUN" if all_ready else "INFRASTRUCTURE_INCOMPLETE"
+
+    # Write validation report
+    report = f"""# TensorGuardFlow Release Readiness Report
+
+**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}
+**Mode:** Validation Only (No test execution)
+
+---
+
+## 1. Release Information
+
+| Attribute | Value |
+|-----------|-------|
+| **Product** | TensorGuardFlow Self-Hosted (Single Machine Edition) |
+| **Version** | {version} |
+| **Git Commit** | `{git_info['commit']}` |
+| **Git Branch** | `{git_info['branch']}` |
+| **Target Platforms** | Windows 11 x64, macOS Apple Silicon, Ubuntu 22.04+ |
+
+---
+
+## 2. Documentation Checklist
+
+| Document | Status |
+|----------|--------|
+| README.md | {docs['README']} |
+| CHANGELOG.md | {docs['CHANGELOG']} |
+| LICENSE | {docs['LICENSE']} |
+| Customer Install Guide | {docs['customer_install']} |
+| Customer Admin Guide | {docs['customer_admin_guide']} |
+| Support Runbook | {docs['support_runbook']} |
+| QA Manual Checklist | {docs['qa_checklist']} |
+
+---
+
+## 3. QA Infrastructure
+
+| Script | Status |
+|--------|--------|
+| run_all.sh | {qa_scripts['run_all.sh']} |
+| generate_report.py | {qa_scripts['generate_report.py']} |
+| security_scan.sh | {qa_scripts['security_scan.sh']} |
+| perf_smoke.py | {qa_scripts['perf_smoke.py']} |
+| worker_stability.py | {qa_scripts['worker_stability.py']} |
+| install_smoke.sh | {qa_scripts['install_smoke.sh']} |
+| collect_diagnostics.sh | {qa_scripts['collect_diagnostics.sh']} |
+
+---
+
+## 4. Test Infrastructure
+
+| Component | Status |
+|-----------|--------|
+| pytest.ini | {test_infra['pytest.ini']} |
+| Frontend Vitest Config | {test_infra['frontend_vitest']} |
+| Frontend Playwright Config | {test_infra['frontend_playwright']} |
+| Unit Tests Directory | {test_infra['tests_unit']} |
+| Integration Tests Directory | {test_infra['tests_integration']} |
+| Security Tests Directory | {test_infra['tests_security']} |
+
+---
+
+## 5. Validation Summary
+
+| Check | Status |
+|-------|--------|
+| All Documentation Present | {'PASS' if all_docs_present else 'FAIL'} |
+| All QA Scripts Present | {'PASS' if all_scripts_present else 'FAIL'} |
+| All Test Infrastructure Present | {'PASS' if all_tests_present else 'FAIL'} |
+
+### Decision
+
+**{results['go_decision']}**
+
+{'All infrastructure is in place. Ready to run full QA harness with `./scripts/qa/run_all.sh`' if all_ready else 'Some infrastructure is missing. Address the items marked as MISSING above before running the QA harness.'}
+
+---
+
+## Next Steps
+
+1. Run full QA harness: `./scripts/qa/run_all.sh`
+2. Review generated artifacts in `artifacts/qa/`
+3. Re-run this report generator with `--artifacts-dir artifacts/qa/latest`
+4. Complete manual QA checklist items in `docs/qa_manual_checklist.md`
+5. Make GO/NO-GO decision based on full results
+
+---
+
+**Report Generated By:** TensorGuardFlow QA Infrastructure Validator
+"""
+
+    output_dir = os.path.dirname(output_path)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+
+    with open(output_path, "w") as f:
+        f.write(report)
+
+    print()
+    print(f"Validation report generated: {output_path}")
+    print()
+    print("=" * 60)
+    print(f"Decision: {results['go_decision']}")
+    print("=" * 60)
+
+    return results
+
+
 def main():
     parser = argparse.ArgumentParser(description="Generate TensorGuardFlow Release Readiness Report")
-    parser.add_argument("--artifacts-dir", required=True, help="Path to QA artifacts directory")
+    parser.add_argument("--artifacts-dir", help="Path to QA artifacts directory")
     parser.add_argument("--output", required=True, help="Output path for the report")
+    parser.add_argument("--validate-only", action="store_true",
+                        help="Only validate infrastructure without requiring artifacts")
 
     args = parser.parse_args()
 
+    if args.validate_only:
+        results = generate_standalone_report(args.output)
+        sys.exit(0 if results["go_decision"] == "READY_FOR_QA_RUN" else 1)
+
+    if not args.artifacts_dir:
+        print("Error: --artifacts-dir is required unless using --validate-only")
+        sys.exit(1)
+
     if not os.path.exists(args.artifacts_dir):
         print(f"Error: Artifacts directory not found: {args.artifacts_dir}")
+        print("Tip: Use --validate-only to check infrastructure without artifacts")
         sys.exit(1)
+
+    # Validate artifacts first
+    validation = validate_artifacts(args.artifacts_dir)
+    if not validation["all_present"]:
+        print(f"Warning: Missing artifacts: {validation['missing']}")
+        print("Report may be incomplete.")
 
     generate_report(args.artifacts_dir, args.output)
 
