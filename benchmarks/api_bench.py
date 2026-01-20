@@ -28,7 +28,7 @@ class APIBenchmark:
         try:
             response = await client.post(
                 f"{self.config.url}/auth/token",
-                data={
+                json={
                     "username": self.config.admin_email,
                     "password": self.config.admin_password,
                 },
@@ -87,10 +87,14 @@ class APIBenchmark:
         concurrent: int = 10,
         duration: int = 30,
         warmup: int = 5,
+        use_base_url: bool = False,  # Use base URL instead of API prefix
     ) -> BenchmarkResult:
         """Benchmark a single endpoint."""
         collector = MetricsCollector(name)
-        url = f"{self.config.url}{endpoint}"
+        if use_base_url:
+            url = f"{self.config.base_url}{endpoint}"
+        else:
+            url = f"{self.config.url}{endpoint}"
 
         async def make_request() -> tuple[float, bool, Optional[str]]:
             """Make a single request and return latency, success, error."""
@@ -175,17 +179,18 @@ class APIBenchmark:
                 auth_headers = {"Authorization": f"Bearer {self.token}"}
                 await self.get_or_create_fleet(client)
 
-            # Health endpoint (no auth)
+            # Health endpoint (no auth) - uses base URL, not API prefix
             print("\n[1/6] Benchmarking: GET /health")
             result = await self.bench_endpoint(
                 client,
                 method="GET",
-                endpoint="/status/health",
+                endpoint="/health",
                 name="health_check",
                 description="Health check endpoint - no auth, simple response",
                 concurrent=self.config.concurrent_clients,
                 duration=self.config.duration_seconds,
                 warmup=self.config.warmup_seconds,
+                use_base_url=True,  # Use base URL for health endpoint
             )
             print(format_result_table(result))
             results.append(result)
@@ -198,7 +203,7 @@ class APIBenchmark:
                 endpoint="/auth/token",
                 name="auth_token",
                 description="Authentication - password validation, token generation",
-                data={
+                json_body={
                     "username": self.config.admin_email,
                     "password": self.config.admin_password,
                 },

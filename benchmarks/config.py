@@ -19,7 +19,7 @@ class BenchmarkConfig:
 
     # Authentication
     admin_email: str = os.getenv("BENCH_ADMIN_EMAIL", "admin@tensorguard.local")
-    admin_password: str = os.getenv("BENCH_ADMIN_PASSWORD", "admin123")
+    admin_password: str = os.getenv("BENCH_ADMIN_PASSWORD", "BenchmarkTest123!")
     fleet_api_key: Optional[str] = os.getenv("BENCH_FLEET_API_KEY")
 
     # Load parameters
