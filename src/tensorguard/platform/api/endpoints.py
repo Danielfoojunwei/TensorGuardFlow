@@ -7,11 +7,17 @@ import secrets
 import hashlib
 
 from ..database import get_session
-from ..models.core import Tenant, User, Fleet, Job, UserRole
+from ..models.core import Tenant, User, Fleet, Job, UserRole, OrganizationRole, OrganizationMembership
 from ..models.telemetry_models import FleetDevice, TelemetryStageEvent, StageStatus
-from ..auth import get_current_user, create_access_token, verify_password, get_password_hash, ACCESS_TOKEN_EXPIRE_MINUTES
+from ..auth import (
+    get_current_user, create_access_token, verify_password, get_password_hash,
+    ACCESS_TOKEN_EXPIRE_MINUTES, OrgAuthContext, require_org_role, ensure_fleet_access
+)
 from .identity_endpoints import verify_fleet_auth
 from ...utils.production_gates import is_demo_mode
+
+import logging
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -61,44 +67,84 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
 # --- Tenants ---
 @router.post("/onboarding/init", response_model=Tenant)
 async def init_tenant(name: str, admin_email: str, admin_pass: str, session: Session = Depends(get_session)):
-    """Initialize a new tenant and admin user."""
+    """
+    Initialize a new tenant (organization) and admin user.
+
+    Creates:
+    - New tenant/organization
+    - Admin user with ORG_ADMIN role (legacy)
+    - Organization membership with OWNER role (new RBAC)
+
+    The first user to onboard an organization becomes the OWNER.
+    """
     try:
         # Check if user exists
         existing_user = session.exec(select(User).where(User.email == admin_email)).first()
         if existing_user:
             raise HTTPException(status_code=400, detail="Email already registered")
-            
+
+        # Create tenant
         tenant = Tenant(name=name, plan="Enterprise")
         session.add(tenant)
         session.commit()
         session.refresh(tenant)
-        
+
+        # Create admin user
         user = User(
-            email=admin_email, 
+            email=admin_email,
             hashed_password=get_password_hash(admin_pass),
-            role=UserRole.ORG_ADMIN,
+            role=UserRole.ORG_ADMIN,  # Legacy role
             tenant_id=tenant.id
         )
         session.add(user)
         session.commit()
-        
+        session.refresh(user)
+
+        # Create organization membership with OWNER role
+        membership = OrganizationMembership(
+            user_id=user.id,
+            organization_id=tenant.id,
+            role=OrganizationRole.OWNER,
+            is_accepted=True
+        )
+        session.add(membership)
+        session.commit()
+
         return tenant
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"ERROR in init_tenant: {e}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        session.rollback()
+        import logging
+        logging.getLogger(__name__).error(f"Error in init_tenant: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to create organization")
 
 # --- Fleets ---
 @router.get("/fleets", response_model=List[Fleet])
-async def get_fleets(session: Session = Depends(get_session), current_user: User = Depends(get_current_user)):
-    return session.exec(select(Fleet).where(Fleet.tenant_id == current_user.tenant_id)).all()
+async def get_fleets(
+    auth: OrgAuthContext = Depends(require_org_role(OrganizationRole.READONLY)),
+    session: Session = Depends(get_session)
+):
+    """
+    List all fleets in the organization.
+
+    Required role: READONLY or higher
+    Returns fleets scoped to the authenticated user's organization.
+    """
+    return session.exec(
+        select(Fleet).where(Fleet.tenant_id == auth.organization.id)
+    ).all()
 
 
 @router.get("/fleets/extended")
-async def get_fleets_extended(session: Session = Depends(get_session), current_user: User = Depends(get_current_user)):
+async def get_fleets_extended(
+    auth: OrgAuthContext = Depends(require_org_role(OrganizationRole.READONLY)),
+    session: Session = Depends(get_session)
+):
     """
     Get fleets with extended metrics (device counts, trust scores, region info).
+
+    Required role: READONLY or higher
 
     All metrics are computed from real database data:
     - Device counts from FleetDevice table
@@ -108,7 +154,7 @@ async def get_fleets_extended(session: Session = Depends(get_session), current_u
 
     No random/simulated data in production paths.
     """
-    fleets = session.exec(select(Fleet).where(Fleet.tenant_id == current_user.tenant_id)).all()
+    fleets = session.exec(select(Fleet).where(Fleet.tenant_id == auth.organization.id)).all()
 
     result = []
     now = datetime.utcnow()
@@ -186,7 +232,19 @@ async def get_fleets_extended(session: Session = Depends(get_session), current_u
     return result
 
 @router.post("/fleets", response_model=Dict[str, Any])
-async def create_fleet(name: str, session: Session = Depends(get_session), current_user: User = Depends(get_current_user)):
+async def create_fleet(
+    name: str,
+    auth: OrgAuthContext = Depends(require_org_role(OrganizationRole.OPERATOR)),
+    session: Session = Depends(get_session)
+):
+    """
+    Create a new fleet in the organization.
+
+    Required role: OPERATOR or higher (OPERATOR, ADMIN, OWNER)
+
+    Returns the API key ONCE - it will not be shown again.
+    The caller must securely store this key.
+    """
     import secrets
     import hashlib
     from ..auth import encrypt_api_key
@@ -199,13 +257,18 @@ async def create_fleet(name: str, session: Session = Depends(get_session), curre
 
     fleet = Fleet(
         name=name,
-        tenant_id=current_user.tenant_id,
+        tenant_id=auth.organization.id,
         api_key_hash=key_hash,
         api_key_encrypted=key_encrypted
     )
     session.add(fleet)
     session.commit()
     session.refresh(fleet)
+
+    logger.info(
+        f"Fleet created: id={fleet.id} name={fleet.name} "
+        f"org={auth.organization.id} by user={auth.user.email}"
+    )
 
     # Return the raw key ONLY once
     return {
@@ -215,24 +278,158 @@ async def create_fleet(name: str, session: Session = Depends(get_session), curre
         "instruction": "Save this key! It will not be shown again."
     }
 
+
+@router.post("/fleets/{fleet_id}/rotate-key", response_model=Dict[str, Any])
+async def rotate_fleet_key(
+    fleet_id: str,
+    auth: OrgAuthContext = Depends(require_org_role(OrganizationRole.ADMIN)),
+    session: Session = Depends(get_session)
+):
+    """
+    Rotate a fleet's API key.
+
+    Required role: ADMIN or higher (ADMIN, OWNER)
+
+    This invalidates the old key immediately and generates a new one.
+    Returns the new API key ONCE - it will not be shown again.
+
+    SECURITY: This is a privileged operation that should be audited.
+    """
+    import secrets
+    import hashlib
+    from ..auth import encrypt_api_key
+    from ..models.core import AuditLog
+
+    # Verify fleet exists and belongs to this org
+    fleet = session.get(Fleet, fleet_id)
+    if not fleet or fleet.tenant_id != auth.organization.id:
+        raise HTTPException(status_code=404, detail="Fleet not found")
+
+    # Generate new API key
+    raw_key = f"tg_{secrets.token_hex(16)}"
+    key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+    key_encrypted = encrypt_api_key(raw_key)
+
+    # Update fleet
+    fleet.api_key_hash = key_hash
+    fleet.api_key_encrypted = key_encrypted
+    session.add(fleet)
+
+    # Audit log
+    audit = AuditLog(
+        tenant_id=auth.organization.id,
+        user_id=auth.user.id,
+        action="FLEET_KEY_ROTATE",
+        resource_type="fleet",
+        resource_id=fleet_id,
+        details="{}",
+        success=True
+    )
+    session.add(audit)
+    session.commit()
+
+    logger.info(
+        f"Fleet key rotated: fleet={fleet_id} "
+        f"org={auth.organization.id} by user={auth.user.email}"
+    )
+
+    return {
+        "id": fleet.id,
+        "name": fleet.name,
+        "api_key": raw_key,
+        "instruction": "Save this key! It will not be shown again. The old key is now invalid.",
+        "rotated_at": datetime.utcnow().isoformat()
+    }
+
+
+@router.delete("/fleets/{fleet_id}")
+async def delete_fleet(
+    fleet_id: str,
+    auth: OrgAuthContext = Depends(require_org_role(OrganizationRole.ADMIN)),
+    session: Session = Depends(get_session)
+):
+    """
+    Deactivate a fleet.
+
+    Required role: ADMIN or higher (ADMIN, OWNER)
+
+    This soft-deletes the fleet by setting is_active=False.
+    The fleet's API key will no longer work for authentication.
+    """
+    from ..models.core import AuditLog
+
+    # Verify fleet exists and belongs to this org
+    fleet = session.get(Fleet, fleet_id)
+    if not fleet or fleet.tenant_id != auth.organization.id:
+        raise HTTPException(status_code=404, detail="Fleet not found")
+
+    # Soft delete
+    fleet.is_active = False
+    session.add(fleet)
+
+    # Audit log
+    audit = AuditLog(
+        tenant_id=auth.organization.id,
+        user_id=auth.user.id,
+        action="FLEET_DEACTIVATE",
+        resource_type="fleet",
+        resource_id=fleet_id,
+        details="{}",
+        success=True
+    )
+    session.add(audit)
+    session.commit()
+
+    logger.info(
+        f"Fleet deactivated: fleet={fleet_id} "
+        f"org={auth.organization.id} by user={auth.user.email}"
+    )
+
+    return {"status": "deactivated", "fleet_id": fleet_id}
+
 # --- Jobs ---
 @router.get("/jobs", response_model=List[Job])
-async def get_jobs(session: Session = Depends(get_session), current_user: User = Depends(get_current_user)):
-    # Join with Fleet to check Tenant ID
-    statement = select(Job).join(Fleet).where(Fleet.tenant_id == current_user.tenant_id)
+async def get_jobs(
+    auth: OrgAuthContext = Depends(require_org_role(OrganizationRole.READONLY)),
+    session: Session = Depends(get_session)
+):
+    """
+    List all jobs across fleets in the organization.
+
+    Required role: READONLY or higher
+    """
+    statement = select(Job).join(Fleet).where(Fleet.tenant_id == auth.organization.id)
     return session.exec(statement).all()
 
+
 @router.post("/jobs", response_model=Job)
-async def create_job(fleet_id: str, type: str, config: str, session: Session = Depends(get_session), current_user: User = Depends(get_current_user)):
+async def create_job(
+    fleet_id: str,
+    type: str,
+    config: str,
+    auth: OrgAuthContext = Depends(require_org_role(OrganizationRole.OPERATOR)),
+    session: Session = Depends(get_session)
+):
+    """
+    Create a new job for a fleet.
+
+    Required role: OPERATOR or higher
+    """
     # Verify fleet ownership
     fleet = session.get(Fleet, fleet_id)
-    if not fleet or fleet.tenant_id != current_user.tenant_id:
+    if not fleet or fleet.tenant_id != auth.organization.id:
         raise HTTPException(status_code=404, detail="Fleet not found")
-        
+
     job = Job(fleet_id=fleet_id, type=type, config_json=config, status="pending")
     session.add(job)
     session.commit()
     session.refresh(job)
+
+    logger.info(
+        f"Job created: id={job.id} type={type} fleet={fleet_id} "
+        f"by user={auth.user.email}"
+    )
+
     return job
 
 # --- Attestation & Key Release ---

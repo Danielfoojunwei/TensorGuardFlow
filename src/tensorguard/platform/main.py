@@ -1,13 +1,23 @@
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request, Response, Depends, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from .database import check_db_health, SessionLocal
+from .middleware import (
+    RequestIDMiddleware,
+    StructuredLoggingMiddleware,
+    StandardErrorResponse,
+    ErrorCodes,
+    setup_logging,
+    get_request_id,
+)
 import os
 import logging
 from datetime import datetime
 
+# Setup structured logging early
+setup_logging(os.getenv("TG_LOG_LEVEL", "INFO"))
 logger = logging.getLogger(__name__)
 
 # Environment configuration
@@ -113,6 +123,12 @@ app.add_middleware(
         "X-TG-Fleet-Id", "X-TG-Timestamp", "X-TG-Nonce", "X-TG-Signature",
     ],
 )
+
+# Request ID and structured logging middleware
+# Note: Middleware is executed in reverse order of registration
+# RequestIDMiddleware must be added last so it runs first
+app.add_middleware(StructuredLoggingMiddleware)
+app.add_middleware(RequestIDMiddleware)
 
 # Output structure for dev convenience
 os.makedirs("public", exist_ok=True)
@@ -240,6 +256,123 @@ async def prometheus_metrics():
         content=content,
         media_type="text/plain; charset=utf-8"
     )
+
+
+# --- Debug System Endpoint (Admin Only) ---
+
+from .auth import get_current_user
+from .models.core import User, OrganizationRole, OrganizationMembership
+from .models.telemetry_models import FleetDevice
+
+@app.get("/api/v1/debug/system", tags=["debug"])
+async def debug_system_status(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Debug endpoint for system diagnostics.
+
+    Returns comprehensive system status including:
+    - Database connectivity and pool status
+    - Pending renewal jobs
+    - Telemetry counts
+    - Fleet counts
+    - Worker status (if available)
+
+    Requires: Authenticated user with ADMIN or OWNER role
+    """
+    # Check user role (must be admin or owner)
+    from .auth import get_user_org_role
+    user_role = get_user_org_role(current_user.id, current_user.tenant_id, SessionLocal())
+
+    # Allow if legacy ORG_ADMIN or new OWNER/ADMIN
+    from .models.core import UserRole
+    is_admin = (
+        current_user.role in [UserRole.ORG_ADMIN, UserRole.SITE_ADMIN] or
+        (user_role and user_role in [OrganizationRole.OWNER, OrganizationRole.ADMIN])
+    )
+
+    if not is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Debug endpoint requires admin privileges"
+        )
+
+    request_id = getattr(request.state, "request_id", None) or get_request_id() or "unknown"
+
+    try:
+        with SessionLocal() as session:
+            # Database counts
+            fleet_count = session.exec(select(func.count()).select_from(Fleet)).one()
+            device_count = session.exec(select(func.count()).select_from(FleetDevice)).one()
+            audit_count = session.exec(select(func.count()).select_from(AuditLog)).one()
+            stage_events_count = session.exec(
+                select(func.count()).select_from(TelemetryStageEvent)
+            ).one()
+            system_events_count = session.exec(
+                select(func.count()).select_from(TelemetrySystemEvent)
+            ).one()
+
+            # Pending renewal jobs
+            pending_renewals = session.exec(
+                select(func.count()).select_from(IdentityRenewalJob).where(
+                    IdentityRenewalJob.status.in_([
+                        RenewalJobStatus.PENDING.value,
+                        RenewalJobStatus.RUNNING.value
+                    ])
+                )
+            ).one()
+
+            # Membership count for current org
+            membership_count = session.exec(
+                select(func.count()).select_from(OrganizationMembership).where(
+                    OrganizationMembership.organization_id == current_user.tenant_id
+                )
+            ).one()
+
+        db_health = check_db_health()
+
+        return {
+            "request_id": request_id,
+            "timestamp": datetime.utcnow().isoformat(),
+            "version": "2.3.0",
+            "environment": TG_ENVIRONMENT,
+            "debug": {
+                "database": {
+                    "status": db_health["status"],
+                    "pool_info": db_health.get("pool_info", {}),
+                },
+                "counts": {
+                    "fleets": fleet_count,
+                    "devices": device_count,
+                    "audit_logs": audit_count,
+                    "stage_events": stage_events_count,
+                    "system_events": system_events_count,
+                    "org_memberships": membership_count,
+                },
+                "pending_jobs": {
+                    "renewal_jobs": pending_renewals,
+                },
+                "feature_flags": {
+                    "security_headers_enabled": TG_ENABLE_SECURITY_HEADERS,
+                    "cors_credentials": TG_ALLOW_CREDENTIALS,
+                },
+            },
+            "user": {
+                "email": current_user.email,
+                "role": current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role),
+                "org_role": user_role.value if user_role else None,
+            },
+        }
+    except Exception as exc:
+        logger.error(f"[{request_id}] Debug endpoint error: {exc}", exc_info=True)
+        return StandardErrorResponse.create(
+            code=ErrorCodes.INTERNAL_ERROR,
+            message="Failed to collect debug information",
+            status_code=500,
+            details={"error": str(exc)},
+            request_id=request_id,
+        )
 
 
 # Routes
