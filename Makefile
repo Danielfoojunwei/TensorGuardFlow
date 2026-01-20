@@ -38,6 +38,14 @@ help:
 	@echo "  make docker-prod - Start with docker compose (production)"
 	@echo "  make db-migrate  - Run database migrations (alembic)"
 	@echo ""
+	@echo "Benchmarking:"
+	@echo "  make bench         - Run full performance benchmarks"
+	@echo "  make bench-api     - API latency benchmarks only"
+	@echo "  make bench-ingest  - Telemetry ingest benchmarks only"
+	@echo "  make bench-smoke   - Quick benchmark smoke test"
+	@echo "  make bench-stress  - High-load stress testing"
+	@echo "  make bench-regression - Compare against baseline"
+	@echo ""
 
 # ============================================================================
 # INSTALLATION
@@ -158,13 +166,52 @@ ci: install lint test
 # ============================================================================
 # BENCHMARKING
 # ============================================================================
-bench:
+
+# Run internal microbenchmarks (crypto, privacy, etc.)
+bench-internal:
 	@echo "--- Running TensorGuard Microbenchmarks ---"
 	PYTHONPATH=src python -m tensorguard.bench.cli micro
 	@echo "--- Running Privacy Eval ---"
 	PYTHONPATH=src python -m tensorguard.bench.cli privacy
 	@echo "--- Generating Benchmarking Report ---"
 	PYTHONPATH=src python -m tensorguard.bench.cli report
+
+# Run performance benchmarks (API latency, telemetry throughput)
+bench: bench-api bench-ingest
+	@echo "--- Performance Benchmarks Complete ---"
+	@echo "Results saved to artifacts/benchmarks/"
+
+# API latency benchmarks
+bench-api:
+	@echo "--- Running API Latency Benchmarks ---"
+	@mkdir -p artifacts/benchmarks
+	python -m benchmarks.runner api --scenario standard --output-dir artifacts/benchmarks
+
+# Telemetry ingest throughput benchmarks
+bench-ingest:
+	@echo "--- Running Telemetry Ingest Benchmarks ---"
+	@mkdir -p artifacts/benchmarks
+	python -m benchmarks.runner ingest --scenario standard --output-dir artifacts/benchmarks
+
+# Quick smoke test for benchmarks
+bench-smoke:
+	@echo "--- Running Benchmark Smoke Tests ---"
+	python -m benchmarks.runner all --scenario smoke --output-dir artifacts/benchmarks
+
+# Stress test (high concurrency, long duration)
+bench-stress:
+	@echo "--- Running Stress Benchmarks ---"
+	python -m benchmarks.runner all --scenario stress --output-dir artifacts/benchmarks
+
+# Validate benchmark infrastructure
+bench-validate:
+	@echo "--- Validating Benchmark Setup ---"
+	python -m benchmarks.runner api --duration 5 --concurrent 2 --warmup 1 --output-dir artifacts/benchmarks
+
+# Performance regression test against baseline
+bench-regression:
+	@echo "--- Running Performance Regression Test ---"
+	python -m benchmarks.regression_test --baseline artifacts/benchmarks/benchmark_baseline_20260120.json --latency-threshold 20 --throughput-threshold 20
 
 # ============================================================================
 # QA & RELEASE TESTING
