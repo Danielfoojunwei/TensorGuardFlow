@@ -1,7 +1,7 @@
 # Makefile for TensorGuardFlow
 # Automation for build, test, development, and deployment
 
-.PHONY: install test agent bench clean lint setup ci typecheck dev dev-backend dev-frontend db-init worker docker docker-prod db-migrate help
+.PHONY: install test agent bench clean lint setup ci typecheck dev dev-backend dev-frontend db-init worker docker docker-prod db-migrate help test-backend test-frontend test-e2e test-integration test-security qa qa-quick
 
 # Default target
 all: help
@@ -167,10 +167,44 @@ bench:
 	PYTHONPATH=src python -m tensorguard.bench.cli report
 
 # ============================================================================
+# QA & RELEASE TESTING
+# ============================================================================
+
+# Run full QA harness (generates release readiness report)
+qa:
+	@echo "--- Running Full QA Harness ---"
+	./scripts/qa/run_all.sh
+
+# Run quick QA (skip slow tests, Docker, and performance)
+qa-quick:
+	@echo "--- Running Quick QA Harness ---"
+	./scripts/qa/run_all.sh --quick --skip-docker
+
+# Backend tests with JUnit output
+test-backend:
+	@echo "--- Running Backend Tests with JUnit Output ---"
+	PYTHONPATH=src python -m pytest tests/unit/ tests/integration/ -v --junitxml=artifacts/qa/junit_backend.xml --cov=src/tensorguard --cov-report=xml:artifacts/qa/coverage.xml
+
+# Frontend tests (requires vitest setup)
+test-frontend:
+	@echo "--- Running Frontend Tests ---"
+	cd frontend && npm run test
+
+# E2E tests
+test-e2e:
+	@echo "--- Running E2E Tests ---"
+	PYTHONPATH=src python -m pytest tests/e2e/ -v --junitxml=artifacts/qa/junit_e2e.xml
+
+# Security tests
+test-security:
+	@echo "--- Running Security Tests ---"
+	PYTHONPATH=src python -m pytest tests/security/ -v --junitxml=artifacts/qa/junit_security.xml
+
+# ============================================================================
 # SETUP & CLEANUP
 # ============================================================================
 setup:
-	mkdir -p keys/identity keys/inference keys/aggregation artifacts data
+	mkdir -p keys/identity keys/inference keys/aggregation artifacts data artifacts/qa
 	@echo "--- Directory structure created ---"
 
 clean:
