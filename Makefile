@@ -1,7 +1,7 @@
 # Makefile for TensorGuardFlow
 # Automation for build, test, development, and deployment
 
-.PHONY: install test agent bench clean lint setup ci typecheck dev dev-backend dev-frontend db-init worker docker docker-prod db-migrate help
+.PHONY: install test agent bench clean lint setup ci typecheck dev dev-backend dev-frontend db-init worker docker docker-prod db-migrate help test-backend test-frontend test-e2e test-integration test-security qa qa-quick
 
 # Default target
 all: help
@@ -37,6 +37,14 @@ help:
 	@echo "  make docker     - Start with docker compose (dev mode)"
 	@echo "  make docker-prod - Start with docker compose (production)"
 	@echo "  make db-migrate  - Run database migrations (alembic)"
+	@echo ""
+	@echo "Benchmarking:"
+	@echo "  make bench         - Run full performance benchmarks"
+	@echo "  make bench-api     - API latency benchmarks only"
+	@echo "  make bench-ingest  - Telemetry ingest benchmarks only"
+	@echo "  make bench-smoke   - Quick benchmark smoke test"
+	@echo "  make bench-stress  - High-load stress testing"
+	@echo "  make bench-regression - Compare against baseline"
 	@echo ""
 
 # ============================================================================
@@ -158,7 +166,9 @@ ci: install lint test
 # ============================================================================
 # BENCHMARKING
 # ============================================================================
-bench:
+
+# Run internal microbenchmarks (crypto, privacy, etc.)
+bench-internal:
 	@echo "--- Running TensorGuard Microbenchmarks ---"
 	PYTHONPATH=src python -m tensorguard.bench.cli micro
 	@echo "--- Running Privacy Eval ---"
@@ -166,11 +176,82 @@ bench:
 	@echo "--- Generating Benchmarking Report ---"
 	PYTHONPATH=src python -m tensorguard.bench.cli report
 
+# Run performance benchmarks (API latency, telemetry throughput)
+bench: bench-api bench-ingest
+	@echo "--- Performance Benchmarks Complete ---"
+	@echo "Results saved to artifacts/benchmarks/"
+
+# API latency benchmarks
+bench-api:
+	@echo "--- Running API Latency Benchmarks ---"
+	@mkdir -p artifacts/benchmarks
+	python -m benchmarks.runner api --scenario standard --output-dir artifacts/benchmarks
+
+# Telemetry ingest throughput benchmarks
+bench-ingest:
+	@echo "--- Running Telemetry Ingest Benchmarks ---"
+	@mkdir -p artifacts/benchmarks
+	python -m benchmarks.runner ingest --scenario standard --output-dir artifacts/benchmarks
+
+# Quick smoke test for benchmarks
+bench-smoke:
+	@echo "--- Running Benchmark Smoke Tests ---"
+	python -m benchmarks.runner all --scenario smoke --output-dir artifacts/benchmarks
+
+# Stress test (high concurrency, long duration)
+bench-stress:
+	@echo "--- Running Stress Benchmarks ---"
+	python -m benchmarks.runner all --scenario stress --output-dir artifacts/benchmarks
+
+# Validate benchmark infrastructure
+bench-validate:
+	@echo "--- Validating Benchmark Setup ---"
+	python -m benchmarks.runner api --duration 5 --concurrent 2 --warmup 1 --output-dir artifacts/benchmarks
+
+# Performance regression test against baseline
+bench-regression:
+	@echo "--- Running Performance Regression Test ---"
+	python -m benchmarks.regression_test --baseline artifacts/benchmarks/benchmark_baseline_20260120.json --latency-threshold 20 --throughput-threshold 20
+
+# ============================================================================
+# QA & RELEASE TESTING
+# ============================================================================
+
+# Run full QA harness (generates release readiness report)
+qa:
+	@echo "--- Running Full QA Harness ---"
+	./scripts/qa/run_all.sh
+
+# Run quick QA (skip slow tests, Docker, and performance)
+qa-quick:
+	@echo "--- Running Quick QA Harness ---"
+	./scripts/qa/run_all.sh --quick --skip-docker
+
+# Backend tests with JUnit output
+test-backend:
+	@echo "--- Running Backend Tests with JUnit Output ---"
+	PYTHONPATH=src python -m pytest tests/unit/ tests/integration/ -v --junitxml=artifacts/qa/junit_backend.xml --cov=src/tensorguard --cov-report=xml:artifacts/qa/coverage.xml
+
+# Frontend tests (requires vitest setup)
+test-frontend:
+	@echo "--- Running Frontend Tests ---"
+	cd frontend && npm run test
+
+# E2E tests
+test-e2e:
+	@echo "--- Running E2E Tests ---"
+	PYTHONPATH=src python -m pytest tests/e2e/ -v --junitxml=artifacts/qa/junit_e2e.xml
+
+# Security tests
+test-security:
+	@echo "--- Running Security Tests ---"
+	PYTHONPATH=src python -m pytest tests/security/ -v --junitxml=artifacts/qa/junit_security.xml
+
 # ============================================================================
 # SETUP & CLEANUP
 # ============================================================================
 setup:
-	mkdir -p keys/identity keys/inference keys/aggregation artifacts data
+	mkdir -p keys/identity keys/inference keys/aggregation artifacts data artifacts/qa
 	@echo "--- Directory structure created ---"
 
 clean:
