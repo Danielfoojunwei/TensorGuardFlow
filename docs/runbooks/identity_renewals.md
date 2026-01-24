@@ -4,6 +4,12 @@
 
 This runbook covers certificate renewal operations for the TensorGuard Machine Identity Guard subsystem.
 
+### 5. Troubleshooting & Fail-Closed Scenarios
+If a certificate renewal fails in production:
+1.  **Check Logs**: `grep "Fail-Closed" /var/log/tensorguard.log`
+2.  **Verify liboqs**: Ensure the native library is reachable by the service.
+3.  **Audit Proof**: Check the `Trace ID` in the Platform Dashboard.
+
 ## Prerequisites
 
 - TensorGuard Platform running (`uvicorn tensorguard.platform.main:app`)

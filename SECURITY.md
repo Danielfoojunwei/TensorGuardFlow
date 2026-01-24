@@ -60,27 +60,27 @@ For production deployments:
 
 ### Post-Quantum Cryptography (PQC)
 
-**IMPORTANT**: The PQC implementations in `src/tensorguard/crypto/pqc/` are
-**SIMULATORS ONLY** and provide **NO ACTUAL SECURITY**. They are included for:
+**IMPORTANT**: The PQC implementations in `src/tensorguard/crypto/pqc/` support dual-mode operation:
+- **Production Mode**: Requires `liboqs-python` and the native `liboqs` library. Enforced by default when `TENSORGUARD_PRODUCTION_MODE=true`.
+- **Simulator Mode**: Used for development only. Provides **NO CRYPTOGRAPHIC SECURITY**.
 
-- API compatibility testing
-- Performance benchmarking
-- Integration development
+In production mode, the system will **Fail-Closed** if `liboqs` is missing. To override for research:
+```bash
+export TENSORGUARD_ENABLE_EXPERIMENTAL_CRYPTO=true
+```
 
-For production PQC, integrate with:
-- liboqs (Open Quantum Safe)
-- NIST PQC finalist implementations
-- Hardware-backed PQC when available
+For production PQC, ensure:
+- `liboqs-python` is installed
+- NIST Level 3 parameters are verified for your latency requirements
 
 ### Custom Cryptography
 
 The N2HE (Noise-Tolerant Homomorphic Encryption) implementation in
-`src/tensorguard/core/crypto.py` is a research prototype. For production:
+`src/tensorguard/core/crypto.py` is a research prototype. 
 
-1. Obtain third-party cryptographic audit
-2. Use constant-time implementations
-3. Implement proper side-channel protections
-4. Consider using established libraries (SEAL, OpenFHE)
+**Enforcement**: In production mode, the native N2HE prototype is **BLOCKED** to prevent accidental deployment of unaudited code. Users must:
+1. set `TENSORGUARD_ENABLE_EXPERIMENTAL_CRYPTO=true` to acknowledge the risk.
+2. Integrate with audited libraries (SEAL, OpenFHE) for production use.
 
 ## Serialization Security
 

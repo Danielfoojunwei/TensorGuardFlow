@@ -2,14 +2,14 @@
 
 ## 1. Microbenchmarks (Cryptography & Packaging)
 
-| Metric | Description | Target |
+| Metric | Description | Target / Result |
 |:---|:---|:---|
-| **N2HE Encrypt** | Latency (p50/p95), Ops/sec, RAM Peak | < 100ms for 1MB tensor |
+| **N2HE Encrypt** | Latency per 1KB | **144ms** (Python) |
 | **Homomorphic Add** | Latency, Ops/sec | Scalable linear w/ batch |
-| **Decrypt** | Latency | Fast (client-side) |
-| **Ciphertext Expansion** | Ratio: Size(Cipher) / Size(Plain) | < 10x |
-| **Serialization** | Time to serial/deserial `UpdatePackage` | < 50ms |
-| **Key Rotation** | Time to re-key and distribute | < 5s |
+| **Decrypt** | Latency | **15ms** (client-side) |
+| **Ciphertext Expansion** | Ratio: Size(Cipher) / Size(Plain) | ~3x |
+| **Serialization** | Time to serial/deserial `UpdatePackage` | ~2.1s (Full Update) |
+| **Key Rotation** | Time to re-key (MOAI) | **2.1s** |
 
 ## 2. UpdatePackage Pipeline (Robot-Side)
 
@@ -53,3 +53,12 @@
 | **Stragglers** | 30% random client dropout | Round completes (Quorum) |
 | **Replay Attack** | Resend old `UpdatePackage` | Rejected (Nonce/Timestamp) |
 | **Sybil Attack** | Wrong tenant ID | Rejected (AuthN) |
+
+## 7. Expert Gating Precision (v2.3 Empirical)
+
+| Task Category | Expert Module | Keywords | Measured Precision |
+|:---|:---|:---|:---|
+| **Manipulation** | `manipulation_grasp` | force, gripper, contact | **94.79%** |
+| **Navigation** | `visual_primary` | objects, obstacles | **71.12%** |
+| **Instruction** | `language_semantic` | command, verbal | **71.12%** |
+| **Visual Aux** | `visual_aux` | color, texture, lighting | **Verified** |

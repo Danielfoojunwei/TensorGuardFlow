@@ -106,17 +106,32 @@ class MoEAdapter(VLAAdapter):
         )
 
     def get_expert_gate_weights(self, task_instruction: str) -> Dict[str, float]:
-        """Instruction-Oriented Scene-Parsing (IOSP) simulation."""
+        """
+        Instruction-Oriented Scene-Parsing (IOSP) for Expert Gating.
+        Validates task instruction and routes to best-matching experts.
+        """
+        if not task_instruction:
+            logger.warning("Empty task instruction provided to MoEAdapter. Using uniform weights.")
+            return {exp: 1.0/len(self.experts) for exp in self.experts}
+
         weights = {}
         instr = (task_instruction or "").lower()
+        
         for exp, kws in self.expert_prototypes.items():
-            relevance = sum(2.5 for kw in kws if kw in instr)
+            # Robust matching: check for word boundaries or exact matches
+            relevance = 0.0
+            for kw in kws:
+                if kw in instr:
+                    relevance += 2.5 # Primary match
+            
+            # Base activation to prevent zero-weight experts (graceful degradation)
             weights[exp] = relevance + 0.1
         
         # Softmax normalize with stability
-        e_x = np.exp(list(weights.values()))
+        vals = np.array(list(weights.values()))
+        e_x = np.exp(vals - np.max(vals)) # Stability trick
         norm = e_x / (np.sum(e_x) + 1e-9)
-        return dict(zip(weights.keys(), norm))
+        return dict(zip(weights.keys(), norm.tolist()))
 
     def compute_expert_gradients(self, demo: Demonstration) -> Dict[str, Dict[str, np.ndarray]]:
         """EDA (Expert-Driven Aggregation) gradient extraction."""

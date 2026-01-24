@@ -1,4 +1,10 @@
-# Product Requirement Document: TensorGuard Management Platform
+# Product Requirement Document: TensorGuard Management Platform (v2.3 Production Ready)
+
+## 1. Executive Summary
+The Management Platform is the central nervous system of the TensorGuard fabric. It provides a "Single Pane of Glass" for managing fleets of edge agents, orchestrating model deployments, and visualizing compliance posture. It includes a modern web UI and a comprehensive REST API. 
+
+> [!NOTE]
+> **Production Hardening**: The platform enforces a "Fail-Closed" security policy, blocking deployment if cryptographic integrity cannot be guaranteed via liboqs-native libraries.
 
 ## 1. Executive Summary
 The Management Platform is the central nervous system of the TensorGuard fabric. It provides a "Single Pane of Glass" for managing fleets of edge agents, orchestrating model deployments, and visualizing compliance posture. It includes a modern web UI (Mission Control) and a comprehensive REST API.

@@ -1,7 +1,7 @@
-# TensorGuard: The Unified Trust Fabric for the AI Era
+# TensorGuard v2.3 Pitch: Trust Your Intelligence at the Edge
 
-## The Crisis in AI Security
-Companies are racing to deploy AI to the edge, but the security landscape is fragmented and dangerous.
+## The Vision
+In the next 5 years, every humanoid robot will learn in the field. But they won't learn in the cloud. TensorGuard v2.3 is the **Production Ready** anchor for this future.
 -   **Model Theft:** Proprietary weights are stolen from untrusted edge devices.
 -   **Privacy Leaks:** Inference data is reconstructed from network traffic (Side-Channel Attacks).
 -   **Compliance Nightmares:** No auditable chain of custody for which model ran where and when.

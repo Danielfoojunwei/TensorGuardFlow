@@ -15,6 +15,8 @@ import logging
 from typing import Tuple
 
 from .agility import PostQuantumKEM
+from ...utils.config import settings
+from ...utils.exceptions import CryptographyError
 
 logger = logging.getLogger(__name__)
 
@@ -61,9 +63,36 @@ class Kyber768(PostQuantumKEM):
 
     def __init__(self):
         """Initialize Kyber-768 KEM."""
+<<<<<<< HEAD
         if not _LIBOQS_AVAILABLE:
             raise ImportError(
                 "Kyber768 requires liboqs. Install liboqs-python with the liboqs native library."
+=======
+        self._use_liboqs = _LIBOQS_AVAILABLE
+        self._kem = None
+
+        if self._use_liboqs:
+            try:
+                self._kem = _oqs.KeyEncapsulation("ML-KEM-768")
+                logger.debug("Kyber768 initialized with liboqs ML-KEM-768")
+            except Exception as e:
+                logger.warning(f"Failed to initialize liboqs ML-KEM-768: {e}. Using simulator.")
+                self._use_liboqs = False
+
+        if not self._use_liboqs:
+            if settings.PRODUCTION_MODE and not settings.ENABLE_EXPERIMENTAL_CRYPTO:
+                raise CryptographyError(
+                    "Kyber768: liboqs not available in PRODUCTION MODE. "
+                    "Insecure simulator blocked. Install liboqs-python or set "
+                    "TENSORGUARD_ENABLE_EXPERIMENTAL_CRYPTO=true to override."
+                )
+            
+            warnings.warn(
+                "Kyber768: Using SIMULATOR mode - NO CRYPTOGRAPHIC SECURITY. "
+                "Install liboqs-python for production use.",
+                category=UserWarning,
+                stacklevel=2
+>>>>>>> 9ac05e7 (v2.3 Release: Empirical Research Validation & High-Fidelity FastUMI Benchmarking. (Verified non-theoretical metrics for ML success, bandwidth efficiency, and MoE routing))
             )
         self._kem = _oqs.KeyEncapsulation("ML-KEM-768")
         logger.debug("Kyber768 initialized with liboqs ML-KEM-768")

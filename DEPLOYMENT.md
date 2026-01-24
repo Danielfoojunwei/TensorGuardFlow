@@ -5,6 +5,7 @@ This guide describes how to deploy the TensorGuard Unified Trust Fabric in a pro
 ## 1. Prerequisites
 
 *   **Python 3.10+**: Required for both Control Plane and Agent.
+*   **liboqs-python**: Required for Production PQC Signatures/KEM.
 *   **Operating System**: Linux (Ubuntu 20.04+ recommended) or Windows Server.
 *   **Network**: 
     *   Agents must have HTTPS access to the Control Plane.
@@ -146,3 +147,10 @@ The Identity module will deposit renewed certificates at:
 *   `/var/lib/tensorguard/certs/client.key`
 
 Point your mTLS services (e.g., ROS2 SROS, gRPC) to these paths.
+
+### 5.4. Fail-Closed Security Enforcement
+In production mode (`TENSORGUARD_PRODUCTION_MODE=true`), the SDK will block any cryptographic operations if `liboqs` is missing. 
+To override for development/research only, use:
+```bash
+export TENSORGUARD_ENABLE_EXPERIMENTAL_CRYPTO=true
+```

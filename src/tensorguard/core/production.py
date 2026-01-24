@@ -86,6 +86,7 @@ class OperatingEnvelope:
     enable_canary: bool = True
     enable_rollback: bool = True
     canary_percentage: float = 0.1  # 10% canary rollout
+    circuit_breaker_tripped: bool = False # Production safety: stop all rounds if tripped
 
     def validate(self) -> bool:
         """Validate envelope constraints"""
@@ -105,6 +106,9 @@ class OperatingEnvelope:
 
         if self.canary_percentage < 0 or self.canary_percentage > 1:
             errors.append(f"Canary percentage {self.canary_percentage} must be in [0, 1]")
+
+        if self.circuit_breaker_tripped:
+            errors.append("Circuit breaker is TRIPPED. All operations suspended for safety.")
 
         if errors:
             logger.error(f"Operating envelope validation failed:\n" + "\n".join(f"  - {e}" for e in errors))
@@ -195,6 +199,8 @@ class UpdatePackage:
     - Safe rollback
     """
 
+    SUPPORTED_VERSIONS: List[str] = field(default_factory=lambda: ["2.0.0-fedmoe", "2.1.0-moai", "2.3.0-fastumi"])
+
     # Version and identity
     schema_version: str = "1.0.0"
     package_id: str = field(default_factory=lambda: hashlib.sha256(str(time.time()).encode()).hexdigest()[:16])
@@ -242,6 +248,9 @@ class UpdatePackage:
             "expert_weights": self.expert_weights,
             "tensorguard_version": self.tensorguard_version
         }
+
+        if package_dict["tensorguard_version"] not in self.SUPPORTED_VERSIONS:
+             logger.warning(f"Packaging with unvalidated version: {self.tensorguard_version}")
 
         # Serialize metadata as JSON
         metadata_json = json.dumps(package_dict, sort_keys=True, default=numpy_json_serializer).encode()
@@ -319,6 +328,10 @@ class UpdatePackage:
             expert_weights=package_dict.get("expert_weights", {}),
             delta_tensors=delta_tensors
         )
+
+        if package.tensorguard_version not in cls.SUPPORTED_VERSIONS:
+            raise ValueError(f"Unsupported UpdatePackage version: {package.tensorguard_version}. "
+                             f"Valid versions are: {cls.SUPPORTED_VERSIONS}")
 
         # Reconstruct target map
         if package_dict["target_map"]:

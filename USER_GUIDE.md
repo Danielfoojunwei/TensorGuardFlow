@@ -26,6 +26,11 @@ Monitor real-time adherence to global standards:
 ### 4. Audit Trail
 A live feed of all security-critical system events. Each entry includes a **Trace ID** for complete accountability.
 
+### 5. Expert-Driven Adaptation (IOSP)
+Real-time visualization of how the system parses instructions and routes them to specific "experts" (LoRA adapters).
+- **Gating Confidence**: Percentage agreement between scene-parsing keywords and expert mapping.
+- **Expert Distribution**: Proportional weighting of Visual, Language, and Manipulation blocks.
+
 ---
 
 ## 🛠️ Common Workflows
@@ -45,3 +50,22 @@ When new demonstration data is collected by the robots:
 In the **Vault** tab, you can manual rotate master keys or verify the health of the Certificate Authority.
 > [!NOTE]
 > Most key management is automated; manual intervention is only recommended for emergency decommissioning.
+
+### Configuring Expert Gating (IOSP)
+To optimize performance for specialized tasks, you can customize the keyword mapping for the MoE experts.
+
+1.  Initialize the **MoEAdapter**.
+2.  Define **Expert Prototypes** with semantic keywords.
+
+```python
+from tensorguard.core.adapters import MoEAdapter
+
+adapter = MoEAdapter()
+# View default mapping
+print(adapter.expert_prototypes)
+
+# Example: Custom 'Surgical' expert
+adapter.expert_prototypes["surgical_precision"] = ["incision", "suture", "vessel"]
+```
+
+The system will automatically increase the weighting for the `surgical_precision` block when task instructions contain these keywords.

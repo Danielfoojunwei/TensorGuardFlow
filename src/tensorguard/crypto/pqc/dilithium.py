@@ -15,6 +15,8 @@ import logging
 from typing import Tuple
 
 from .agility import PostQuantumSig
+from ...utils.config import settings
+from ...utils.exceptions import CryptographyError
 
 logger = logging.getLogger(__name__)
 
@@ -60,9 +62,36 @@ class Dilithium3(PostQuantumSig):
 
     def __init__(self):
         """Initialize Dilithium-3 signature scheme."""
+<<<<<<< HEAD
         if not _LIBOQS_AVAILABLE:
             raise ImportError(
                 "Dilithium3 requires liboqs. Install liboqs-python with the liboqs native library."
+=======
+        self._use_liboqs = _LIBOQS_AVAILABLE
+        self._sig = None
+
+        if self._use_liboqs:
+            try:
+                self._sig = _oqs.Signature("ML-DSA-65")
+                logger.debug("Dilithium3 initialized with liboqs ML-DSA-65")
+            except Exception as e:
+                logger.warning(f"Failed to initialize liboqs ML-DSA-65: {e}. Using simulator.")
+                self._use_liboqs = False
+
+        if not self._use_liboqs:
+            if settings.PRODUCTION_MODE and not settings.ENABLE_EXPERIMENTAL_CRYPTO:
+                raise CryptographyError(
+                    "Dilithium3: liboqs not available in PRODUCTION MODE. "
+                    "Insecure simulator blocked. Install liboqs-python or set "
+                    "TENSORGUARD_ENABLE_EXPERIMENTAL_CRYPTO=true to override."
+                )
+            
+            warnings.warn(
+                "Dilithium3: Using SIMULATOR mode - NO CRYPTOGRAPHIC SECURITY. "
+                "Install liboqs-python for production use.",
+                category=UserWarning,
+                stacklevel=2
+>>>>>>> 9ac05e7 (v2.3 Release: Empirical Research Validation & High-Fidelity FastUMI Benchmarking. (Verified non-theoretical metrics for ML success, bandwidth efficiency, and MoE routing))
             )
         self._sig = _oqs.Signature("ML-DSA-65")
         logger.debug("Dilithium3 initialized with liboqs ML-DSA-65")

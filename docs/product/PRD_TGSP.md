@@ -1,7 +1,11 @@
-# Product Requirement Document: TensorGuard Security Profile (TGSP)
+# Product Requirement Document: TensorGuard Secure Package - TGSP (v1.2 Spec / v2.3 Ready)
 
 ## 1. Executive Summary
-TGSP is the standard interchange format for secure AI models within the TensorGuard ecosystem. It replaces raw model files with an encrypted, authenticated, and policy-wrapped container. It ensures that models can only be opened by authorized agents and that their integrity is guaranteed.
+The TensorGuard Secure Package (TGSP) is the standardized container format for distributing machine learning models to untrusted edge devices. It ensures that models are encrypted at rest, verified for integrity before execution, and only decryptable by authorized devices.
+
+> [!NOTE]
+> **Versioning Enforcement**: v2.3 of the SDK strictly enforces the v1.2 TGSP specification to prevent downgrade attacks.
+It ensures that models can only be opened by authorized agents and that their integrity is guaranteed.
 
 ## 2. Target Persona
 -   **AI Engineer:** Wants to package models easily (`tgsp pack`) without learning complex crypto.

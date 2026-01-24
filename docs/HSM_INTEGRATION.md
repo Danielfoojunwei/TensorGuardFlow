@@ -1,5 +1,11 @@
 # TensorGuard Enterprise Key Management (HSM Integration)
 
+### 1. Unified Trust Fabric Configuration
+To enable cloud-based KMS for your fleet, you must first ensure all nodes are running TensorGuard v2.3 with `liboqs` installed.
+
+> [!IMPORTANT]
+> **Production Key Management**: In production, the system will block initialization if only software-simulated keys are found without the `liboqs` native library.
+
 This guide documents how to integrate TensorGuard with Hardware Security Modules (HSMs) and cloud-based Key Management Services (KMS) for enterprise deployments.
 
 ## Overview

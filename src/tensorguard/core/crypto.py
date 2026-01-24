@@ -417,6 +417,14 @@ class N2HEEncryptor:
         self._usage_count = 0
         self._max_uses = settings.MAX_KEY_USES
         
+        if settings.PRODUCTION_MODE and not settings.ENABLE_EXPERIMENTAL_CRYPTO:
+            raise CryptographyError(
+                "N2HE: Research prototype encryption used in PRODUCTION MODE. "
+                "This implementation is NOT AUDITED and lacks formal security proofs. "
+                "Insecure crypto blocked. Use Microsoft SEAL or OpenFHE for production, "
+                "or set TENSORGUARD_ENABLE_EXPERIMENTAL_CRYPTO=true to override."
+            )
+
         if key_path and Path(key_path).exists():
             self._ctx.load_key(key_path)
         else:

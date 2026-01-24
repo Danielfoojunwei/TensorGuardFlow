@@ -42,8 +42,10 @@ class TensorGuardSettings(BaseSettings):
     # ==========================================================================
     # GENERAL
     # ==========================================================================
-    ENVIRONMENT: str = Field(default="development", description="Runtime environment: development, staging, production")
+    ENVIRONMENT: str = Field(default="production", description="Runtime environment: development, staging, production")
     LOG_LEVEL: str = Field(default="INFO", description="Logging level: DEBUG, INFO, WARNING, ERROR")
+    PRODUCTION_MODE: bool = Field(default=True, description="Enable production enforcement mode")
+    ENABLE_EXPERIMENTAL_CRYPTO: bool = Field(default=False, description="Allow research N2HE in production (OVERRIDE ONLY)")
 
     # ==========================================================================
     # SECURITY

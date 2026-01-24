@@ -1,7 +1,15 @@
-# Product Requirement Document: TensorGuard Edge Agent
+# Product Requirement Document: TensorGuard Edge Agent (v2.3)
 
 ## 1. Executive Summary
+<<<<<<< HEAD
 The Edge Agent is the lightweight, secure runtime that lives on robotic end-devices (Jetson, AgX, Windows IoT). It is responsible for Local Training, Model Inference, and enforcing Security Policy.
+=======
+The Edge Agent is the locally deployed component of the TensorGuard fabric. It provides a secure enclave for model execution, managing identity, networking, and cryptographic integrity at the robotic edge. It is designed to run on resource-constrained hardware (NVIDIA Jetson) while providing enterprise-grade security.
+
+> [!IMPORTANT]
+> **Production Mandatory**: In production mode, the agent requires `liboqs-python` for signed updates. Fail-Closed enforcement is enabled by default.
+ pulling/decrypting TGSP packages, and enforcing privacy policies on network traffic.
+>>>>>>> 9ac05e7 (v2.3 Release: Empirical Research Validation & High-Fidelity FastUMI Benchmarking. (Verified non-theoretical metrics for ML success, bandwidth efficiency, and MoE routing))
 
 ## 2. Core Features
 
