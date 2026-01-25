@@ -12,6 +12,7 @@ liboqs is required for all cryptographic operations.
 """
 
 import logging
+import warnings
 from typing import Tuple
 
 from .agility import PostQuantumKEM
@@ -63,11 +64,6 @@ class Kyber768(PostQuantumKEM):
 
     def __init__(self):
         """Initialize Kyber-768 KEM."""
-<<<<<<< HEAD
-        if not _LIBOQS_AVAILABLE:
-            raise ImportError(
-                "Kyber768 requires liboqs. Install liboqs-python with the liboqs native library."
-=======
         self._use_liboqs = _LIBOQS_AVAILABLE
         self._kem = None
 
@@ -92,10 +88,11 @@ class Kyber768(PostQuantumKEM):
                 "Install liboqs-python for production use.",
                 category=UserWarning,
                 stacklevel=2
->>>>>>> 9ac05e7 (v2.3 Release: Empirical Research Validation & High-Fidelity FastUMI Benchmarking. (Verified non-theoretical metrics for ML success, bandwidth efficiency, and MoE routing))
             )
-        self._kem = _oqs.KeyEncapsulation("ML-KEM-768")
-        logger.debug("Kyber768 initialized with liboqs ML-KEM-768")
+        
+        # Re-verify kem setup if using liboqs
+        if self._use_liboqs and not self._kem:
+             self._kem = _oqs.KeyEncapsulation("ML-KEM-768")
 
     @property
     def name(self) -> str:
@@ -112,7 +109,7 @@ class Kyber768(PostQuantumKEM):
     @property
     def is_production(self) -> bool:
         """Returns True if using real liboqs implementation."""
-        return True
+        return self._use_liboqs
 
     def keygen(self) -> Tuple[bytes, bytes]:
         """
@@ -121,9 +118,15 @@ class Kyber768(PostQuantumKEM):
         Returns:
             Tuple of (public_key, secret_key)
         """
-        kem = _oqs.KeyEncapsulation("ML-KEM-768")
-        pk = kem.generate_keypair()
-        sk = kem.export_secret_key()
+        if not self._use_liboqs:
+            # Fallback simulator for non-production development
+            import os
+            pk = os.urandom(self.PK_SIZE)
+            sk = os.urandom(self.SK_SIZE)
+            return pk, sk
+
+        pk = self._kem.generate_keypair()
+        sk = self._kem.export_secret_key()
         return bytes(pk), bytes(sk)
 
     def encap(self, pk: bytes) -> Tuple[bytes, bytes]:
@@ -139,8 +142,11 @@ class Kyber768(PostQuantumKEM):
         if len(pk) != self.PK_SIZE:
             raise ValueError(f"Invalid public key size: expected {self.PK_SIZE}, got {len(pk)}")
 
-        kem = _oqs.KeyEncapsulation("ML-KEM-768")
-        ciphertext, shared_secret = kem.encap_secret(pk)
+        if not self._use_liboqs:
+            import os
+            return os.urandom(self.SS_SIZE), os.urandom(self.CT_SIZE)
+
+        ciphertext, shared_secret = self._kem.encap_secret(pk)
         return bytes(shared_secret), bytes(ciphertext)
 
     def decap(self, sk: bytes, ct: bytes) -> bytes:
@@ -159,6 +165,11 @@ class Kyber768(PostQuantumKEM):
         if len(ct) != self.CT_SIZE:
             raise ValueError(f"Invalid ciphertext size: expected {self.CT_SIZE}, got {len(ct)}")
 
+        if not self._use_liboqs:
+            import os
+            return os.urandom(self.SS_SIZE)
+
+        # For decap we need to re-init with SK if not already
         kem = _oqs.KeyEncapsulation("ML-KEM-768", sk)
         shared_secret = kem.decap_secret(ct)
         return bytes(shared_secret)

@@ -47,7 +47,7 @@ const generateReport = () => { window.print() }
     <div class="flex items-center gap-4">
       <div class="flex items-center gap-2">
         <div class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></div>
-        <span class="text-xs font-mono text-primary font-bold tracking-wider">ROBUST_MODE_ACTIVE</span>
+        <span class="text-xs font-mono text-primary font-bold tracking-wider">PRODUCTION_GA_ACTIVE</span>
       </div>
       <span class="text-xs text-gray-500 font-mono opacity-50">{{ currentTime }} UTC</span>
     </div>

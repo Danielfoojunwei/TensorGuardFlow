@@ -9,6 +9,11 @@ import ModelsWorkbench from './components/ModelsWorkbench.vue'
 import OperationsCenter from './components/OperationsCenter.vue'
 import SecurityCenter from './components/SecurityCenter.vue'
 import GlobalSettings from './components/GlobalSettings.vue'
+import AuthCenter from './components/AuthCenter.vue'
+
+// Auth state
+const isAuthenticated = ref(!!localStorage.getItem('auth_token'))
+const userEmail = ref(localStorage.getItem('auth_user') || '')
 
 // Main navigation state
 const activeTab = ref('dashboard')
@@ -20,6 +25,13 @@ const securityTab = ref('overview')
 
 // Handle navigation events from child components
 const handleNavigate = (target) => {
+  if (target === 'signout') {
+    localStorage.removeItem('auth_token')
+    localStorage.removeItem('auth_user')
+    isAuthenticated.value = false
+    return
+  }
+  
   if (typeof target === 'object') {
     activeTab.value = target.page
     if (target.tab) {
@@ -39,55 +51,65 @@ const handleNavigate = (target) => {
     activeTab.value = target
   }
 }
+
+const handleAuthenticated = (email) => {
+  userEmail.value = email
+  isAuthenticated.value = true
+}
 </script>
 
 <template>
   <div class="flex h-screen bg-background text-secondary overflow-hidden">
-    <!-- Sidebar -->
-    <Sidebar :activeTab="activeTab" @update:activeTab="handleNavigate" />
+    <!-- Auth Gate -->
+    <AuthCenter v-if="!isAuthenticated" @authenticated="handleAuthenticated" />
 
-    <!-- Main Content -->
-    <div class="flex-1 flex flex-col ml-64 transition-all duration-300">
-      <Header />
+    <template v-else>
+      <!-- Sidebar -->
+      <Sidebar :activeTab="activeTab" @update:activeTab="handleNavigate" />
 
-      <main class="flex-1 overflow-hidden relative">
-        <!-- Content Switcher -->
-        <transition name="fade" mode="out-in">
-          <!-- Command Center (Dashboard) -->
-          <div v-if="activeTab === 'dashboard'" class="h-full overflow-y-auto">
-            <CommandCenter @navigate="handleNavigate" />
-          </div>
+      <!-- Main Content -->
+      <div class="flex-1 flex flex-col ml-64 transition-all duration-300">
+        <Header />
 
-          <!-- Models Workbench -->
-          <div v-else-if="activeTab === 'models'" class="h-full overflow-hidden">
-            <ModelsWorkbench :initialTab="modelTab" @navigate="handleNavigate" />
-          </div>
-
-          <!-- Operations Center -->
-          <div v-else-if="activeTab === 'operations'" class="h-full overflow-hidden">
-            <OperationsCenter :initialTab="operationsTab" @navigate="handleNavigate" />
-          </div>
-
-          <!-- Security Center -->
-          <div v-else-if="activeTab === 'security'" class="h-full overflow-hidden">
-            <SecurityCenter :initialTab="securityTab" @navigate="handleNavigate" />
-          </div>
-
-          <!-- Settings -->
-          <div v-else-if="activeTab === 'settings'" class="h-full overflow-y-auto p-6">
-            <GlobalSettings />
-          </div>
-
-          <!-- Fallback -->
-          <div v-else class="h-full overflow-y-auto p-6 flex items-center justify-center">
-            <div class="text-gray-500 text-center">
-              <div class="text-4xl mb-4">404</div>
-              <div>View not found: {{ activeTab }}</div>
+        <main class="flex-1 overflow-hidden relative">
+          <!-- Content Switcher -->
+          <transition name="fade" mode="out-in">
+            <!-- Command Center (Dashboard) -->
+            <div v-if="activeTab === 'dashboard'" class="h-full overflow-y-auto">
+              <CommandCenter @navigate="handleNavigate" />
             </div>
-          </div>
-        </transition>
-      </main>
-    </div>
+
+            <!-- Models Workbench -->
+            <div v-else-if="activeTab === 'models'" class="h-full overflow-hidden">
+              <ModelsWorkbench :initialTab="modelTab" @navigate="handleNavigate" />
+            </div>
+
+            <!-- Operations Center -->
+            <div v-else-if="activeTab === 'operations'" class="h-full overflow-hidden">
+              <OperationsCenter :initialTab="operationsTab" @navigate="handleNavigate" />
+            </div>
+
+            <!-- Security Center -->
+            <div v-else-if="activeTab === 'security'" class="h-full overflow-hidden">
+              <SecurityCenter :initialTab="securityTab" @navigate="handleNavigate" />
+            </div>
+
+            <!-- Settings -->
+            <div v-else-if="activeTab === 'settings'" class="h-full overflow-y-auto p-6">
+              <GlobalSettings />
+            </div>
+
+            <!-- Fallback -->
+            <div v-else class="h-full overflow-y-auto p-6 flex items-center justify-center">
+              <div class="text-gray-500 text-center">
+                <div class="text-4xl mb-4">404</div>
+                <div>View not found: {{ activeTab }}</div>
+              </div>
+            </div>
+          </transition>
+        </main>
+      </div>
+    </template>
   </div>
 </template>
 

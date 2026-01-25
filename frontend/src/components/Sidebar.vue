@@ -60,7 +60,7 @@ const navItems = [
       </div>
       <div>
         <span class="font-bold text-white text-sm">TensorGuard</span>
-        <div class="text-[10px] text-gray-500">Flow v2.1</div>
+        <div class="text-[10px] text-gray-500">Flow v2.3 GA</div>
       </div>
     </div>
 

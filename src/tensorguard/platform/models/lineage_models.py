@@ -30,8 +30,8 @@ class ModelVersion(SQLModel, table=True):
     """
     __tablename__ = "model_version"
     __table_args__ = (
-        Index('ix_model_version_tenant_tag', 'tenant_id', 'tag'),
-        Index('ix_model_version_status', 'tenant_id', 'status'),
+        Index('ix_model_version_tenant_tag_composite', 'tenant_id', 'tag'),
+        Index('ix_model_version_tenant_status_composite', 'tenant_id', 'status'),
     )
 
     id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)

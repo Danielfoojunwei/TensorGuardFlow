@@ -45,6 +45,20 @@ const rotationSchedule = ref([])
 const auditLogs = ref([])
 const complianceScore = ref(95)
 
+// Modal states
+const showPolicyModal = ref(false)
+const showAddEndpointModal = ref(false)
+
+const newPolicy = ref({
+    name: '',
+    max_validity_days: 90
+})
+
+const newEndpoint = ref({
+    hostname: '',
+    type: 'edge-node'
+})
+
 const loading = ref(true)
 
 const fetchData = async () => {
@@ -97,6 +111,38 @@ const fetchData = async () => {
         console.error('Failed to fetch security data', e)
     }
     loading.value = false
+}
+
+const createPolicy = async () => {
+    try {
+        const res = await fetch('/api/v1/identity/policies', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newPolicy.value)
+        })
+        if (res.ok) {
+            showPolicyModal.value = false
+            await fetchData()
+        }
+    } catch (e) {
+        console.error("Failed to create policy", e)
+    }
+}
+
+const createEndpoint = async () => {
+    try {
+        const res = await fetch('/api/v1/identity/inventory/endpoints', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newEndpoint.value)
+        })
+        if (res.ok) {
+            showAddEndpointModal.value = false
+            await fetchData()
+        }
+    } catch (e) {
+        console.error("Failed to create endpoint", e)
+    }
 }
 
 const getExpiryColor = (days) => {
@@ -262,7 +308,7 @@ onMounted(fetchData)
       <div v-else-if="activeTab === 'identity'" class="h-full overflow-y-auto p-6">
         <div class="flex items-center justify-between mb-6">
           <h2 class="text-lg font-semibold text-white">Certificate Inventory</h2>
-          <button class="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg font-medium flex items-center gap-2">
+          <button @click="showAddEndpointModal = true" class="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg font-medium flex items-center gap-2">
             <Plus class="w-4 h-4" /> Add Endpoint
           </button>
         </div>
@@ -345,7 +391,7 @@ onMounted(fetchData)
       <div v-else-if="activeTab === 'policy'" class="h-full overflow-y-auto p-6">
         <div class="flex items-center justify-between mb-6">
           <h2 class="text-lg font-semibold text-white">Certificate Policies</h2>
-          <button class="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg font-medium flex items-center gap-2">
+          <button @click="showPolicyModal = true" class="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg font-medium flex items-center gap-2">
             <Plus class="w-4 h-4" /> New Policy
           </button>
         </div>
@@ -407,6 +453,74 @@ onMounted(fetchData)
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- Create Policy Modal -->
+    <div v-if="showPolicyModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div class="bg-[#0d1117] border border-[#30363d] rounded-xl w-full max-w-lg overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200">
+        <div class="px-6 py-4 border-b border-[#30363d] flex items-center justify-between bg-[#161b22]">
+          <h3 class="font-bold text-white">Create Security Policy</h3>
+          <button @click="showPolicyModal = false" class="text-gray-500 hover:text-white transition-colors">
+            <Plus class="w-5 h-5 rotate-45" />
+          </button>
+        </div>
+        <div class="p-6 space-y-4">
+          <div class="space-y-1">
+            <label class="text-[10px] font-bold text-gray-500 uppercase">Policy Name</label>
+            <input v-model="newPolicy.name" type="text" placeholder="e.g. strict-pqc-tls" class="w-full bg-[#161b22] border border-[#30363d] rounded p-2 text-sm text-white focus:border-primary/50 outline-none" />
+          </div>
+          <div class="space-y-1">
+            <label class="text-[10px] font-bold text-gray-500 uppercase">Max Validity (Days)</label>
+            <input v-model.number="newPolicy.max_validity_days" type="number" class="w-full bg-[#161b22] border border-[#30363d] rounded p-2 text-sm text-white focus:border-primary/50 outline-none" />
+          </div>
+          <div class="p-4 bg-orange-500/5 border border-orange-500/20 rounded-lg">
+            <div class="flex items-center gap-2 text-orange-500 mb-1">
+              <Shield class="w-4 h-4" />
+              <span class="text-xs font-bold uppercase">GA Security Guard</span>
+            </div>
+            <p class="text-[11px] text-gray-400">All new GA policies enforce PQC-signed identity by default to meet v2.3 compliance standards.</p>
+          </div>
+        </div>
+        <div class="px-6 py-4 bg-[#161b22] border-t border-[#30363d] flex justify-end gap-3">
+          <button @click="showPolicyModal = false" class="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white transition-colors">Cancel</button>
+          <button @click="createPolicy" class="px-4 py-2 bg-primary text-white text-sm font-bold rounded hover:bg-primary/90 transition-colors">Generate Policy</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Endpoint Modal -->
+    <div v-if="showAddEndpointModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div class="bg-[#0d1117] border border-[#30363d] rounded-xl w-full max-w-lg overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200">
+        <div class="px-6 py-4 border-b border-[#30363d] flex items-center justify-between bg-[#161b22]">
+          <h3 class="font-bold text-white">Add Security Endpoint</h3>
+          <button @click="showAddEndpointModal = false" class="text-gray-500 hover:text-white transition-colors">
+            <Plus class="w-5 h-5 rotate-45" />
+          </button>
+        </div>
+        <div class="p-6 space-y-4">
+          <div class="space-y-1">
+            <label class="text-[10px] font-bold text-gray-500 uppercase">Endpoint Hostname</label>
+            <input v-model="newEndpoint.hostname" type="text" placeholder="e.g. edge-agent-01.local" class="w-full bg-[#161b22] border border-[#30363d] rounded p-2 text-sm text-white focus:border-primary/50 outline-none" />
+          </div>
+          <div class="space-y-1">
+            <label class="text-[10px] font-bold text-gray-500 uppercase">Node Type</label>
+            <select v-model="newEndpoint.type" class="w-full bg-[#161b22] border border-[#30363d] rounded p-2 text-sm text-white focus:border-primary/50 outline-none">
+              <option value="edge-node">Edge Node (Humanoid)</option>
+              <option value="gateway">Fleet Gateway</option>
+              <option value="hsm">Hardware Security Module</option>
+            </select>
+          </div>
+          <div class="p-3 bg-blue-500/5 border border-blue-500/20 rounded-md flex gap-3">
+             <Lock class="w-5 h-5 text-blue-500 shrink-0" />
+             <div class="text-[11px] text-gray-400">
+                Adding an endpoint triggers an automated mTLS certificate request via the GA Machine Identity workflow.
+             </div>
+          </div>
+        </div>
+        <div class="px-6 py-4 bg-[#161b22] border-t border-[#30363d] flex justify-end gap-3">
+          <button @click="showAddEndpointModal = false" class="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white transition-colors">Cancel</button>
+          <button @click="createEndpoint" class="px-4 py-2 bg-primary text-white text-sm font-bold rounded hover:bg-primary/90 transition-colors">Register Endpoint</button>
+        </div>
     </div>
   </div>
 </template>

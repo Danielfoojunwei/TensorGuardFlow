@@ -147,3 +147,23 @@ async def add_evidence(expert_id: str, evidence_type: str, value: Dict[str, Any]
     session.commit()
     session.refresh(evidence)
     return evidence
+
+@router.put("/experts/{expert_id}/gating", response_model=FedMoEExpert)
+async def update_expert_gating(
+    expert_id: str, 
+    config: Dict[str, Any], 
+    session: Session = Depends(get_session), 
+    current_user: User = Depends(get_current_user)
+):
+    """Update IOSP/Gating configuration for an expert."""
+    expert = session.get(FedMoEExpert, expert_id)
+    if not expert or expert.tenant_id != current_user.tenant_id:
+        raise HTTPException(status_code=404, detail="Expert not found")
+    
+    expert.gating_config = config
+    expert.updated_at = datetime.utcnow()
+    
+    session.add(expert)
+    session.commit()
+    session.refresh(expert)
+    return expert

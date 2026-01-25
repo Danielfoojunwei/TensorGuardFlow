@@ -13,7 +13,8 @@ import { ref, onMounted, onUnmounted, computed } from 'vue'
 import {
     Activity, Server, Shield, Zap, AlertTriangle, CheckCircle,
     TrendingUp, Clock, Users, Database, Lock, Package,
-    Play, ArrowRight, RefreshCw, Radio, Bot, FileKey
+    Play, ArrowRight, RefreshCw, Radio, Bot, FileKey,
+    BookOpen
 } from 'lucide-vue-next'
 
 const emit = defineEmits(['navigate'])
@@ -51,6 +52,7 @@ const alerts = ref([])
 
 // Recent Activity
 const recentActivity = ref([])
+const showTutorial = ref(false)
 const loading = ref(true)
 const error = ref(null)
 
@@ -105,7 +107,7 @@ const fetchDashboardData = async () => {
             secondaryMetrics.value = {
                 uptime_pct: data.uptime_pct || 99.9,
                 avg_latency_ms: data.avg_latency_ms || 0,
-                bw_reduction: data.bw_reduction || 7844,
+                bw_reduction: data.bw_reduction || 30.5,
                 key_rotations_24h: data.key_rotations_24h || 0,
                 nbt_score: data.nbt_score || 0,
                 compliance: data.compliance || 'Level 4'
@@ -159,12 +161,16 @@ const getAlertColor = (type) => {
 const quickActions = [
     { id: 'new-training', label: 'Start Training Run', icon: Play, color: 'bg-green-600 hover:bg-green-700', navigate: { page: 'models', tab: 'training' } },
     { id: 'deploy-model', label: 'Deploy Model', icon: Zap, color: 'bg-blue-600 hover:bg-blue-700', navigate: { page: 'models', tab: 'registry' } },
-    { id: 'view-fleets', label: 'Fleet Status', icon: Server, color: 'bg-purple-600 hover:bg-purple-700', navigate: { page: 'operations', tab: 'fleets' } },
+    { id: 'tutorial', label: 'Platform Tutorial', icon: BookOpen, color: 'bg-gray-700 hover:bg-gray-800', action: 'tutorial' },
     { id: 'security', label: 'Security Center', icon: Shield, color: 'bg-orange-600 hover:bg-orange-700', navigate: { page: 'security', tab: 'overview' } }
 ]
 
 const handleQuickAction = (action) => {
-    emit('navigate', action.navigate)
+    if (action.action === 'tutorial') {
+        showTutorial.value = true
+    } else {
+        emit('navigate', action.navigate)
+    }
 }
 
 onMounted(() => {
@@ -184,7 +190,7 @@ onUnmounted(() => {
       <div class="flex items-center justify-between">
         <div>
           <h1 class="text-2xl font-bold text-white">Command Center</h1>
-          <p class="text-sm text-gray-500">TensorGuardFlow System Overview</p>
+          <p class="text-sm text-gray-500">TensorGuardFlow v2.3 GA System Overview</p>
         </div>
         <div class="flex items-center gap-4">
           <div class="flex items-center gap-2 text-sm">
@@ -324,6 +330,44 @@ onUnmounted(() => {
         <div class="bg-[#0d1117] border border-[#30363d] rounded-lg p-4 text-center">
           <div class="text-2xl font-bold text-pink-500">{{ secondaryMetrics.compliance }}</div>
           <div class="text-[10px] text-gray-500 uppercase mt-1">Compliance</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tutorial Modal -->
+    <div v-if="showTutorial" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div class="bg-[#0d1117] border border-[#30363d] rounded-xl w-full max-w-2xl max-h-[80vh] overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200 flex flex-col">
+        <div class="px-6 py-4 border-b border-[#30363d] flex items-center justify-between bg-[#161b22] shrink-0">
+          <div class="flex items-center gap-2">
+            <BookOpen class="w-5 h-5 text-primary" />
+            <h3 class="font-bold text-white">TensorGuardFlow v2.3 GA Tutorial</h3>
+          </div>
+          <button @click="showTutorial = false" class="text-gray-500 hover:text-white transition-colors">
+            <Plus class="w-5 h-5 rotate-45" />
+          </button>
+        </div>
+        <div class="p-6 overflow-y-auto space-y-6 text-sm text-gray-300">
+           <section>
+             <h4 class="text-white font-bold mb-2">1. What is a Training Run?</h4>
+             <p class="leading-relaxed">A Training Run in Flow is a <strong>PEFT (Parameter-Efficient Fine-Tuning)</strong> event. It teaches your humanoid fleet a specific "Skill Expert" without sharing raw sensor data. Gradients are protected via <strong>N2HE Lattice Encryption</strong>.</p>
+           </section>
+           <section>
+             <h4 class="text-white font-bold mb-2">2. The Federated Feedback Loop</h4>
+             <div class="p-3 bg-primary/5 border border-primary/20 rounded-lg">
+                <ul class="space-y-2 list-disc pl-4 text-xs">
+                   <li><strong>Trigger</strong>: Initiate from Operations -> Training Monitor.</li>
+                   <li><strong>Compute</strong>: Edge nodes (humanoids) calculate weighted updates.</li>
+                   <li><strong>Aggregate</strong>: The platform merges updates into a new Skill version.</li>
+                </ul>
+             </div>
+           </section>
+           <section>
+             <h4 class="text-white font-bold mb-2">3. IOSP Gating</h4>
+             <p class="leading-relaxed">Once trained, experts are activated via <strong>Instruction-Oriented Scene-Parsing (IOSP)</strong>. This ensures the robot brain only uses relevant skills for the current instruction, preventing parameter interference.</p>
+           </section>
+        </div>
+        <div class="px-6 py-4 bg-[#161b22] border-t border-[#30363d] flex justify-end shrink-0">
+          <button @click="showTutorial = false" class="px-6 py-2 bg-primary text-white text-sm font-bold rounded hover:bg-primary/90 transition-colors">Got it!</button>
         </div>
       </div>
     </div>

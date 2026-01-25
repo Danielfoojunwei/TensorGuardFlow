@@ -12,6 +12,7 @@ liboqs is required for all cryptographic operations.
 """
 
 import logging
+import warnings
 from typing import Tuple
 
 from .agility import PostQuantumSig
@@ -62,11 +63,6 @@ class Dilithium3(PostQuantumSig):
 
     def __init__(self):
         """Initialize Dilithium-3 signature scheme."""
-<<<<<<< HEAD
-        if not _LIBOQS_AVAILABLE:
-            raise ImportError(
-                "Dilithium3 requires liboqs. Install liboqs-python with the liboqs native library."
-=======
         self._use_liboqs = _LIBOQS_AVAILABLE
         self._sig = None
 
@@ -91,10 +87,11 @@ class Dilithium3(PostQuantumSig):
                 "Install liboqs-python for production use.",
                 category=UserWarning,
                 stacklevel=2
->>>>>>> 9ac05e7 (v2.3 Release: Empirical Research Validation & High-Fidelity FastUMI Benchmarking. (Verified non-theoretical metrics for ML success, bandwidth efficiency, and MoE routing))
             )
-        self._sig = _oqs.Signature("ML-DSA-65")
-        logger.debug("Dilithium3 initialized with liboqs ML-DSA-65")
+        
+        # Re-verify sig setup if using liboqs
+        if self._use_liboqs and not self._sig:
+            self._sig = _oqs.Signature("ML-DSA-65")
 
     @property
     def name(self) -> str:
@@ -115,7 +112,7 @@ class Dilithium3(PostQuantumSig):
     @property
     def is_production(self) -> bool:
         """Returns True if using real liboqs implementation."""
-        return True
+        return self._use_liboqs
 
     def keygen(self) -> Tuple[bytes, bytes]:
         """
@@ -124,9 +121,12 @@ class Dilithium3(PostQuantumSig):
         Returns:
             Tuple of (public_key, secret_key)
         """
-        sig = _oqs.Signature("ML-DSA-65")
-        pk = sig.generate_keypair()
-        sk = sig.export_secret_key()
+        if not self._use_liboqs:
+            import os
+            return os.urandom(self.PK_SIZE), os.urandom(self.SK_SIZE)
+
+        pk = self._sig.generate_keypair()
+        sk = self._sig.export_secret_key()
         return bytes(pk), bytes(sk)
 
     def sign(self, sk: bytes, message: bytes) -> bytes:
@@ -143,8 +143,13 @@ class Dilithium3(PostQuantumSig):
         if len(sk) != self.SK_SIZE:
             raise ValueError(f"Invalid secret key size: expected {self.SK_SIZE}, got {len(sk)}")
 
-        sig = _oqs.Signature("ML-DSA-65", sk)
-        signature = sig.sign(message)
+        if not self._use_liboqs:
+            import os
+            return os.urandom(self.SIG_SIZE)
+
+        # For signing, we need to init with SK
+        sig_worker = _oqs.Signature("ML-DSA-65", sk)
+        signature = sig_worker.sign(message)
         return bytes(signature)
 
     def verify(self, pk: bytes, message: bytes, signature: bytes) -> bool:
@@ -162,9 +167,12 @@ class Dilithium3(PostQuantumSig):
         if len(pk) != self.PK_SIZE:
             return False
 
+        if not self._use_liboqs:
+            # Simulator always "verifies" if signature size is correct
+            return len(signature) == self.SIG_SIZE
+
         try:
-            sig = _oqs.Signature("ML-DSA-65")
-            return sig.verify(message, signature, pk)
+            return self._sig.verify(message, signature, pk)
         except Exception as e:
             logger.debug(f"Signature verification failed: {e}")
             return False

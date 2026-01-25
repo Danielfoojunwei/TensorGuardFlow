@@ -10,8 +10,10 @@ import {
     Bot, Database, Scale, BookOpen, GitBranch,
     Plus, Search, Filter, RefreshCw, Play, Shield,
     Rocket, Eye, CheckCircle, Clock, AlertTriangle,
-    ChevronDown, Settings2, TrendingUp, Zap, RotateCcw
+    ChevronDown, Settings2, TrendingUp, Zap, RotateCcw,
+    Sliders
 } from 'lucide-vue-next'
+import ModelGating from './ModelGating.vue'
 
 const props = defineProps({
     initialTab: { type: String, default: 'registry' }
@@ -39,7 +41,10 @@ const errorMessage = ref('')
 // Modal states
 const showCreateModal = ref(false)
 const showDeployModal = ref(false)
+const showEvalModal = ref(false)
 const selectedModel = ref(null)
+const selectedEvalModel = ref('')
+const configuringExpert = ref(null)
 
 // Fetch data
 const fetchData = async () => {
@@ -316,7 +321,7 @@ onMounted(fetchData)
             <Scale class="w-12 h-12 text-gray-600 mx-auto mb-4" />
             <h2 class="text-lg font-semibold text-white mb-2">Evaluation Arena</h2>
             <p class="text-gray-500 mb-6">Run benchmarks and compare model performance</p>
-            <button class="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg font-medium">
+            <button @click="showEvalModal = true" class="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg font-medium">
               Start Evaluation
             </button>
           </div>
@@ -344,11 +349,104 @@ onMounted(fetchData)
                 <span :class="['text-xs font-bold uppercase px-2 py-1 rounded border', getStatusStyle(skill.status)]">
                   {{ skill.status }}
                 </span>
+                <button @click="configuringExpert = configuringExpert?.id === skill.id ? null : skill"
+                        class="p-2 rounded hover:bg-[#1f2428] transition-colors"
+                        title="Configure Gating">
+                  <Sliders class="w-4 h-4 text-gray-400" :class="configuringExpert?.id === skill.id ? 'text-primary' : ''" />
+                </button>
               </div>
+            </div>
+
+            <!-- Inline Gating Control -->
+            <div v-if="configuringExpert?.id === skill.id" class="mt-4 border-t border-[#30363d] pt-4 animate-in slide-in-from-top-2 duration-300">
+               <ModelGating :expert="skill" @updated="fetchData" />
             </div>
           </div>
         </div>
+        </div>
+
+    <!-- New Model Modal -->
+    <div v-if="showCreateModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div class="bg-[#0d1117] border border-[#30363d] rounded-xl w-full max-w-lg overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200">
+        <div class="px-6 py-4 border-b border-[#30363d] flex items-center justify-between bg-[#161b22]">
+          <h3 class="font-bold text-white">Create New VLA Model</h3>
+          <button @click="showCreateModal = false" class="text-gray-500 hover:text-white transition-colors">
+            <Plus class="w-5 h-5 rotate-45" />
+          </button>
+        </div>
+        <div class="p-6 space-y-4">
+          <div class="space-y-1">
+            <label class="text-[10px] font-bold text-gray-500 uppercase">Model Name</label>
+            <input type="text" placeholder="e.g. humanoid-grasping-pro" class="w-full bg-[#161b22] border border-[#30363d] rounded p-2 text-sm text-white focus:border-primary/50 outline-none" />
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div class="space-y-1">
+              <label class="text-[10px] font-bold text-gray-500 uppercase">Base Architecture</label>
+              <select class="w-full bg-[#161b22] border border-[#30363d] rounded p-2 text-sm text-white">
+                <option>Llama-3-8B-VLA</option>
+                <option>OpenVLA-7B</option>
+                <option>I-VLA-Base</option>
+              </select>
+            </div>
+            <div class="space-y-1">
+              <label class="text-[10px] font-bold text-gray-500 uppercase">Version</label>
+              <input type="text" value="1.0.0" class="w-full bg-[#161b22] border border-[#30363d] rounded p-2 text-sm text-white" disabled />
+            </div>
+          </div>
+          <div class="p-4 bg-primary/5 border border-primary/20 rounded-lg">
+            <div class="flex items-center gap-2 text-primary mb-1">
+              <Shield class="w-4 h-4" />
+              <span class="text-xs font-bold uppercase">PQC Protection Active</span>
+            </div>
+            <p class="text-[11px] text-gray-400">All GA models require Dilithium-3 signatures for weight integrity verification at the edge node.</p>
+          </div>
+        </div>
+        <div class="px-6 py-4 bg-[#161b22] border-t border-[#30363d] flex justify-end gap-3">
+          <button @click="showCreateModal = false" class="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white transition-colors">Cancel</button>
+          <button @click="showCreateModal = false" class="px-4 py-2 bg-primary text-white text-sm font-bold rounded hover:bg-primary/90 transition-colors">Initialize Model</button>
+        </div>
       </div>
+    </div>
+
+    <!-- Deploy Model Modal -->
+    <div v-if="showDeployModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div class="bg-[#0d1117] border border-[#30363d] rounded-xl w-full max-w-lg overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200">
+        <div class="px-6 py-4 border-b border-[#30363d] flex items-center justify-between bg-[#161b22]">
+          <h3 class="font-bold text-white">Deploy: {{ selectedModel?.name }}</h3>
+          <button @click="showDeployModal = false" class="text-gray-500 hover:text-white transition-colors">
+            <Plus class="w-5 h-5 rotate-45" />
+          </button>
+        </div>
+        <div class="p-6 space-y-4">
+          <div class="space-y-1">
+            <label class="text-[10px] font-bold text-gray-500 uppercase">Target Fleet</label>
+            <select class="w-full bg-[#161b22] border border-[#30363d] rounded p-2 text-sm text-white">
+              <option>Production-US-West (24 nodes)</option>
+              <option>Staging-Laboratory (5 nodes)</option>
+              <option>Canary-Fleet-7 (2 nodes)</option>
+            </select>
+          </div>
+          <div class="space-y-1">
+            <label class="text-[10px] font-bold text-gray-500 uppercase">Rollout Strategy</label>
+            <div class="grid grid-cols-3 gap-2">
+              <button class="p-2 border border-primary/50 bg-primary/10 rounded text-[10px] font-bold text-white">IMMEDIATE</button>
+              <button class="p-2 border border-[#30363d] hover:border-gray-500 rounded text-[10px] font-bold text-gray-400 transition-colors">CANARY (10%)</button>
+              <button class="p-2 border border-[#30363d] hover:border-gray-500 rounded text-[10px] font-bold text-gray-400 transition-colors">BLUE/GREEN</button>
+            </div>
+          </div>
+          <div class="flex items-center gap-3 p-3 bg-yellow-500/5 border border-yellow-500/20 rounded-md">
+            <AlertTriangle class="w-5 h-5 text-yellow-500 shrink-0" />
+            <div class="text-[11px] text-yellow-500/80">
+              GA Safeguard: Ensure this model has completed a 1000-cycle simulation benchmark before production deployment.
+            </div>
+          </div>
+        </div>
+        <div class="px-6 py-4 bg-[#161b22] border-t border-[#30363d] flex justify-end gap-3">
+          <button @click="showDeployModal = false" class="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white transition-colors">Cancel</button>
+          <button @click="showDeployModal = false" class="px-4 py-2 bg-orange-600 text-white text-sm font-bold rounded hover:bg-orange-700 transition-colors">Push to Edge</button>
+        </div>
+      </div>
+    </div>
 
       <!-- Lineage Tab -->
       <div v-else-if="activeTab === 'lineage'" class="h-full overflow-y-auto p-6">
@@ -361,5 +459,46 @@ onMounted(fetchData)
         </div>
       </div>
     </div>
+
+    <!-- Evaluation Modal -->
+    <div v-if="showEvalModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div class="bg-[#0d1117] border border-[#30363d] rounded-xl w-full max-w-lg overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200">
+        <div class="px-6 py-4 border-b border-[#30363d] flex items-center justify-between bg-[#161b22]">
+          <h3 class="font-bold text-white">Start Benchmark Evaluation</h3>
+          <button @click="showEvalModal = false" class="text-gray-500 hover:text-white transition-colors">
+            <Plus class="w-5 h-5 rotate-45" />
+          </button>
+        </div>
+        <div class="p-6 space-y-4">
+          <div class="space-y-1">
+            <label class="text-[10px] font-bold text-gray-500 uppercase">Target Model</label>
+            <select v-model="selectedEvalModel" class="w-full bg-[#161b22] border border-[#30363d] rounded p-2 text-sm text-white focus:border-primary/50 outline-none">
+              <option v-for="m in models" :key="m.id" :value="m.id">{{ m.name }} (v{{ m.version }})</option>
+              <option value="test">Llama-3-8B-Baseline</option>
+            </select>
+          </div>
+          <div class="space-y-1">
+            <label class="text-[10px] font-bold text-gray-500 uppercase">Benchmark Suite</label>
+            <div class="grid grid-cols-2 gap-2">
+              <button class="p-2 border border-primary/50 bg-primary/10 rounded text-[10px] font-bold text-white text-left">GRASPING_SURROGATE</button>
+              <button class="p-2 border border-[#30363d] hover:border-gray-500 rounded text-[10px] font-bold text-gray-400 transition-colors text-left">NAV_OBSTACLE_V3</button>
+              <button class="p-2 border border-[#30363d] hover:border-gray-500 rounded text-[10px] font-bold text-gray-400 transition-colors text-left">SIM_H1_ASSEMBLY</button>
+              <button class="p-2 border border-[#30363d] hover:border-gray-500 rounded text-[10px] font-bold text-gray-400 transition-colors text-left">LLM_REASONING_PRO</button>
+            </div>
+          </div>
+          <div class="p-3 bg-purple-500/5 border border-purple-500/20 rounded-md flex gap-3">
+             <Scale class="w-5 h-5 text-purple-500 shrink-0" />
+             <div class="text-[11px] text-gray-400">
+                Running an evaluation generates a high-fidelity safety score required for production staging in the v2.3 GA workflow.
+             </div>
+          </div>
+        </div>
+        <div class="px-6 py-4 bg-[#161b22] border-t border-[#30363d] flex justify-end gap-3">
+          <button @click="showEvalModal = false" class="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white transition-colors">Cancel</button>
+          <button @click="showEvalModal = false" class="px-4 py-2 bg-primary text-white text-sm font-bold rounded hover:bg-primary/90 transition-colors">Queue Evaluation</button>
+        </div>
+      </div>
+    </div>
+
   </div>
 </template>
