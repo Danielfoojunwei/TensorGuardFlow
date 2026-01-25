@@ -47,8 +47,10 @@ class UnifiedKeyManager:
         self.vault_root = Path(vault_root)
         self.vault_root.mkdir(parents=True, exist_ok=True)
         # Ensure base dir permissions if possible
-        try: os.chmod(self.vault_root, 0o700)
-        except: pass
+        try:
+            os.chmod(self.vault_root, 0o700)
+        except (OSError, PermissionError) as e:
+            logger.debug(f"Could not set vault permissions: {e}")
 
     def _get_scope_path(self, scope: KeyScope) -> Path:
         path = self.vault_root / scope.value
@@ -132,7 +134,8 @@ class UnifiedKeyManager:
                 try:
                     meta = json.loads(meta_file.read_text())
                     result.append(meta)
-                except:
+                except (json.JSONDecodeError, IOError, OSError) as e:
+                    logger.warning(f"Failed to parse metadata file {meta_file}: {e}")
                     continue
         return result
 

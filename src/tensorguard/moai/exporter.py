@@ -237,9 +237,8 @@ class MoaiExporter:
                 logger.warning(f"Skipping non-array weight: {k}")
 
         # 5. Create Metadata with provenance
-        checkpoint_hash = hashlib.sha256(
-            open(model_path, "rb").read()
-        ).hexdigest()[:32]
+        with open(model_path, "rb") as f:
+            checkpoint_hash = hashlib.sha256(f.read()).hexdigest()[:32]
 
         base_config = self.config.__dict__.copy() if hasattr(self.config, "__dict__") else {}
         meta = ModelPackMetadata(

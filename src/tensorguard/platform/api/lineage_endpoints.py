@@ -490,5 +490,5 @@ def _relative_time(dt: Optional[datetime]) -> str:
             return f"{diff.seconds // 60}m ago"
         else:
             return "just now"
-    except:
+    except (TypeError, AttributeError, OverflowError):
         return "unknown"
