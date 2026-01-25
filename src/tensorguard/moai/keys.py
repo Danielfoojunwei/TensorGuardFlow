@@ -95,7 +95,8 @@ class MoaiKeyManager:
                 has_relin_keys=meta.params.get("has_relin_keys", True),
                 has_galois_keys=meta.params.get("has_galois_keys", True)
             )
-        except:
+        except (FileNotFoundError, KeyError, AttributeError) as e:
+            logger.debug(f"Failed to load metadata for {key_id}: {e}")
             return None
 
     def save_keys(self, key_id: str, pk: bytes, sk: Optional[bytes] = None, eval_k: Optional[bytes] = None):

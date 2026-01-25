@@ -180,5 +180,5 @@ class NetworkGuardian:
         try:
             writer.write(dummy_data)
             await writer.drain()
-        except:
-            pass
+        except (ConnectionError, OSError, asyncio.CancelledError) as e:
+            logger.debug(f"Failed to send dummy packet: {e}")

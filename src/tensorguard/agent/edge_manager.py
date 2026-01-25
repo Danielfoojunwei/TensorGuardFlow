@@ -46,9 +46,13 @@ class EdgeAgentManager:
         
         # 1. Spooler
         data_dir = getattr(self.config, 'data_dir', './storage')
-        if ".." in data_dir or data_dir.startswith("/") or data_dir.startswith("\\"):
-             # Local dev fallback
-             data_dir = "storage"
+        # Secure path validation: normalize and ensure it's within allowed scope
+        data_dir = os.path.normpath(data_dir)
+        real_path = os.path.realpath(data_dir)
+        cwd = os.path.realpath(os.getcwd())
+        if not real_path.startswith(cwd) or ".." in data_dir:
+            logger.warning(f"Rejecting unsafe data_dir path: {data_dir}, using default 'storage'")
+            data_dir = "storage"
              
         os.makedirs(data_dir, exist_ok=True)
         db_path = os.path.join(data_dir, "spool.db")
@@ -126,9 +130,39 @@ class EdgeAgentManager:
                 rclpy.shutdown()
 
     def configure(self, new_config):
-        # Update uploader URL/Key if changed
-        # Restart ROS node if topics changed
-        pass
+        """
+        Reconfigure the Edge Agent Manager with new settings.
+
+        Updates uploader URL/key and restarts ROS node if topics changed.
+        """
+        logger.info("Reconfiguring Edge Agent Manager...")
+
+        # Update config reference
+        old_config = self.config
+        self.config = new_config
+
+        # Update uploader if URL or API key changed
+        new_url = getattr(new_config, 'control_plane_url', None)
+        new_api_key = getattr(new_config, 'api_key', None) or os.environ.get("TG_FLEET_API_KEY")
+
+        if self.uploader and new_url and new_api_key:
+            old_url = getattr(old_config, 'control_plane_url', None)
+            old_api_key = getattr(old_config, 'api_key', None)
+
+            if new_url != old_url or new_api_key != old_api_key:
+                logger.info("Uploader configuration changed, restarting...")
+                self.uploader.stop()
+                fleet_id = getattr(new_config, 'fleet_id', os.environ.get("TG_FLEET_ID", ""))
+                if fleet_id:
+                    self.uploader = Uploader(
+                        self.spooler,
+                        target_url=new_url + "/api/v1/telemetry",
+                        api_key=new_api_key,
+                        fleet_id=fleet_id,
+                    )
+                    self.uploader.start()
+
+        logger.info("Edge Agent Manager reconfiguration complete")
 
     # =========================================================================
     # Telemetry Emission Helpers

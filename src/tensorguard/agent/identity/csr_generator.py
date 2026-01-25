@@ -323,7 +323,8 @@ class CSRGenerator:
         try:
             self.vault.delete_key(self.scope, key_id, suffix=".key")
             return True
-        except:
+        except (OSError, IOError, FileNotFoundError) as e:
+            logger.warning(f"Failed to delete key {key_id}: {e}")
             return False
     
     def list_keys(self) -> List[str]:

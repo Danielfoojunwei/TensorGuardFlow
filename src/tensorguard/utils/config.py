@@ -153,6 +153,11 @@ class TensorGuardSettings(BaseSettings):
         return issues
 
 
+class ProductionConfigError(Exception):
+    """Raised when critical production configuration is missing or invalid."""
+    pass
+
+
 # Global settings instance
 settings = TensorGuardSettings()
 
@@ -162,8 +167,18 @@ if settings.is_production():
     if _issues:
         import logging
         _logger = logging.getLogger(__name__)
+        _critical_issues = []
         for issue in _issues:
             if issue.startswith("CRITICAL"):
                 _logger.critical(issue)
+                _critical_issues.append(issue)
             else:
                 _logger.warning(issue)
+
+        # Fail-fast on critical issues in production
+        if _critical_issues:
+            raise ProductionConfigError(
+                f"Production configuration validation failed with {len(_critical_issues)} critical issue(s):\n"
+                + "\n".join(f"  - {issue}" for issue in _critical_issues)
+                + "\n\nSet TG_ENVIRONMENT=development to bypass these checks."
+            )
