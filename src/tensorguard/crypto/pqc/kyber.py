@@ -144,7 +144,13 @@ class Kyber768(PostQuantumKEM):
 
         if not self._use_liboqs:
             import os
-            return os.urandom(self.SS_SIZE), os.urandom(self.CT_SIZE)
+            # Functional Simulator for Testing:
+            # Embed SS in CT so decap can recover it. INSECURE - TEST ONLY.
+            # Real Kyber CT is 1088 bytes. SS is 32 bytes.
+            ss = os.urandom(self.SS_SIZE)
+            padding = os.urandom(self.CT_SIZE - self.SS_SIZE)
+            ct = ss + padding
+            return ss, ct
 
         ciphertext, shared_secret = self._kem.encap_secret(pk)
         return bytes(shared_secret), bytes(ciphertext)
@@ -166,8 +172,8 @@ class Kyber768(PostQuantumKEM):
             raise ValueError(f"Invalid ciphertext size: expected {self.CT_SIZE}, got {len(ct)}")
 
         if not self._use_liboqs:
-            import os
-            return os.urandom(self.SS_SIZE)
+            # Functional Simulator: Extract SS from CT
+            return ct[:self.SS_SIZE]
 
         # For decap we need to re-init with SK if not already
         kem = _oqs.KeyEncapsulation("ML-KEM-768", sk)

@@ -55,13 +55,13 @@ const navItems = [
   <aside class="w-64 bg-[#0d1117] border-r border-[#30363d] fixed h-full z-20 flex flex-col">
     <!-- Logo Area -->
     <div class="h-16 flex items-center px-5 border-b border-[#30363d] flex-shrink-0">
-      <div class="w-9 h-9 bg-gradient-to-br from-primary to-orange-700 rounded-lg mr-3 flex items-center justify-center font-bold text-white text-sm shadow-lg">
-        TG
+      <div class="flex items-center gap-3 px-2 mb-8">
+        <div class="w-8 h-8 rounded-lg bg-orange-500 flex items-center justify-center shadow-lg shadow-orange-500/20">
+          <Shield class="w-5 h-5 text-white" />
+        </div>
+        <span class="font-bold text-orange-500 text-sm tracking-tight">DYNAMICAL</span>
       </div>
-      <div>
-        <span class="font-bold text-white text-sm">TensorGuard</span>
-        <div class="text-[10px] text-gray-500">Flow v2.3 GA</div>
-      </div>
+      <div class="text-[10px] text-gray-500">Flow v2.3 GA</div>
     </div>
 
     <!-- Navigation -->

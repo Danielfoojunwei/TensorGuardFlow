@@ -90,9 +90,10 @@ class MoEAdapter(VLAAdapter):
         )
         self.experts = experts or ["visual_primary", "visual_aux", "language_semantic", "manipulation_grasp"]
         self.expert_prototypes = {
-            "visual_primary": ["geometric", "shapes", "objects", "obstacles", "camera", "color", "depth"],
-            "language_semantic": ["command", "intent", "goal", "instruction", "parse", "meaning"],
-            "manipulation_grasp": ["gripper", "grasp", "pick", "place", "handle", "finger", "force", "torque"],
+            "visual_primary": ["geometric", "shapes", "objects", "obstacles", "camera"],
+            "visual_aux": ["color", "texture", "depth", "lighting", "shadows"],
+            "language_semantic": ["command", "intent", "goal", "instruction", "verbal", "parse", "meaning"],
+            "manipulation_grasp": ["gripper", "grasp", "pick", "place", "handle", "finger", "force", "torque", "contact", "friction"],
             "locomotion_base": ["move", "navigate", "base", "wheels", "collision", "path", "trajectory"],
             "fluid_pouring": ["pour", "bottle", "liquid", "tilt", "steady", "container", "cup"],
             "cleaning_wiping": ["wipe", "surface", "clean", "scrub", "pressure", "dust", "table"],

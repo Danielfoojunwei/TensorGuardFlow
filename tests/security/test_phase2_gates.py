@@ -39,11 +39,10 @@ def test_key_provider_factory_blocks_unsupported_in_production(monkeypatch):
         KeyProviderFactory.create("pkcs11")
 
 
-def test_native_backend_blocked_in_production(monkeypatch):
-    monkeypatch.setenv("TG_ENVIRONMENT", "production")
-    is_production.cache_clear()
-
-    from tensorguard.serving.backend import NativeBackend
-
-    with pytest.raises(ProductionGateError):
-        NativeBackend()
+    from unittest.mock import patch
+    import tensorguard.utils.production_gates as pg
+    
+    with patch("tensorguard.utils.production_gates.is_production", return_value=True):
+        from tensorguard.serving.backend import NativeBackend
+        with pytest.raises(pg.ProductionGateError):
+            NativeBackend()

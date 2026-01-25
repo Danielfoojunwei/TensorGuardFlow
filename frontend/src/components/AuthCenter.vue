@@ -56,12 +56,12 @@ const handleOAuth = (provider) => {
     <div class="w-full max-w-[440px] relative">
       <!-- Logo & Branding -->
       <div class="text-center mb-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-        <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-orange-400 p-0.5 mb-4 shadow-lg shadow-primary/20">
+        <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-orange-500 to-orange-400 p-0.5 mb-4 shadow-lg shadow-orange-500/20">
             <div class="w-full h-full bg-[#0d1117] rounded-[14px] flex items-center justify-center">
-                <Shield class="w-8 h-8 text-primary" />
+                <Shield class="w-8 h-8 text-orange-500" />
             </div>
         </div>
-        <h1 class="text-2xl font-bold tracking-tight text-white mb-1">TensorGuardFlow</h1>
+        <h1 class="text-2xl font-bold tracking-tight text-orange-500 mb-1">DYNAMICAL</h1>
         <p class="text-xs text-gray-500 uppercase font-bold tracking-widest">Enterprise Access Hub • v2.3 GA</p>
       </div>
 

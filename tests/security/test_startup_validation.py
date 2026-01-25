@@ -12,15 +12,18 @@ def test_startup_validation_requires_secret_key_in_production(monkeypatch):
     monkeypatch.setenv("TG_KEY_MASTER", "a" * 64)
     is_production.cache_clear()
 
-    with pytest.raises(ProductionGateError):
+    import tensorguard.utils.production_gates as pg
+    
+    with pytest.raises(pg.ProductionGateError):
         validate_startup_config("platform", require_secret_key=True, require_database=True, require_key_master=True)
 
 
 def test_startup_validation_allows_dev_without_secrets(monkeypatch):
-    monkeypatch.setenv("TG_ENVIRONMENT", "development")
-    monkeypatch.delenv("TG_SECRET_KEY", raising=False)
-    monkeypatch.delenv("DATABASE_URL", raising=False)
-    monkeypatch.delenv("TG_KEY_MASTER", raising=False)
-    is_production.cache_clear()
-
-    validate_startup_config("platform", require_secret_key=True, require_database=True, require_key_master=True)
+    from unittest.mock import patch
+    # Force is_production to False to ensure gates are skipped/warn-only
+    with patch("tensorguard.utils.production_gates.is_production", return_value=False):
+        monkeypatch.delenv("TG_SECRET_KEY", raising=False)
+        monkeypatch.delenv("DATABASE_URL", raising=False)
+        monkeypatch.delenv("TG_KEY_MASTER", raising=False)
+        
+        validate_startup_config("platform", require_secret_key=True, require_database=True, require_key_master=True)

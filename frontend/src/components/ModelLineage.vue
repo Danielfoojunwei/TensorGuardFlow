@@ -89,7 +89,7 @@ onMounted(fetchVersions)
           <h3 class="text-sm font-bold text-gray-400 mb-6 uppercase tracking-wider">Commit History</h3>
           
           <div class="relative pl-4 border-l-2 border-[#30363d] space-y-8">
-             <div v-for="(c, i) in commits" :key="c.id" class="relative group">
+             <div v-for="c in commits" :key="c.id" class="relative group">
                 <!-- Node -->
                 <div class="absolute -left-[25px] w-4 h-4 rounded-full border-2 transition-colors z-10"
                      :class="c.status === 'deployed' ? 'bg-primary border-primary scale-125' : 'bg-[#111] border-gray-500 group-hover:border-primary'">

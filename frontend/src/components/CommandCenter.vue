@@ -189,8 +189,8 @@ onUnmounted(() => {
       <!-- Header -->
       <div class="flex items-center justify-between">
         <div>
-          <h1 class="text-2xl font-bold text-white">Command Center</h1>
-          <p class="text-sm text-gray-500">TensorGuardFlow v2.3 GA System Overview</p>
+          <h1 class="text-2xl font-bold text-white tracking-tight">Command Center</h1>
+          <p class="text-sm text-gray-500">DYNAMICAL v2.3 GA System Overview</p>
         </div>
         <div class="flex items-center gap-4">
           <div class="flex items-center gap-2 text-sm">
@@ -340,7 +340,9 @@ onUnmounted(() => {
         <div class="px-6 py-4 border-b border-[#30363d] flex items-center justify-between bg-[#161b22] shrink-0">
           <div class="flex items-center gap-2">
             <BookOpen class="w-5 h-5 text-primary" />
-            <h3 class="font-bold text-white">TensorGuardFlow v2.3 GA Tutorial</h3>
+            <h3 class="font-bold text-white">DYNAMICAL v2.3 GA Tutorial</h3>
+ Linda
+ Linda
           </div>
           <button @click="showTutorial = false" class="text-gray-500 hover:text-white transition-colors">
             <Plus class="w-5 h-5 rotate-45" />

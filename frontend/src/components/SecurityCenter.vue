@@ -521,6 +521,8 @@ onMounted(fetchData)
           <button @click="showAddEndpointModal = false" class="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white transition-colors">Cancel</button>
           <button @click="createEndpoint" class="px-4 py-2 bg-primary text-white text-sm font-bold rounded hover:bg-primary/90 transition-colors">Register Endpoint</button>
         </div>
+      </div>
     </div>
+
   </div>
 </template>

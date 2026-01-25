@@ -8,7 +8,7 @@ from .format import read_tgsp_header
 
 class TGSPService:
     @staticmethod
-    def create_package(out_path, signing_key_path=None, payloads=None, policy_path=None, recipients=None, evidence_report=None, base_models=None):
+    def create_package(out_path, signing_key_path=None, payloads=None, policy_path=None, recipients=None, evidence_report=None, base_models=None, signing_pub_path=None):
         """Legacy shim for TGSPService."""
         with tempfile.TemporaryDirectory() as tmp_in:
             if payloads:
@@ -36,7 +36,8 @@ class TGSPService:
                 model_name="tgsp-service-package",
                 model_version="0.0.1",
                 recipients=recipient_paths,
-                signing_key=signing_key_path
+                signing_key=signing_key_path,
+                signing_pub=signing_pub_path
             )
             
             run_build(new_args)

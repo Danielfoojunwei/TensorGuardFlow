@@ -68,7 +68,8 @@ class TestTGSPCore:
             signing_key_path=f"{TEST_KEYS_DIR}/sign.priv",
             payloads=[f"model-v1:weights:{payload_path}"],
             policy_path=policy_path,
-            recipients=[f"edge-node-1:{TEST_KEYS_DIR}/recipient.pub"]
+            recipients=[f"edge-node-1:{TEST_KEYS_DIR}/recipient.pub"],
+            signing_pub_path=f"{TEST_KEYS_DIR}/sign.pub"
         )
         assert os.path.exists(pkg_path)
         
@@ -101,7 +102,8 @@ class TestTGSPCore:
         TGSPService.create_package(
             out_path=pkg_path,
             signing_key_path=f"{TEST_KEYS_DIR}/sign.priv",
-            payloads=[f"p1:raw:{payload_path}"]
+            payloads=[f"p1:raw:{payload_path}"],
+            signing_pub_path=f"{TEST_KEYS_DIR}/sign.pub"
         )
         
         # 2. Tamper with signature by creating a new package with SAME content but DIFFERENT key, 
@@ -140,7 +142,8 @@ class TestTGSPCore:
             out_path=pkg_path,
             signing_key_path=f"{TEST_KEYS_DIR}/sign.priv",
             payloads=[f"s1:secret:{payload_path}"],
-            recipients=[f"valid-user:{TEST_KEYS_DIR}/recipient.pub"]
+            recipients=[f"valid-user:{TEST_KEYS_DIR}/recipient.pub"],
+            signing_pub_path=f"{TEST_KEYS_DIR}/sign.pub"
         )
         
         # Generate random other key (Hybrid PQC)

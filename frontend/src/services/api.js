@@ -1,6 +1,6 @@
 /**
- * TensorGuardFlow API Service Layer
- * Provides consistent API access with error handling and auth management
+ * DYNAMICAL API Service Layer
+ling and auth management
  */
 
 const API_BASE = '/api/v1'

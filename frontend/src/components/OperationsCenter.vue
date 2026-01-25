@@ -10,7 +10,7 @@ import {
     Server, Radio, Package, Link, RefreshCw, Plus,
     Activity, Users, Shield, Zap, TrendingUp, TrendingDown,
     CheckCircle, AlertTriangle, Clock, Play, Square,
-    Upload, Download, Cpu, Cloud, Box, Lock
+    Upload, Download, Cpu, Cloud, Box, Lock, RotateCcw
 } from 'lucide-vue-next'
 
 const props = defineProps({
@@ -51,6 +51,9 @@ const uploading = ref(false)
 const uploadFile = ref(null)
 const selectedBaseModel = ref('Llama-VLA-8B')
 const selectedFleet = ref('')
+const rollingBackFleet = ref(null)
+const showRollbackModal = ref(false)
+const rollbackTargetFleet = ref(null)
 
 // Integrations
 const integrations = ref([
@@ -135,6 +138,40 @@ const configureIntegration = (int) => {
 
 const saveIntegration = () => {
     configuringIntegration.value = null
+}
+
+// Emergency TGSP Rollback
+const initiateRollback = (fleet) => {
+    rollbackTargetFleet.value = fleet
+    showRollbackModal.value = true
+}
+
+const confirmEmergencyRollback = async () => {
+    if (!rollbackTargetFleet.value) return
+    rollingBackFleet.value = rollbackTargetFleet.value.id
+    try {
+        const token = localStorage.getItem('auth_token')
+        const headers = token ? { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' }
+        await fetch('/api/v1/fleets/emergency-rollback', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ 
+                fleet_id: rollbackTargetFleet.value.id, 
+                reason: 'Operator-initiated emergency rollback' 
+            })
+        })
+        // Optimistically update UI
+        const fleet = fleets.value.find(f => f.id === rollbackTargetFleet.value.id)
+        if (fleet) {
+            fleet.status = 'rolling_back'
+        }
+        await fetchFleets()
+    } catch (e) {
+        console.error("Emergency rollback failed", e)
+    }
+    rollingBackFleet.value = null
+    showRollbackModal.value = false
+    rollbackTargetFleet.value = null
 }
 
 // Training monitor functions - uses real telemetry API
@@ -353,6 +390,19 @@ onUnmounted(() => {
                 <div class="text-xs text-gray-500">Utilization</div>
                 <div class="text-lg font-bold text-blue-500">{{ ((fleet.devices_online / fleet.devices_total) * 100).toFixed(0) }}%</div>
               </div>
+            </div>
+
+            <!-- Emergency Rollback Action -->
+            <div class="mt-4 pt-4 border-t border-[#30363d] flex items-center justify-between">
+              <div class="text-xs text-gray-500">
+                Active Package: <span class="font-mono text-gray-400">{{ fleet.active_package || 'core-v2.3.0.tgsp' }}</span>
+              </div>
+              <button @click="initiateRollback(fleet)"
+                      :disabled="rollingBackFleet === fleet.id"
+                      class="px-3 py-1.5 bg-red-600/10 border border-red-500/30 text-red-500 hover:bg-red-600/20 rounded-lg font-medium text-xs flex items-center gap-2 transition-colors">
+                <RotateCcw class="w-3.5 h-3.5" :class="rollingBackFleet === fleet.id ? 'animate-spin' : ''" />
+                {{ rollingBackFleet === fleet.id ? 'Rolling Back...' : 'Emergency Rollback' }}
+              </button>
             </div>
           </div>
         </div>
@@ -616,8 +666,6 @@ onUnmounted(() => {
       </div>
     </div>
 
-    </div>
-
     <!-- Integration Config Modal -->
     <div v-if="configuringIntegration" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div class="bg-[#0d1117] border border-[#30363d] rounded-xl w-full max-w-lg overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200">
@@ -671,6 +719,40 @@ onUnmounted(() => {
         <div class="px-6 py-4 bg-[#161b22] border-t border-[#30363d] flex justify-end gap-3">
           <button @click="configuringIntegration = null" class="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white transition-colors">Cancel</button>
           <button @click="saveIntegration" class="px-4 py-2 bg-primary text-white text-sm font-bold rounded hover:bg-primary/90 transition-colors">Verify & Connect</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Emergency Rollback Confirmation Modal -->
+    <div v-if="showRollbackModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div class="bg-[#0d1117] border border-red-500/30 rounded-xl w-full max-w-md overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200">
+        <div class="px-6 py-4 border-b border-red-500/30 flex items-center gap-3 bg-red-500/5">
+          <AlertTriangle class="w-6 h-6 text-red-500" />
+          <h3 class="font-bold text-red-500">Emergency Rollback</h3>
+        </div>
+        <div class="p-6 space-y-4">
+          <p class="text-gray-300 text-sm">
+            You are about to initiate an <strong class="text-red-400">emergency rollback</strong> for fleet:
+          </p>
+          <div class="bg-[#161b22] p-4 rounded-lg border border-[#30363d]">
+            <div class="font-bold text-white">{{ rollbackTargetFleet?.name || '—' }}</div>
+            <div class="text-xs text-gray-500 mt-1">{{ rollbackTargetFleet?.devices_total || 0 }} devices • {{ rollbackTargetFleet?.region || 'Unknown' }}</div>
+          </div>
+          <div class="p-3 bg-red-500/5 border border-red-500/20 rounded-md">
+            <div class="flex items-start gap-2">
+              <Shield class="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+              <div class="text-[11px] text-gray-400">
+                This action will immediately halt the current TGSP package deployment and revert all devices to the last known-good configuration. The fleet will be temporarily offline during the rollback process.
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="px-6 py-4 bg-[#161b22] border-t border-red-500/30 flex justify-end gap-3">
+          <button @click="showRollbackModal = false; rollbackTargetFleet = null" class="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white transition-colors">Cancel</button>
+          <button @click="confirmEmergencyRollback" :disabled="rollingBackFleet" class="px-4 py-2 bg-red-600 text-white text-sm font-bold rounded hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center gap-2">
+            <RotateCcw class="w-4 h-4" :class="rollingBackFleet ? 'animate-spin' : ''" />
+            {{ rollingBackFleet ? 'Executing...' : 'Confirm Rollback' }}
+          </button>
         </div>
       </div>
     </div>

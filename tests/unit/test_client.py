@@ -19,9 +19,15 @@ def test_client_missing_adapter():
 def test_client_with_adapter():
     from tensorguard.core.adapters import MoEAdapter
     client = create_client()
-    client.set_adapter(MoEAdapter())
     
-    client.add_demonstration(Demonstration(observations=[np.zeros(10)], actions=[np.zeros(2)]))
+    # Provide a mock gradient function for testing
+    def mock_gradient_fn(model, demo):
+        return {"block_0.param": np.ones(10), "block_1.param": np.ones(5)}
+    
+    adapter = MoEAdapter(model=None, gradient_fn=mock_gradient_fn)
+    client.set_adapter(adapter)
+    
+    client.add_demonstration(Demonstration(observations=[np.zeros(10)], actions=[np.zeros(2)], instruction="pick object"))
     encrypted = client.process_round()
     
     assert encrypted is not None

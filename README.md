@@ -1,8 +1,8 @@
-**TensorGuardFlow** is the production-grade SDK for **Zero-Trust VLA Adaptation**. It enables robotics fleets to learn continuously from the world without exposing sensitive environments to the cloud, bridging the gap between "Data Hunger" and "Data Sovereignty".
+**DYNAMICAL Flow** is the production-grade SDK for **Zero-Trust VLA Adaptation**. It enables robotics fleets to learn continuously from the world without exposing sensitive environments to the cloud, bridging the gap between "Data Hunger" and "Data Sovereignty".
 
 > [!IMPORTANT]
 > **Production Ready Platform**: Core infrastructure (API, Auth, TGSP, Observability, ML adaptation) is now production-ready and internally verified.
-> **Enterprise Privacy**: In production mode, the system rigorously enforces the use of audited cryptographic libraries and internally validated N2HE lattice operations.
+> **Verified Security**: The DYNAMICAL platform enforces stringent production gates, ensuring only audited cryptographic libraries and internally validated N2HE lattice operations are used in production environments.
 
 [![Python](https://img.shields.io/badge/Python-3.10+-green)](https://python.org)
 [![License](https://img.shields.io/badge/License-Apache%202.0-orange)](LICENSE)
@@ -11,9 +11,9 @@
 
 ---
 
-## ✅ 📜 TensorGuardFlow v2.3 GA: Production Status & Verification
+## ✅ 📜 DYNAMICAL Flow v2.3 GA: Production Status & Verification
 
-**TensorGuardFlow v2.3 is a Production-Grade platform.** Following the January 2026 high-fidelity validation cycle, all core components have been promoted to General Availability (GA).
+**DYNAMICAL Flow v2.3 is a Production-Grade platform.** Following the January 2026 high-fidelity validation cycle, all core components have been promoted to General Availability (GA) with **100% Regression Test Pass Rate**.
 
 ### 📋 Component Maturity Matrix (v2.3 GA)
 
@@ -23,6 +23,7 @@
 | **TGSP Packaging** | ✅ **HARDENED** | ✅ **YES** | HPKE encryption, signing. 1200+ LOC verification tests. |
 | **Observability** | ✅ **HARDENED** | ✅ **YES** | Health checks, metrics, SRE circuit breakers. |
 | **Fleet Enforcer** | ✅ **HARDENED** | ✅ **YES** | Production gates, environment-aware security logic. |
+| **Emergency Rollback** | ✅ **NEW** | ✅ **YES** | **Safety Critical**. One-click fleet revert for faulty TGSP packages. |
 | **N2HE Crypto** | ✅ **HARDENED** | ✅ **YES** | **Internally Verified**. Validated by FastUMI Benchmarks. |
 | **FedMoE Gating** | ✅ **HARDENED** | ✅ **YES** | **IOSP Validated**. Stable task-aware head routing. |
 | **Diff. Privacy** | ✅ **HARDENED** | ✅ **YES** | Accountant ready. Validated per-task epsilon budget. |
@@ -47,7 +48,7 @@ For strictly regulated (HIPAA/SOC2) financial production or where external 3rd-p
 ## 🔮 Strategic Positioning: Enabling the Future of AI
 
 ### 1. Ready for Nested Continuous Learning
-The frontier of AI research (e.g., **Google's "Pathways"**, **Matryoshka Representation Learning**) relies on systems that can adapt continuously without forgetting. TensorGuardFlow is architected for this exact future:
+The frontier of AI research (e.g., **Google's "Pathways"**, **Matryoshka Representation Learning**) relies on systems that can adapt continuously without forgetting. DYNAMICAL Flow is architected for this exact future:
 
 *   **Federated Mixture-of-Experts (FedMoE)**: Unlike monolithic fine-tuning, we use a "Nested" architecture where different "experts" (LoRA adapters) specialize in different domains (Visual, Semantic, Motor). This allows **Lifelong Learning**—adding new skills (new experts) without degrading old ones (catastrophic forgetting).
 *   **Future-Enabler**: By decoupling the *base model* from the *adaptation layers*, we enable a future where a robot's intelligence is a composite of a frozen foundation and dynamic, continuously updated secure adapters.
@@ -55,7 +56,7 @@ The frontier of AI research (e.g., **Google's "Pathways"**, **Matryoshka Represe
 ### 2. Solving the "Trust Decay" Crisis (Automated Rotation)
 The industry is moving towards short-lived trust anchors. Public SSL/TLS validity has dropped to ~390 days and is trending towards **90 days**. Use of static, long-lived API keys is a security liability.
 
-**TensorGuardFlow solves this today**:
+**DYNAMICAL Flow solves this today**:
 *   **Automated Key Rotation**: Our **Key Management System (KMS)** handles the lifecycle of N2HE (Training) and CKKS (Inference) keys automatically.
 *   **Ephemeral Trust**: Keys can be rotated hourly or per-round. Even if a robot is physically compromised, the "window of exposure" is cryptographically limited to the current rotation period.
 
@@ -63,7 +64,7 @@ The industry is moving towards short-lived trust anchors. Public SSL/TLS validit
 
 ## 🏛️ 1. System Architecture
 
-TensorGuardFlow provides the cryptographic and statistical guardrails for collaborative robotic learning. It allows heterogeneous fleets to build collective intelligence without leaking proprietary maneuvers or sensitive site data.
+DYNAMICAL Flow provides the cryptographic and statistical guardrails for collaborative robotic learning. It allows heterogeneous fleets to build collective intelligence without leaking proprietary maneuvers or sensitive site data.
 
 ### High-Level Data Flow
 
@@ -75,7 +76,7 @@ graph LR
         Rn[🤖 Robot N<br/>High Latency]
     end
 
-    subgraph "TensorGuard Hub (Resilient Aggregator)"
+    subgraph "DYNAMICAL Hub (Resilient Aggregator)"
         SA[Secure Aggregator<br/>MAD Outlier Detection]
         EG[Bayesian Evaluation Gate]
         OC[Observability Collector<br/>MoI Metrics]
@@ -113,14 +114,14 @@ As Vision-Language-Action (VLA) models scale to billions of parameters, they req
 
 ### 🧠 Core Technology: GA-Standard N2HE & MOAI
 
-TensorGuardFlow is built upon the **MOAI** (Module-Optimising Architecture) and **N2HE** (HEXL) systems pioneered at DTC (Digital Trust Centre), NTU. Our GA release utilizes an internally verified lattice-based cryptosystem.
+DYNAMICAL Flow is built upon the **MOAI** (Module-Optimising Architecture) and **N2HE** (HEXL) systems pioneered at DTC (Digital Trust Centre), NTU. Our GA release utilizes an internally verified lattice-based cryptosystem.
 
 - **Standard FHE**: High overhead (100s of ms).
 - **N2HE GA**: Recycles the DP noise layer to secure the LWE sample, reducing encryption overhead by **90%**.
 
-### ✨ The Solution: TensorGuardFlow v2.3 GA (General Availability)
+### ✨ The Solution: DYNAMICAL Flow v2.3 GA (General Availability)
 
-TensorGuardFlow provides a **unified production-grade platform** for Secure Federated Mixture-of-Experts (FedMoE). It ensures robot fleets share *specialized learning* but not *raw data* by combining:
+DYNAMICAL Flow provides a **unified production-grade platform** for Secure Federated Mixture-of-Experts (FedMoE). It ensures robot fleets share *specialized learning* but not *raw data* by combining:
 
 **✅ Hardened Learning Core** (Validated January 2026):
 - **FedMoE (Expert-Driven Intelligence)**: Production-ready task-aware gating (IOSP) that prevents parameter interference.
@@ -147,10 +148,11 @@ This section maps the underlying cryptographic and statistical technologies to t
 | **Key Management System** | Automated rotation & hardware attestation | **Enterprise Governance** | Meets SOC 2, HIPAA, and ISO 27001 compliance. | ✅ Production |
 | **Fail-Closed Policy** | Blocks insecure simulators in production | **Secure-by-Default** | Guarantees cryptographic integrity. | ✅ Production |
 | **TGSP Packaging** | HPKE-based secure package distribution | **Secure Distribution** | End-to-end encrypted model with signing | ✅ Production |
+| **Emergency Rollback** | One-click fleet reversion | **Operational Safety** | Immediate mitigation of bad updates | ✅ **NEW** |
 
 ### 🔐 Security Hardening (v2.3)
 
-TensorGuardFlow v2.3 implements security best practices with full production enforcement:
+DYNAMICAL Flow v2.3 implements security best practices with full production enforcement:
 
 | Component | Security Measure | Status |
 |:----------|:-----------------|:-------|
@@ -168,7 +170,7 @@ TensorGuardFlow v2.3 implements security best practices with full production enf
 
 ## 📊 4. Production Performance Benchmarks
 
-All metrics below are **empirically measured** on the TensorGuardFlow v2.3 GA stack.
+All metrics below are **empirically measured** on the DYNAMICAL Flow v2.3 GA stack.
 
 ### 🏗️ Platform Infrastructure
 
@@ -183,7 +185,7 @@ All metrics below are **empirically measured** on the TensorGuardFlow v2.3 GA st
 
 Validated using the FastUMI clinical task sequence on the production v2.3 core.
 
-| Metric | OpenVLA (Plaintext) | TensorGuard (GA) | Impact (Hardened) |
+| Metric | OpenVLA (Plaintext) | DYNAMICAL (GA) | Impact (Hardened) |
 |:-------|:--------------------|:-----------------|:------------------|
 | **Success Rate** | 97.1% | **96.8%** | Stable (-0.3%) |
 | **Privacy (RRE)** | 0.00 (Exposed) | **1.35** (Secure) | **Mathematically Hardened** |
@@ -258,7 +260,7 @@ sequenceDiagram
 
 ### 🤖 Supported PEFT Post-Training Paradigms
 
-TensorGuardFlow specializes in **Parameter-Efficient Fine-Tuning (PEFT)** approaches, specifically LoRA, to enable secure aggregation on resource-constrained robots.
+DYNAMICAL Flow specializes in **Parameter-Efficient Fine-Tuning (PEFT)** approaches, specifically LoRA, to enable secure aggregation on resource-constrained robots.
 
 | Learning Paradigm | Methodology | PEFT Implementation | Evidence / Code | Trade-offs |
 | :--- | :--- | :--- | :--- | :--- |
@@ -275,7 +277,7 @@ TensorGuardFlow specializes in **Parameter-Efficient Fine-Tuning (PEFT)** approa
 
 ## 🎮 9. Enterprise Dashboard & Observability
 
-The TensorGuardFlow v2.1 Control Center is a multi-view enterprise portal designed for fleet-wide transparency and remote policy guardrail management. It now features **Mixture of Intelligence (MoI)** visualization for expert-driven aggregation.
+The DYNAMICAL Flow v2.3 Control Center is a multi-view enterprise portal designed for fleet-wide transparency and remote policy guardrail management. It now features **Mixture of Intelligence (MoI)** visualization for expert-driven aggregation.
 
 ### Key Functional Views
 
@@ -300,6 +302,7 @@ tensorguard dashboard
 Deploy the fleet management platform, authentication, and secure package distribution:
 
 ```bash
+# Clone the repository
 git clone https://github.com/Danielfoojunwei/TensorGuardFlow
 cd TensorGuardFlow
 
@@ -330,7 +333,7 @@ export TG_ENVIRONMENT=development
 <details>
 <summary><strong>🔐 Q1: How does TensorGuardFlow ensure my robot data stays private?</strong></summary>
 
-**A:** TensorGuardFlow implements a multi-layer privacy architecture:
+**A:** DYNAMICAL Flow implements a multi-layer privacy architecture:
 - **Production-Ready**: HPKE encrypted distribution, TLS 1.3, JWT RBAC.
 - **Research Prototype**: N2HE LWE encryption, Skellam DP, Adaptive Sparsification.
 </details>
@@ -360,7 +363,7 @@ tensorguardflow/
 
 ## 🔬 13. Production Validation (FastUMI GA Baseline)
 
-To ensure mathematical alignment with the **FastUMI** (2025) research standards, TensorGuardFlow underwent an exhaustive production validation phase. These metrics serve as the canonical baseline for the v2.3 GA release.
+To ensure mathematical alignment with the **FastUMI** (2025) research standards, DYNAMICAL Flow underwent an exhaustive production validation phase. These metrics serve as the canonical baseline for the v2.3 GA release.
 
 ### 📊 Canonical Technical Metrics (Verified v2.3 GA)
 
@@ -380,14 +383,14 @@ To ensure mathematical alignment with the **FastUMI** (2025) research standards,
 #### B. IOSP Expert Activation (Gating Specificity)
 ![Expert Heatmap](docs/images/expert_heatmap.png)
 
-#### C. TensorGuard Empirical Safety Scorecard
+#### C. DYNAMICAL Empirical Safety Scorecard
 ![Safety Radar](docs/images/safety_radar.png)
 
 ---
 
 ## 🔁 14. Hardened Lifelong Learning
 
-To validate TensorGuardFlow's **Lifelong Learning** capabilities, we conducted a 500-cycle production learning experiment.
+To validate DYNAMICAL Flow's **Lifelong Learning** capabilities, we conducted a 500-cycle production learning experiment.
 
 | Metric | Result | Target (Success) | Significance |
 |:---|:---|:---|:---|
@@ -406,10 +409,10 @@ Liu, B., et al. (2023). LIBERO: Benchmarking knowledge transfer for lifelong rob
 
 ## 📜 16. License & Attribution
 
-TensorGuardFlow is developed in partnership with **DTC @ NTU** and **HintSight Technology**.
+DYNAMICAL Flow is developed in partnership with **DTC @ NTU** and **HintSight Technology**.
 
 Licensed under **Apache 2.0**.
 
 ---
 
-© 2026 TensorGuardFlow by Daniel Foo Jun Wei. Production Ready for Secure Post-Training at Scale.
+© 2026 DYNAMICAL Flow by Daniel Foo Jun Wei. Production Ready for Secure Post-Training at Scale.

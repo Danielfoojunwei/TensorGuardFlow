@@ -78,7 +78,7 @@
 
     /* Document Title Injection */
     body::before {
-        content: "TensorGuard Executive Health Report";
+        content: "DYNAMICAL Executive Health Report";
         display: block;
         font-size: 24pt;
         font-weight: bold;

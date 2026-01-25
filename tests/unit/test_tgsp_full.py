@@ -33,6 +33,7 @@ def test_full_flow_v02(tgsp_test_env):
         main()
         
     signing_key = str(keys_dir / "signing.priv")
+    signing_pub = str(keys_dir / "signing.pub")
     fleet_pub = str(keys_dir / "fleet1" / "encryption.pub")
     fleet_priv = str(keys_dir / "fleet1" / "encryption.priv")
     
@@ -46,7 +47,8 @@ def test_full_flow_v02(tgsp_test_env):
         "--out", tgsp_file,
         "--model-name", "robot-v1",
         "--recipients", f"fleet:f1:{fleet_pub}",
-        "--signing-key", signing_key
+        "--signing-key", signing_key,
+        "--signing-pub", signing_pub
     ]
     with patch("sys.argv", cmd):
         main()
@@ -89,6 +91,8 @@ def test_full_flow_v03_hpke(tgsp_test_env):
 
     fleet_pub = str(keys_dir / "fleet_hpke" / "encryption.pub")
     fleet_priv = str(keys_dir / "fleet_hpke" / "encryption.priv")
+    signing_key = str(keys_dir / "signing.priv")
+    signing_pub = str(keys_dir / "signing.pub")
     
     tgsp_file = str(out_dir / "model_v03.tgsp")
     
@@ -98,7 +102,8 @@ def test_full_flow_v03_hpke(tgsp_test_env):
         "--input-dir", str(input_dir),
         "--out", tgsp_file,
         "--recipients", f"fleet:hpke:{fleet_pub}",
-        "--signing-key", str(keys_dir / "signing.priv") # HPKE flow still needs signing key in v1 logic
+        "--signing-key", signing_key,
+        "--signing-pub", signing_pub
     ]
     with patch("sys.argv", cmd):
         main()

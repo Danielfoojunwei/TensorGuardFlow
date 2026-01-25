@@ -71,6 +71,10 @@ import os
 _ENVIRONMENT = os.getenv("TG_ENVIRONMENT", "development").lower()
 _ENABLE_EXPERIMENTAL = os.getenv("TG_ENABLE_EXPERIMENTAL_CRYPTO", "false").lower() == "true"
 
+# Initialize logger early for module-level messages
+from tensorguard.utils.logging import get_logger
+logger = get_logger(__name__)
+
 
 class ExperimentalCryptoError(RuntimeError):
     """Raised when experimental crypto is used in production without explicit opt-in."""
@@ -111,8 +115,6 @@ try:
     HAS_CPP_BACKEND = True
 except ImportError:
     HAS_CPP_BACKEND = False
-
-logger = get_logger(__name__)
 
 @dataclass
 class N2HEParams:
