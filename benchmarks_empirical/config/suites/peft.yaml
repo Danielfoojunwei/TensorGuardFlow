@@ -1,0 +1,51 @@
+# PEFT/LoRA Benchmark Suite
+# Measures adapter training performance and throughput
+
+suite: peft
+
+datasets:
+  - name: cifar100
+    num_tasks: 1
+    classes_per_task: 100
+    train_transforms: standard
+    eval_transforms: standard
+    download: true
+    data_dir: ./data/cifar100
+
+model:
+  backbone: resnet18
+  pretrained: true
+  num_classes: 100
+  hidden_dim: 512
+
+training:
+  epochs_per_task: 10
+  batch_size: 64
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  optimizer: adam
+  scheduler: null
+
+peft:
+  adapter_type: lora
+  lora_rank: 8
+  lora_alpha: 16
+  lora_dropout: 0.1
+  target_modules:
+    - layer3
+    - layer4
+
+methods:
+  - frozen
+  - full_finetune
+  - lora
+  - adapter
+
+seeds:
+  - 42
+  - 123
+  - 456
+
+device: cuda
+output_dir: reports
+fail_on_mock: true

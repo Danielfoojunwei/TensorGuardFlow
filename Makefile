@@ -38,10 +38,16 @@ help:
 	@echo "  make docker-prod - Start with docker compose (production)"
 	@echo "  make db-migrate  - Run database migrations (alembic)"
 	@echo ""
-	@echo "Benchmarking:"
-	@echo "  make bench         - Run full performance benchmarks"
-	@echo "  make bench-api     - API latency benchmarks only"
-	@echo "  make bench-ingest  - Telemetry ingest benchmarks only"
+	@echo "Benchmarking (Empirical - Real Datasets):"
+	@echo "  make bench         - Run all empirical benchmarks (3 seeds, real data)"
+	@echo "  make bench-cl      - Continual Learning benchmarks only"
+	@echo "  make bench-wilds   - WILDS distribution shift benchmarks only"
+	@echo "  make bench-peft    - PEFT/LoRA benchmarks only"
+	@echo "  make bench-fast    - Quick benchmark (1 seed, reduced epochs)"
+	@echo ""
+	@echo "Benchmarking (Infrastructure/API):"
+	@echo "  make bench-api     - API latency benchmarks"
+	@echo "  make bench-ingest  - Telemetry ingest benchmarks"
 	@echo "  make bench-smoke   - Quick benchmark smoke test"
 	@echo "  make bench-stress  - High-load stress testing"
 	@echo "  make bench-regression - Compare against baseline"
@@ -176,12 +182,60 @@ bench-internal:
 	@echo "--- Generating Benchmarking Report ---"
 	PYTHONPATH=src python -m tensorguard.bench.cli report
 
-# Run performance benchmarks (API latency, telemetry throughput)
-bench: bench-api bench-ingest
-	@echo "--- Performance Benchmarks Complete ---"
-	@echo "Results saved to artifacts/benchmarks/"
+# ============================================================================
+# EMPIRICAL BENCHMARKS (Real Public Datasets)
+# ============================================================================
 
-# API latency benchmarks
+# Run all empirical benchmarks with 3 seeds (canonical benchmark)
+bench:
+	@echo "=============================================="
+	@echo "TENSORGUARDFLOW EMPIRICAL BENCHMARKS"
+	@echo "=============================================="
+	@echo "Running benchmarks on real public datasets..."
+	@echo "This will download CIFAR-100, TinyImageNet, CORe50, and WILDS datasets."
+	@echo ""
+	@mkdir -p reports
+	python -m benchmarks_empirical.run --suite all --seeds 42 123 456 --output_dir reports --fail_on_mock true
+	@echo ""
+	@echo "Benchmark complete. Outputs:"
+	@echo "  - reports/run_manifest.json"
+	@echo "  - reports/metrics.json"
+	@echo "  - reports/benchmark_results.csv"
+	@echo "  - reports/benchmark_report.md"
+
+# Run only Continual Learning benchmarks
+bench-cl:
+	@echo "--- Running Continual Learning Benchmarks ---"
+	@mkdir -p reports
+	python -m benchmarks_empirical.run --suite clvision --seeds 42 123 456 --output_dir reports
+
+# Run only WILDS distribution shift benchmarks
+bench-wilds:
+	@echo "--- Running WILDS Distribution Shift Benchmarks ---"
+	@mkdir -p reports
+	python -m benchmarks_empirical.run --suite wilds --seeds 42 123 456 --output_dir reports
+
+# Run only PEFT/LoRA benchmarks
+bench-peft:
+	@echo "--- Running PEFT/LoRA Benchmarks ---"
+	@mkdir -p reports
+	python -m benchmarks_empirical.run --suite peft --seeds 42 123 456 --output_dir reports
+
+# Fast benchmark run (1 seed, reduced epochs) for development
+bench-fast:
+	@echo "--- Running Fast Benchmarks (Development Mode) ---"
+	@mkdir -p reports
+	python -m benchmarks_empirical.run --suite all --fast --output_dir reports
+
+# Run benchmarks using shell script
+bench-script:
+	@./scripts/bench/run_empirical.sh
+
+# ============================================================================
+# LEGACY API BENCHMARKS (Infrastructure Testing)
+# ============================================================================
+
+# Run API performance benchmarks
 bench-api:
 	@echo "--- Running API Latency Benchmarks ---"
 	@mkdir -p artifacts/benchmarks

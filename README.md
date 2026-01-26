@@ -168,33 +168,62 @@ DYNAMICAL Flow v2.3 implements security best practices with full production enfo
 
 ---
 
-## 📊 4. Production Performance Benchmarks
+## 📊 4. Reproducible Performance Benchmarks
 
-All metrics below are **empirically measured** on the DYNAMICAL Flow v2.3 GA stack.
+> **IMPORTANT**: All benchmark claims in this repository are now backed by reproducible empirical results.
+> Run `make bench` to generate the complete benchmark report.
 
-### 🏗️ Platform Infrastructure
+### 🔬 Empirical Benchmark Framework
 
-| Endpoint | Description | RPS | P95 Latency | Status |
-|:---------|:------------|:----|:------------|:-------|
-| **Health Check** | Simple status endpoint | **183 RPS** | **12.5ms** | ✅ GA READY |
-| **Authentication**| Argon2 + JWT generation | **140 RPS** | **48.7ms** | ✅ GA READY |
-| **Fleet Listing** | Database query with auth | **127 RPS** | **65.3ms** | ✅ GA READY |
-| **Telemetry Ingest**| Batch event processing | **14,150/sec**| **685ms** | ✅ GA READY |
+DYNAMICAL Flow includes a comprehensive benchmark framework that evaluates performance on **real public datasets** with deterministic seeds for reproducibility.
 
-### 🤖 High-Fidelity VLA Performance
+```bash
+# Run all benchmarks (generates reports/benchmark_report.md)
+make bench
 
-Validated using the FastUMI clinical task sequence on the production v2.3 core.
+# Quick benchmark for development
+make bench-fast
 
-| Metric | OpenVLA (Plaintext) | DYNAMICAL (GA) | Impact (Hardened) |
-|:-------|:--------------------|:-----------------|:------------------|
-| **Success Rate** | 97.1% | **96.8%** | Stable (-0.3%) |
-| **Privacy (RRE)** | 0.00 (Exposed) | **1.35** (Secure) | **Mathematically Hardened** |
-| **Round Latency** | 45.0 ms | **658.5 ms** | Production Latency |
-| **Bandwidth (PEFT)** | ~500 MB | **16.4 MB** | **30.5x Compression** |
+# Run specific suites
+make bench-cl      # Continual Learning (Split CIFAR-100, TinyImageNet, CORe50)
+make bench-wilds   # Distribution Shift (WILDS datasets)
+make bench-peft    # PEFT/LoRA throughput and efficiency
+```
 
-**Production Evidence:**
-1. **Accuracy Persistence**: Maintains **100% Success Rate Parity** with the insecure baseline.
-2. **Encryption Hardening**: RRE of **1.35** achieved via internally verified Skellam-N2HE.
+### 📈 Benchmark Suites
+
+| Suite | Datasets | Metrics | Baselines |
+|:------|:---------|:--------|:----------|
+| **Continual Learning** | Split CIFAR-100, Split TinyImageNet, CORe50 | Avg Accuracy, Forgetting, BWT, FWT | Frozen, Naive FT, TensorGuard |
+| **Distribution Shift** | WILDS (iWildCam, Camelyon17) | ID Acc, OOD Acc, Worst-Group | Frozen, Naive FT, TensorGuard |
+| **PEFT/LoRA** | CIFAR-100 | Throughput, Memory, Adapter Size | Frozen, Full FT, LoRA |
+
+### 📋 Generated Reports
+
+After running `make bench`, the following files are generated:
+
+| File | Description |
+|:-----|:------------|
+| `reports/benchmark_report.md` | Human-readable benchmark report |
+| `reports/metrics.json` | Structured metrics (JSON) |
+| `reports/benchmark_results.csv` | Tabular results for analysis |
+| `reports/run_manifest.json` | Environment, git commit, pip freeze |
+
+For detailed benchmark methodology and audit of previous claims, see [docs/BENCHMARK_CLAIMS_AUDIT.md](docs/BENCHMARK_CLAIMS_AUDIT.md).
+
+### 🏗️ Platform Infrastructure Benchmarks
+
+Platform API benchmarks are run separately using:
+
+```bash
+make bench-api     # API latency benchmarks
+make bench-ingest  # Telemetry throughput benchmarks
+```
+
+These measure:
+- Health check, authentication, fleet listing latencies
+- Telemetry ingestion throughput
+- Request concurrency handling
 
 ---
 
@@ -361,41 +390,69 @@ tensorguardflow/
 
 ---
 
-## 🔬 13. Production Validation (FastUMI GA Baseline)
+## 🔬 13. Empirical Validation & Reproducible Results
 
-To ensure mathematical alignment with the **FastUMI** (2025) research standards, DYNAMICAL Flow underwent an exhaustive production validation phase. These metrics serve as the canonical baseline for the v2.3 GA release.
+DYNAMICAL Flow provides a comprehensive empirical benchmark framework using **real public datasets**.
+All metrics are reproducible by running the benchmark suite.
 
-### 📊 Canonical Technical Metrics (Verified v2.3 GA)
+### 📊 Reproducing Benchmark Results
 
-| Task Category | Latency | Bandwidth | SR (Hardened) | Routing Stability |
-|:---|:---|:---|:---|:---|
-| **Pick and Place** | 0.017s | **9.4 KB** | **93.9%** | ✅ STABLE |
-| **Rotate Handle** | 0.018s | **9.4 KB** | **95.9%** | ✅ STABLE |
-| **Open Drawer** | 0.017s | **9.4 KB** | **96.0%** | ✅ STABLE |
-| **Push Button** | 0.018s | **9.4 KB** | **97.1%** | ✅ STABLE |
-| **Stack Cubes** | 0.017s | **9.4 KB** | **94.0%** | ✅ STABLE |
+```bash
+# Install dependencies
+pip install -e ".[bench]"
 
-### 📈 Phase 22: Deep FL Metrics & Gating Transparency
+# Run full benchmark suite (3 seeds, real datasets)
+make bench
 
-#### A. VLA Convergence Analysis
-![Convergence Curve](docs/images/convergence_curve.png)
+# View generated report
+cat reports/benchmark_report.md
+```
 
-#### B. IOSP Expert Activation (Gating Specificity)
-![Expert Heatmap](docs/images/expert_heatmap.png)
+### 🎯 Benchmark Datasets
 
-#### C. DYNAMICAL Empirical Safety Scorecard
-![Safety Radar](docs/images/safety_radar.png)
+| Dataset | Type | Tasks | Classes | Source |
+|:--------|:-----|:------|:--------|:-------|
+| **Split CIFAR-100** | Continual Learning | 20 | 100 | torchvision |
+| **Split TinyImageNet** | Continual Learning | 20 | 200 | Stanford CS231N |
+| **CORe50** | Continual Learning | 10 | 50 | VLomonaco/core50 |
+| **iWildCam** | Distribution Shift | 1 | 182 | WILDS |
+
+### 📈 Key Metrics Tracked
+
+| Metric | Description | Computation |
+|:-------|:------------|:------------|
+| **Average Accuracy** | Mean accuracy across all tasks | After final task training |
+| **Forgetting** | Performance drop on previous tasks | max(a_ij) - a_Tj |
+| **Backward Transfer** | Impact of new learning on old tasks | a_Tj - a_jj |
+| **Forward Transfer** | Zero-shot performance on future tasks | a_i-1,i - baseline |
+| **ID/OOD Accuracy** | In vs out-of-distribution performance | Standard accuracy |
+| **Worst-Group Accuracy** | Minimum group performance | WILDS grouper |
 
 ---
 
-## 🔁 14. Hardened Lifelong Learning
+## 🔁 14. Continual Learning Evaluation
 
-To validate DYNAMICAL Flow's **Lifelong Learning** capabilities, we conducted a 500-cycle production learning experiment.
+DYNAMICAL Flow is evaluated on standard continual learning benchmarks. Run the benchmark suite to generate empirical metrics:
 
-| Metric | Result | Target (Success) | Significance |
-|:---|:---|:---|:---|
-| **Negative Backward Transfer** | **4.21%** | ≤ 15% | Enhanced persistence via specialized experts. |
-| **Forward Transfer (FWT)** | **20.3%** | ≥ 0% | Seeded HE allows faster feature propagation. |
+```bash
+make bench-cl
+```
+
+### Metrics Computed
+
+| Metric | Definition | Target |
+|:-------|:-----------|:-------|
+| **Negative Backward Transfer (NBT)** | Forgetting rate on previously learned tasks | ≤ 15% |
+| **Forward Transfer (FWT)** | Zero-shot performance improvement from prior learning | ≥ 0% |
+| **Average Accuracy** | Mean accuracy after training on all tasks | Maximize |
+
+### Baselines Compared
+
+1. **Frozen Backbone**: No adaptation, evaluate pretrained features
+2. **Naive Sequential Fine-tuning**: Standard fine-tuning without CL strategies
+3. **TensorGuardFlow**: Adapter-based learning with artifact management
+
+See `reports/benchmark_report.md` after running `make bench` for detailed results.
 
 ---
 
