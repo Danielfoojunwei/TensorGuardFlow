@@ -43,6 +43,8 @@ dependencies = [
     # Serialization and database migration
     "msgpack>=1.0.0,<2.0.0",
     "alembic>=1.12.0,<2.0.0",
+    # FastAPI form/file upload support
+    "python-multipart>=0.0.7,<1.0.0",
 ]
 
 [project.optional-dependencies]
@@ -81,9 +83,35 @@ dev = [
     "httpx>=0.25.0,<1.0.0",
 ]
 
-# All optional dependencies
+# All optional dependencies (flattened to avoid pip recursion)
 all = [
-    "tensorguard[bench,fl,acme,pqc,dev]",
+    # bench
+    "xgboost>=2.0.0,<3.0.0",
+    "scikit-learn>=1.3.0,<2.0.0",
+    "scipy>=1.11.0,<2.0.0",
+    "psutil>=5.9.0,<6.0.0",
+    # fl
+    "flwr>=1.5.0,<2.0.0",
+    "tenseal>=0.3.0,<1.0.0",
+    # acme
+    "josepy>=1.14.0,<2.0.0",
+    # pqc (requires liboqs native library)
+    "liboqs-python>=0.10.0",
+    # dev
+    "pytest>=7.4.0,<8.0.0",
+    "pytest-asyncio>=0.21.0,<1.0.0",
+    "pytest-cov>=4.1.0,<5.0.0",
+    "ruff>=0.1.0,<1.0.0",
+    "mypy>=1.7.0,<2.0.0",
+    "httpx>=0.25.0,<1.0.0",
+]
+
+# Test dependencies (minimal set for CI without optional heavy deps)
+test = [
+    "pytest>=7.4.0,<8.0.0",
+    "pytest-asyncio>=0.21.0,<1.0.0",
+    "pytest-cov>=4.1.0,<5.0.0",
+    "httpx>=0.25.0,<1.0.0",
 ]
 
 [project.urls]

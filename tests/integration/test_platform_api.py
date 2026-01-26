@@ -1,6 +1,8 @@
+import os
+# Set development environment BEFORE any imports that load platform modules
+os.environ.setdefault("TG_ENVIRONMENT", "development")
 
 import pytest
-import os
 import shutil
 from fastapi.testclient import TestClient
 from sqlmodel import Session, SQLModel, create_engine

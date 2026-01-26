@@ -342,7 +342,7 @@ class N2HEContext:
         )
 
     def load_key(self, name: str):
-        """Load the secret key from the unified vault."""
+        """Load the secret key from the unified vault by name."""
         try:
             data, meta = vault.load_key_artifact(
                 scope=KeyScope.AGGREGATION,
@@ -356,6 +356,49 @@ class N2HEContext:
                 logger.warning(f"Key 'n' mismatch: {meta.params.get('n')} vs {self.params.n}")
         except Exception as e:
             raise CryptographyError(f"Failed to load N2HE key '{name}': {e}")
+
+    def save_key_to_file(self, path: str):
+        """Save the secret key to a file path (not vault)."""
+        if self.lwe_key is None:
+            raise CryptographyError("No key to save")
+
+        file_path = Path(path)
+        # Ensure parent directory exists
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Ensure consistent suffix
+        if not str(file_path).endswith(".npy.bin"):
+            file_path = Path(str(file_path) + ".npy.bin")
+
+        # Binary serialization
+        data = self.lwe_key.astype(np.int64).tobytes()
+        file_path.write_bytes(data)
+        logger.debug(f"N2HE key saved to file: {file_path}")
+
+    def load_key_from_file(self, path: str):
+        """Load the secret key from a file path (not vault)."""
+        file_path = Path(path)
+
+        # Try with and without suffix
+        if not file_path.exists():
+            file_path_with_suffix = Path(str(path) + ".npy.bin")
+            if file_path_with_suffix.exists():
+                file_path = file_path_with_suffix
+            else:
+                raise CryptographyError(f"Key file not found: {path}")
+
+        try:
+            data = file_path.read_bytes()
+            self.lwe_key = np.frombuffer(data, dtype=np.int64)
+
+            # Validate key dimension matches params
+            if len(self.lwe_key) != self.params.n:
+                logger.warning(
+                    f"Key dimension mismatch: loaded {len(self.lwe_key)}, expected {self.params.n}"
+                )
+            logger.debug(f"N2HE key loaded from file: {file_path}")
+        except Exception as e:
+            raise CryptographyError(f"Failed to load N2HE key from '{path}': {e}")
 
     def encrypt_batch(self, messages: np.ndarray) -> LWECiphertext:
         """
@@ -404,22 +447,66 @@ class N2HEContext:
         return np.pad(flat, (0, pad)) if pad > 0 else flat
 
 class N2HEEncryptor:
-    """Professional wrapper for N2HE encryption with chunking and key rotation."""
-    def __init__(self, key_path: Optional[str] = None, security_level: int = 128):
+    """
+    Professional wrapper for N2HE encryption with chunking and key rotation.
+
+    Key Loading Options:
+        - key_name: Load key from vault by name (recommended for production)
+        - key_file: Load key from filesystem path
+        - Neither: Generate a new ephemeral key
+
+    Args:
+        key_name: Name of key in the unified vault (e.g., "aggregation_key")
+        key_file: Filesystem path to key file (e.g., "/keys/my_key.npy.bin")
+        security_level: Security level in bits (128, 192, 256)
+    """
+    def __init__(
+        self,
+        key_name: Optional[str] = None,
+        key_file: Optional[str] = None,
+        security_level: int = 128,
+        # Deprecated: for backward compatibility
+        key_path: Optional[str] = None,
+    ):
         self.params = N2HEParams(security_bits=security_level)
         self._ctx = N2HEContext(self.params)
         self._usage_count = 0
         self._max_uses = settings.MAX_KEY_USES
-        
+
         if settings.PRODUCTION_MODE and not settings.ENABLE_EXPERIMENTAL_CRYPTO:
             logger.warning(
                 "N2HE: Running with legacy SECURITY_STRICT=False. "
                 "Ensure FastUMI validation suite passes before deployment."
             )
 
-        if key_path and Path(key_path).exists():
-            self._ctx.load_key(key_path)
+        # Handle key loading with clear semantics
+        if key_name is not None:
+            # Load from vault by name
+            self._ctx.load_key(key_name)
+        elif key_file is not None:
+            # Load from filesystem path
+            if Path(key_file).exists():
+                self._ctx.load_key_from_file(key_file)
+            else:
+                logger.warning(f"Key file not found: {key_file}, generating new key")
+                self._ctx.generate_keys()
+        elif key_path is not None:
+            # Deprecated: backward compatibility - try file first, then vault
+            logger.warning(
+                "N2HEEncryptor(key_path=...) is deprecated. "
+                "Use key_name for vault keys or key_file for file paths."
+            )
+            if Path(key_path).exists():
+                self._ctx.load_key_from_file(key_path)
+            else:
+                # Assume it's a vault name for backward compatibility
+                try:
+                    self._ctx.load_key(key_path)
+                except CryptographyError:
+                    logger.warning(f"Key '{key_path}' not found in vault or filesystem, generating new key")
+                    self._ctx.generate_keys()
         else:
+            # No key specified, generate ephemeral
             self._ctx.generate_keys()
         
     def encrypt(self, data: bytes) -> bytes:

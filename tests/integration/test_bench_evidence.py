@@ -1,8 +1,15 @@
-import pytest
 import os
+# Set development environment BEFORE any imports
+os.environ.setdefault("TG_ENVIRONMENT", "development")
+
+import pytest
 import json
 import shutil
 from unittest.mock import MagicMock
+
+# Skip if bench dependencies not available
+psutil = pytest.importorskip("psutil", reason="psutil required for bench tests")
+
 from tensorguard.bench.cli import run_report
 from tensorguard.bench.reporting import ReportGenerator
 

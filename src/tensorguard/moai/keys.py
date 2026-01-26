@@ -41,7 +41,13 @@ class MoaiKeyManager:
         self.scope = KeyScope.INFERENCE
 
     def generate_keypair(self, tenant_id: str, config: MoaiConfig) -> Tuple[str, bytes, bytes, bytes]:
-        import tenseal as ts
+        try:
+            import tenseal as ts
+        except ImportError as e:
+            raise ImportError(
+                "TenSEAL is required for MOAI key generation. "
+                "Install with: pip install tensorguard[fl]"
+            ) from e
         key_id = f"moai_{secrets.token_hex(8)}"
         
         ctx = ts.context(

@@ -1,3 +1,6 @@
+import os
+# Set development environment BEFORE any imports that load platform modules
+os.environ.setdefault("TG_ENVIRONMENT", "development")
 
 import pytest
 from fastapi.testclient import TestClient

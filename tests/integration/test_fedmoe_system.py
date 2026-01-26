@@ -1,5 +1,13 @@
+"""
+Integration test for FedMoE system.
 
+Requires: pip install tensorguard[fl] (includes flwr)
+"""
 import pytest
+
+# Skip entire module if flwr is not available
+flwr = pytest.importorskip("flwr", reason="Flower (flwr) required for FedMoE tests")
+
 import numpy as np
 from datetime import datetime
 from typing import List, Tuple, Dict, Any

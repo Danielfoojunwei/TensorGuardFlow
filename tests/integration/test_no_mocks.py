@@ -7,6 +7,9 @@ to prevent regression.
 
 Usage:
     TG_ENVIRONMENT=production pytest tests/integration/test_no_mocks.py -v
+
+NOTE: These tests use a module-scoped fixture to set TG_ENVIRONMENT=production
+only for the tests in this file, without affecting other test files.
 """
 
 import os
@@ -14,8 +17,11 @@ import pytest
 from datetime import datetime
 from unittest.mock import patch
 
-# Set production environment before imports
-os.environ["TG_ENVIRONMENT"] = "production"
+
+@pytest.fixture(autouse=True)
+def production_environment(monkeypatch):
+    """Set production environment for all tests in this module."""
+    monkeypatch.setenv("TG_ENVIRONMENT", "production")
 
 
 class TestNoMockData:
@@ -79,19 +85,19 @@ class TestNoMockData:
 class TestProductionGates:
     """Test that production gates block simulator/demo code."""
 
-    def test_tpm_simulator_blocked_in_production(self):
+    def test_tpm_simulator_blocked_in_production(self, monkeypatch):
         """TPM simulator should raise error in production without override."""
-        os.environ["TG_ENVIRONMENT"] = "production"
-        os.environ.pop("TG_ALLOW_TPM_SIMULATOR", None)
+        # TG_ENVIRONMENT already set to production by autouse fixture
+        monkeypatch.delenv("TG_ALLOW_TPM_SIMULATOR", raising=False)
 
         from tensorguard.utils.production_gates import is_production
 
         assert is_production(), "Should detect production environment"
 
-    def test_demo_mode_blocked_in_production(self):
+    def test_demo_mode_blocked_in_production(self, monkeypatch):
         """Demo mode should be disabled in production."""
-        os.environ["TG_ENVIRONMENT"] = "production"
-        os.environ.pop("TG_DEMO_MODE", None)
+        # TG_ENVIRONMENT already set to production by autouse fixture
+        monkeypatch.delenv("TG_DEMO_MODE", raising=False)
 
         from tensorguard.utils.production_gates import is_demo_mode
 
@@ -99,7 +105,7 @@ class TestProductionGates:
 
     def test_demo_trainer_raises_in_production(self):
         """DemoTrainer should not be usable in production."""
-        os.environ["TG_ENVIRONMENT"] = "production"
+        # TG_ENVIRONMENT already set to production by autouse fixture
 
         # The DemoTrainer class should either not exist or raise on init
         try:

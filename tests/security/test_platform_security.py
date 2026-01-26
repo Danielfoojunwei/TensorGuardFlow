@@ -1,5 +1,8 @@
-import unittest
 import os
+# Set development environment before any imports
+os.environ.setdefault("TG_ENVIRONMENT", "development")
+
+import unittest
 import shutil
 from fastapi.testclient import TestClient
 from tensorguard.platform.main import app
