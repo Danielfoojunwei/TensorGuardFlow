@@ -164,6 +164,36 @@ if PROMETHEUS_AVAILABLE:
         buckets=[1, 5, 10, 30, 60, 120, 300, 600, 1800, 3600]
     )
 
+    # Vault metrics
+    VAULT_OPS = Counter(
+        'tensorguard_vault_operations_total',
+        'Total vault operations',
+        ['operation']  # save, load, delete, export, import
+    )
+    VAULT_ERRORS = Counter(
+        'tensorguard_vault_errors_total',
+        'Total vault operation errors',
+        ['operation', 'error_type']
+    )
+    VAULT_KEYS_TOTAL = Gauge(
+        'tensorguard_vault_keys_total',
+        'Total number of keys in vault',
+        ['scope']  # identity, inference, aggregation, system
+    )
+
+    # SLO metrics
+    SLO_REQUEST_LATENCY = Histogram(
+        'tensorguard_slo_request_latency_seconds',
+        'Request latency for SLO tracking (p50, p95, p99)',
+        ['endpoint_group'],  # auth, api, health
+        buckets=[0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5]
+    )
+    SLO_AVAILABILITY = Gauge(
+        'tensorguard_slo_availability_ratio',
+        'Current availability ratio (successful requests / total)',
+        ['service']
+    )
+
 
 def setup_observability(
     service_name: str = "tensorguard",
@@ -304,3 +334,177 @@ def setup_otel(service_name: str = "moai-inference"):
     """
     setup_observability(service_name, enable_tracing=True)
     return get_tracer(service_name)
+
+
+# =============================================================================
+# METRICS MIDDLEWARE
+# =============================================================================
+
+class MetricsMiddleware:
+    """
+    ASGI Middleware for automatic request metrics collection.
+
+    Tracks:
+    - Request count by method, endpoint, status
+    - Request latency histogram
+    - SLO latency for endpoint groups
+
+    Usage:
+        from tensorguard.observability.otel import MetricsMiddleware
+        app.add_middleware(MetricsMiddleware)
+    """
+
+    ENDPOINT_GROUPS = {
+        '/auth': 'auth',
+        '/api/v1/auth': 'auth',
+        '/health': 'health',
+        '/healthz': 'health',
+        '/ready': 'health',
+        '/readyz': 'health',
+        '/live': 'health',
+        '/metrics': 'health',
+    }
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        import time
+        start_time = time.time()
+        status_code = 500  # Default in case of error
+
+        async def send_wrapper(message):
+            nonlocal status_code
+            if message["type"] == "http.response.start":
+                status_code = message["status"]
+            await send(message)
+
+        try:
+            await self.app(scope, receive, send_wrapper)
+        finally:
+            if PROMETHEUS_AVAILABLE:
+                duration = time.time() - start_time
+                path = scope.get("path", "/unknown")
+                method = scope.get("method", "UNKNOWN")
+
+                # Normalize path for metrics (remove IDs)
+                normalized_path = self._normalize_path(path)
+
+                # Record request metrics
+                REQUEST_COUNT.labels(
+                    method=method,
+                    endpoint=normalized_path,
+                    status=str(status_code)
+                ).inc()
+
+                REQUEST_LATENCY.labels(
+                    method=method,
+                    endpoint=normalized_path
+                ).observe(duration)
+
+                # Record SLO latency for endpoint group
+                endpoint_group = self._get_endpoint_group(path)
+                if endpoint_group:
+                    SLO_REQUEST_LATENCY.labels(
+                        endpoint_group=endpoint_group
+                    ).observe(duration)
+
+    def _normalize_path(self, path: str) -> str:
+        """Normalize path by replacing IDs with placeholders."""
+        import re
+        # Replace UUIDs
+        path = re.sub(r'/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', '/{id}', path)
+        # Replace numeric IDs
+        path = re.sub(r'/\d+', '/{id}', path)
+        return path
+
+    def _get_endpoint_group(self, path: str) -> str:
+        """Get the endpoint group for SLO tracking."""
+        for prefix, group in self.ENDPOINT_GROUPS.items():
+            if path.startswith(prefix):
+                return group
+        if path.startswith('/api'):
+            return 'api'
+        return 'other'
+
+
+# =============================================================================
+# HELPER FUNCTIONS FOR METRICS
+# =============================================================================
+
+def record_auth_success(method: str = "jwt"):
+    """Record a successful authentication."""
+    if PROMETHEUS_AVAILABLE:
+        AUTH_SUCCESS.labels(method=method).inc()
+
+
+def record_auth_failure(reason: str):
+    """Record an authentication failure."""
+    if PROMETHEUS_AVAILABLE:
+        AUTH_FAILURES.labels(reason=reason).inc()
+
+
+def record_policy_evaluation(policy: str, result: str, resource: str = None):
+    """Record a policy evaluation."""
+    if PROMETHEUS_AVAILABLE:
+        POLICY_EVALUATIONS.labels(policy=policy, result=result).inc()
+        if result == "deny" and resource:
+            POLICY_DENIALS.labels(policy=policy, resource=resource).inc()
+
+
+def record_vault_operation(operation: str):
+    """Record a vault operation."""
+    if PROMETHEUS_AVAILABLE:
+        VAULT_OPS.labels(operation=operation).inc()
+
+
+def record_vault_error(operation: str, error_type: str):
+    """Record a vault operation error."""
+    if PROMETHEUS_AVAILABLE:
+        VAULT_ERRORS.labels(operation=operation, error_type=error_type).inc()
+
+
+def record_job_completion(job_type: str, status: str, duration_seconds: float = None):
+    """Record a job completion."""
+    if PROMETHEUS_AVAILABLE:
+        JOB_COMPLETIONS.labels(job_type=job_type, status=status).inc()
+        if duration_seconds is not None:
+            JOB_DURATION.labels(job_type=job_type).observe(duration_seconds)
+        if status == "failed":
+            JOB_FAILURES.labels(job_type=job_type, reason="execution_error").inc()
+
+
+def get_current_trace_id() -> str:
+    """Get the current trace ID for log correlation."""
+    if not OTEL_AVAILABLE:
+        return ""
+
+    try:
+        current_span = trace.get_current_span()
+        if current_span:
+            ctx = current_span.get_span_context()
+            if ctx.is_valid:
+                return format(ctx.trace_id, '032x')
+    except Exception:
+        pass
+    return ""
+
+
+def get_current_span_id() -> str:
+    """Get the current span ID for log correlation."""
+    if not OTEL_AVAILABLE:
+        return ""
+
+    try:
+        current_span = trace.get_current_span()
+        if current_span:
+            ctx = current_span.get_span_context()
+            if ctx.is_valid:
+                return format(ctx.span_id, '016x')
+    except Exception:
+        pass
+    return ""

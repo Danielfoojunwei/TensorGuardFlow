@@ -209,6 +209,74 @@ def check_security() -> Dict[str, Any]:
     return results
 
 
+def check_vault() -> Dict[str, Any]:
+    """Check vault configuration and accessibility."""
+    from pathlib import Path
+
+    results: Dict[str, Any] = {
+        "name": "Key Vault",
+        "status": "unknown",
+        "checks": [],
+    }
+
+    vault_path = Path(os.getenv("TG_VAULT_PATH", "keys"))
+
+    # Check vault directory exists
+    if vault_path.exists():
+        results["checks"].append(("Directory", "OK", str(vault_path.absolute())))
+    else:
+        try:
+            vault_path.mkdir(parents=True, exist_ok=True)
+            results["checks"].append(("Directory", "OK", f"Created: {vault_path.absolute()}"))
+        except Exception as e:
+            results["checks"].append(("Directory", "FAIL", f"Cannot create: {e}"))
+
+    # Check write permissions
+    try:
+        test_file = vault_path / ".doctor_test"
+        test_file.write_text("test")
+        test_file.unlink()
+        results["checks"].append(("Write Permission", "OK", "Vault is writable"))
+    except Exception as e:
+        results["checks"].append(("Write Permission", "FAIL", str(e)))
+
+    # Check encryption configuration
+    master_key = os.getenv("TG_VAULT_MASTER_KEY")
+    unencrypted = os.getenv("TG_VAULT_UNENCRYPTED", "false").lower() == "true"
+    environment = os.getenv("TG_ENVIRONMENT", "development")
+
+    if master_key:
+        if len(master_key) >= 32:
+            results["checks"].append(("Encryption", "OK", "AES-256-GCM enabled"))
+        else:
+            results["checks"].append(("Encryption", "WARN", f"Key too short ({len(master_key)} chars, need 32+)"))
+    elif unencrypted:
+        results["checks"].append(("Encryption", "WARN", "Disabled via TG_VAULT_UNENCRYPTED=true"))
+    elif environment == "production":
+        results["checks"].append(("Encryption", "FAIL", "Master key required in production"))
+    else:
+        results["checks"].append(("Encryption", "INFO", "Not configured (plaintext in dev)"))
+
+    # Count existing keys
+    try:
+        key_files = list(vault_path.glob("**/*.key")) + list(vault_path.glob("**/*.bin"))
+        meta_files = list(vault_path.glob("**/*.meta.json"))
+        results["checks"].append(("Stored Keys", "OK", f"{len(key_files)} key files, {len(meta_files)} metadata"))
+    except Exception as e:
+        results["checks"].append(("Stored Keys", "WARN", str(e)))
+
+    # Determine overall status
+    statuses = [c[1] for c in results["checks"]]
+    if "FAIL" in statuses:
+        results["status"] = "unhealthy"
+    elif "WARN" in statuses:
+        results["status"] = "degraded"
+    else:
+        results["status"] = "healthy"
+
+    return results
+
+
 def check_dependencies() -> Dict[str, Any]:
     """Check required and optional dependencies."""
     results: Dict[str, Any] = {
@@ -313,6 +381,7 @@ def main():
     parser.add_argument("--db", action="store_true", help="Check database only")
     parser.add_argument("--config", action="store_true", help="Check configuration only")
     parser.add_argument("--security", action="store_true", help="Check security only")
+    parser.add_argument("--vault", action="store_true", help="Check vault only")
     parser.add_argument("--deps", action="store_true", help="Check dependencies only")
     parser.add_argument("--all", action="store_true", help="Run all checks (default)")
     parser.add_argument("--migrate", action="store_true", help="Run database migrations")
@@ -327,7 +396,7 @@ def main():
         sys.exit(0 if success else 1)
 
     # Determine which checks to run
-    run_all = args.all or not (args.db or args.config or args.security or args.deps)
+    run_all = args.all or not (args.db or args.config or args.security or args.vault or args.deps)
 
     results = []
 
@@ -336,6 +405,9 @@ def main():
 
     if run_all or args.security:
         results.append(check_security())
+
+    if run_all or args.vault:
+        results.append(check_vault())
 
     if run_all or args.deps:
         results.append(check_dependencies())

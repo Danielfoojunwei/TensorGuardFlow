@@ -430,6 +430,190 @@ class UnifiedKeyManager:
 
         return migrated
 
+    def export_vault(
+        self,
+        output_path: str,
+        include_material: bool = False,
+        scope: Optional[KeyScope] = None,
+    ) -> Dict[str, Any]:
+        """
+        Export vault metadata (and optionally key material) for disaster recovery.
+
+        By default, exports ONLY metadata (key names, algorithms, timestamps).
+        Use include_material=True to include actual key data (SECURITY SENSITIVE).
+
+        Args:
+            output_path: Path to write the export JSON file
+            include_material: If True, include encrypted key material (default: False)
+            scope: Optional scope filter
+
+        Returns:
+            Export summary dict
+        """
+        export_data = {
+            "version": "1.0",
+            "exported_at": datetime.datetime.now(datetime.UTC).isoformat(),
+            "vault_root": str(self.vault_root.absolute()),
+            "encryption_enabled": self.encryption_enabled,
+            "include_material": include_material,
+            "keys": [],
+        }
+
+        keys = self.list_keys(scope)
+        exported_count = 0
+        errors = []
+
+        for key_meta in keys:
+            key_entry = {
+                "key_id": key_meta.get("key_id"),
+                "scope": key_meta.get("scope"),
+                "algorithm": key_meta.get("algorithm"),
+                "created_at": key_meta.get("created_at"),
+                "owner_id": key_meta.get("owner_id"),
+                "version": key_meta.get("version"),
+                "params": {k: v for k, v in key_meta.get("params", {}).items() if k != "encrypted"},
+                "encrypted_at_rest": key_meta.get("params", {}).get("encrypted", False),
+            }
+
+            if include_material:
+                try:
+                    key_scope = KeyScope(key_meta["scope"])
+                    key_name = key_meta["key_id"].split("_", 1)[1]
+                    data, _ = self.load_key_artifact(key_scope, key_name)
+
+                    # Always export as base64-encoded, even if decrypted
+                    # Re-encrypt with export-specific protection
+                    key_entry["material"] = base64.b64encode(data).decode("ascii")
+                    key_entry["material_encoding"] = "base64"
+                except Exception as e:
+                    key_entry["material_error"] = str(e)
+                    errors.append(f"{key_meta.get('key_id')}: {e}")
+
+            export_data["keys"].append(key_entry)
+            exported_count += 1
+
+        export_data["summary"] = {
+            "total_keys": exported_count,
+            "errors": len(errors),
+            "error_details": errors if errors else None,
+        }
+
+        # Write export file
+        output = Path(output_path)
+        output.write_text(json.dumps(export_data, indent=2))
+        try:
+            output.chmod(0o600)  # Protect export file
+        except (OSError, PermissionError):
+            pass
+
+        logger.info(f"Exported {exported_count} keys to {output_path} (include_material={include_material})")
+        return export_data["summary"]
+
+    def import_vault(
+        self,
+        input_path: str,
+        import_material: bool = False,
+        overwrite: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Import vault from an export file.
+
+        By default, only validates and reports on the export contents.
+        Use import_material=True to actually import key material.
+
+        Args:
+            input_path: Path to the export JSON file
+            import_material: If True, import key material (requires material in export)
+            overwrite: If True, overwrite existing keys
+
+        Returns:
+            Import summary dict
+        """
+        input_file = Path(input_path)
+        if not input_file.exists():
+            raise FileNotFoundError(f"Export file not found: {input_path}")
+
+        export_data = json.loads(input_file.read_text())
+
+        # Validate export format
+        if export_data.get("version") != "1.0":
+            raise ValueError(f"Unsupported export version: {export_data.get('version')}")
+
+        summary = {
+            "total_in_export": len(export_data.get("keys", [])),
+            "imported": 0,
+            "skipped_existing": 0,
+            "skipped_no_material": 0,
+            "errors": [],
+        }
+
+        existing_keys = {k["key_id"] for k in self.list_keys()}
+
+        for key_entry in export_data.get("keys", []):
+            key_id = key_entry.get("key_id")
+
+            # Check if key exists
+            if key_id in existing_keys and not overwrite:
+                summary["skipped_existing"] += 1
+                logger.debug(f"Skipping existing key: {key_id}")
+                continue
+
+            if import_material:
+                material = key_entry.get("material")
+                if not material:
+                    summary["skipped_no_material"] += 1
+                    logger.warning(f"No material in export for key: {key_id}")
+                    continue
+
+                try:
+                    # Decode material
+                    data = base64.b64decode(material)
+                    key_scope = KeyScope(key_entry["scope"])
+                    key_name = key_id.split("_", 1)[1]
+
+                    # Import key
+                    self.save_key_artifact(
+                        scope=key_scope,
+                        name=key_name,
+                        data=data,
+                        algorithm=key_entry.get("algorithm", "unknown"),
+                        params=key_entry.get("params", {}),
+                    )
+                    summary["imported"] += 1
+                    logger.info(f"Imported key: {key_id}")
+
+                except Exception as e:
+                    summary["errors"].append(f"{key_id}: {e}")
+                    logger.error(f"Failed to import key {key_id}: {e}")
+
+        return summary
+
+    def get_vault_status(self) -> Dict[str, Any]:
+        """Get comprehensive vault status for health checks."""
+        keys = self.list_keys()
+        scopes = {}
+        for key in keys:
+            scope = key.get("scope", "unknown")
+            scopes[scope] = scopes.get(scope, 0) + 1
+
+        return {
+            "vault_root": str(self.vault_root.absolute()),
+            "encryption_enabled": self.encryption_enabled,
+            "total_keys": len(keys),
+            "keys_by_scope": scopes,
+            "writable": self._check_writable(),
+        }
+
+    def _check_writable(self) -> bool:
+        """Check if vault directory is writable."""
+        try:
+            test_file = self.vault_root / ".write_test"
+            test_file.write_text("test")
+            test_file.unlink()
+            return True
+        except Exception:
+            return False
+
 
 # Global Instance - lazy initialization
 _vault_instance: Optional[UnifiedKeyManager] = None
@@ -460,3 +644,182 @@ class _VaultProxy:
 
 
 vault = _VaultProxy()
+
+
+# ============================================================================
+# CLI Interface for Vault Operations
+# ============================================================================
+
+def _cli_export(args):
+    """CLI handler for vault export."""
+    vault_mgr = get_vault(args.vault_path)
+    scope = KeyScope(args.scope) if args.scope else None
+
+    print(f"Exporting vault from: {vault_mgr.vault_root}")
+    if args.include_material:
+        print("WARNING: Including key material in export. Protect this file carefully!")
+
+    summary = vault_mgr.export_vault(
+        output_path=args.output,
+        include_material=args.include_material,
+        scope=scope,
+    )
+
+    print(f"\nExport complete:")
+    print(f"  Total keys: {summary['total_keys']}")
+    print(f"  Errors: {summary['errors']}")
+    print(f"  Output: {args.output}")
+
+
+def _cli_import(args):
+    """CLI handler for vault import."""
+    vault_mgr = get_vault(args.vault_path)
+
+    print(f"Importing vault to: {vault_mgr.vault_root}")
+    print(f"From: {args.input}")
+
+    summary = vault_mgr.import_vault(
+        input_path=args.input,
+        import_material=args.import_material,
+        overwrite=args.overwrite,
+    )
+
+    print(f"\nImport complete:")
+    print(f"  Total in export: {summary['total_in_export']}")
+    print(f"  Imported: {summary['imported']}")
+    print(f"  Skipped (existing): {summary['skipped_existing']}")
+    print(f"  Skipped (no material): {summary['skipped_no_material']}")
+    if summary['errors']:
+        print(f"  Errors: {len(summary['errors'])}")
+        for err in summary['errors']:
+            print(f"    - {err}")
+
+
+def _cli_status(args):
+    """CLI handler for vault status."""
+    vault_mgr = get_vault(args.vault_path)
+    status = vault_mgr.get_vault_status()
+
+    print(f"Vault Status")
+    print(f"{'='*50}")
+    print(f"  Root: {status['vault_root']}")
+    print(f"  Encryption: {'Enabled (AES-256-GCM)' if status['encryption_enabled'] else 'Disabled'}")
+    print(f"  Writable: {'Yes' if status['writable'] else 'No'}")
+    print(f"  Total Keys: {status['total_keys']}")
+    if status['keys_by_scope']:
+        print(f"  Keys by scope:")
+        for scope, count in status['keys_by_scope'].items():
+            print(f"    - {scope}: {count}")
+
+
+def _cli_list(args):
+    """CLI handler for listing keys."""
+    vault_mgr = get_vault(args.vault_path)
+    scope = KeyScope(args.scope) if args.scope else None
+    keys = vault_mgr.list_keys(scope)
+
+    if not keys:
+        print("No keys found.")
+        return
+
+    print(f"{'Key ID':<40} {'Scope':<12} {'Algorithm':<15} {'Created'}")
+    print("-" * 90)
+    for key in keys:
+        key_id = key.get("key_id", "?")[:40]
+        scope_val = key.get("scope", "?")[:12]
+        algo = key.get("algorithm", "?")[:15]
+        created = key.get("created_at", "?")[:25]
+        encrypted = "🔒" if key.get("params", {}).get("encrypted") else "⚠️"
+        print(f"{encrypted} {key_id:<38} {scope_val:<12} {algo:<15} {created}")
+
+
+def _cli_migrate(args):
+    """CLI handler for migrating keys to encrypted storage."""
+    vault_mgr = get_vault(args.vault_path)
+
+    if not vault_mgr.encryption_enabled:
+        print("ERROR: Encryption not enabled. Set TG_VAULT_MASTER_KEY environment variable.")
+        return
+
+    scope = KeyScope(args.scope) if args.scope else None
+    migrated = vault_mgr.migrate_to_encrypted(scope)
+    print(f"Migrated {migrated} keys to encrypted storage.")
+
+
+def main():
+    """Main CLI entry point."""
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="TensorGuard Vault Management CLI",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Check vault status
+  python -m tensorguard.core.keys status
+
+  # List all keys
+  python -m tensorguard.core.keys list
+
+  # Export metadata only (safe for backup)
+  python -m tensorguard.core.keys export --out vault_backup.json
+
+  # Export with key material (for full disaster recovery)
+  python -m tensorguard.core.keys export --out vault_full.json --include-material
+
+  # Import from export (validation only)
+  python -m tensorguard.core.keys import --in vault_backup.json
+
+  # Import with key material
+  python -m tensorguard.core.keys import --in vault_full.json --import-material
+
+  # Migrate unencrypted keys to encrypted
+  python -m tensorguard.core.keys migrate
+        """
+    )
+    parser.add_argument("--vault-path", default="keys", help="Vault root directory")
+
+    subparsers = parser.add_subparsers(dest="command", help="Command to run")
+
+    # Status command
+    status_parser = subparsers.add_parser("status", help="Show vault status")
+    status_parser.set_defaults(func=_cli_status)
+
+    # List command
+    list_parser = subparsers.add_parser("list", help="List keys")
+    list_parser.add_argument("--scope", choices=["identity", "inference", "aggregation", "system"])
+    list_parser.set_defaults(func=_cli_list)
+
+    # Export command
+    export_parser = subparsers.add_parser("export", help="Export vault")
+    export_parser.add_argument("--out", "-o", required=True, help="Output file path")
+    export_parser.add_argument("--include-material", action="store_true",
+                               help="Include key material (SECURITY SENSITIVE)")
+    export_parser.add_argument("--scope", choices=["identity", "inference", "aggregation", "system"])
+    export_parser.set_defaults(func=_cli_export)
+
+    # Import command
+    import_parser = subparsers.add_parser("import", help="Import vault")
+    import_parser.add_argument("--in", "-i", dest="input", required=True, help="Input file path")
+    import_parser.add_argument("--import-material", action="store_true",
+                               help="Import key material from export")
+    import_parser.add_argument("--overwrite", action="store_true",
+                               help="Overwrite existing keys")
+    import_parser.set_defaults(func=_cli_import)
+
+    # Migrate command
+    migrate_parser = subparsers.add_parser("migrate", help="Migrate to encrypted storage")
+    migrate_parser.add_argument("--scope", choices=["identity", "inference", "aggregation", "system"])
+    migrate_parser.set_defaults(func=_cli_migrate)
+
+    args = parser.parse_args()
+
+    if not args.command:
+        parser.print_help()
+        return
+
+    args.func(args)
+
+
+if __name__ == "__main__":
+    main()

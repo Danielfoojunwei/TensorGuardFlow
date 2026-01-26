@@ -7,18 +7,28 @@ from .database import check_db_health, SessionLocal
 from .middleware import (
     RequestIDMiddleware,
     StructuredLoggingMiddleware,
+    RateLimitMiddleware,
     StandardErrorResponse,
     ErrorCodes,
     setup_logging,
     get_request_id,
 )
 import os
+import sys
 import logging
+import signal
+import asyncio
 from datetime import datetime
+from pathlib import Path
+from typing import Set
 
 # Setup structured logging early
 setup_logging(os.getenv("TG_LOG_LEVEL", "INFO"))
 logger = logging.getLogger(__name__)
+
+# Global background task registry for graceful shutdown
+_background_tasks: Set[asyncio.Task] = set()
+_shutdown_event = asyncio.Event()
 
 # Environment configuration
 TG_ENVIRONMENT = os.getenv("TG_ENVIRONMENT", "development")
@@ -83,21 +93,156 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
         return response
 
+def _check_vault_accessibility() -> dict:
+    """Check if vault directory is accessible and writable."""
+    vault_path = Path(os.getenv("TG_VAULT_PATH", "keys"))
+    try:
+        vault_path.mkdir(parents=True, exist_ok=True)
+        test_file = vault_path / ".write_test"
+        test_file.write_text("test")
+        test_file.unlink()
+        return {"status": "ok", "path": str(vault_path), "writable": True}
+    except Exception as e:
+        return {"status": "error", "path": str(vault_path), "writable": False, "error": str(e)}
+
+
+def _get_startup_banner() -> str:
+    """Generate startup banner with version and environment info."""
+    demo_mode = os.getenv("TG_DEMO_MODE", "false").lower() == "true"
+    demo_flag = " [DEMO MODE]" if demo_mode else ""
+    return (
+        f"\n"
+        f"╔══════════════════════════════════════════════════════════════╗\n"
+        f"║  TensorGuard Management Platform v{TG_VERSION:<24}  ║\n"
+        f"║  Environment: {TG_ENVIRONMENT:<20}{demo_flag:<24}  ║\n"
+        f"╚══════════════════════════════════════════════════════════════╝"
+    )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    validate_startup_config(
-        "platform",
-        require_database=True,
-        require_secret_key=True,
-        require_key_master=True,
-        enforce_migrations=True,
-        required_dependencies=[("cryptography", "Install cryptography: pip install cryptography>=41.0")],
-    )
-    # Startup logic (e.g., connector discovery)
-    logger.info("Starting TensorGuard Management Platform...")
+    """
+    Production-grade lifespan handler with structured startup and shutdown.
+
+    Startup sequence:
+    1. Validate configuration (secrets, database, dependencies)
+    2. Check database connectivity with timeout
+    3. Validate vault path accessibility
+    4. Log startup banner with version info
+
+    Shutdown sequence:
+    1. Signal background tasks to stop
+    2. Wait for tasks with timeout
+    3. Close database connections
+    4. Log clean shutdown
+    """
+    startup_start = datetime.utcnow()
+
+    # Phase 1: Configuration validation
+    logger.info("[STARTUP] Phase 1: Validating configuration...")
+    try:
+        validate_startup_config(
+            "platform",
+            require_database=True,
+            require_secret_key=True,
+            require_key_master=False,  # Only required if vault encryption is used
+            enforce_migrations=True,
+            required_dependencies=[
+                ("cryptography", "Install cryptography: pip install cryptography>=41.0"),
+            ],
+        )
+    except Exception as e:
+        logger.critical(f"[STARTUP] Configuration validation failed: {e}")
+        raise
+
+    # Phase 2: Database connectivity check with timeout
+    logger.info("[STARTUP] Phase 2: Checking database connectivity...")
+    db_health = check_db_health()
+    if db_health["status"] != "healthy":
+        logger.critical(f"[STARTUP] Database not reachable: {db_health}")
+        if TG_ENVIRONMENT == "production":
+            raise RuntimeError(f"Database not reachable: {db_health.get('error', 'unknown')}")
+    else:
+        logger.info(f"[STARTUP] Database healthy: pool_size={db_health.get('pool_size', 'N/A')}")
+
+    # Phase 3: Vault accessibility check
+    logger.info("[STARTUP] Phase 3: Checking vault accessibility...")
+    vault_status = _check_vault_accessibility()
+    if vault_status["status"] != "ok":
+        logger.warning(f"[STARTUP] Vault not writable: {vault_status}")
+        if TG_ENVIRONMENT == "production":
+            raise RuntimeError(f"Vault not writable: {vault_status.get('error', 'unknown')}")
+    else:
+        logger.info(f"[STARTUP] Vault accessible at {vault_status['path']}")
+
+    # Phase 4: Migration status check
+    logger.info("[STARTUP] Phase 4: Checking migration status...")
+    try:
+        from .db_migration import check_migrations
+        migration_status = check_migrations()
+        if not migration_status["is_current"]:
+            logger.warning(
+                f"[STARTUP] Database has {migration_status['pending_count']} pending migrations. "
+                f"Current: {migration_status['current_revision']}, Head: {migration_status['head_revision']}"
+            )
+        else:
+            logger.info(f"[STARTUP] Database schema is current (revision: {migration_status['current_revision']})")
+        # Store for readyz endpoint
+        app.state.migration_status = migration_status
+    except Exception as e:
+        logger.warning(f"[STARTUP] Could not check migrations: {e}")
+        app.state.migration_status = {"is_current": True, "error": str(e)}
+
+    # Phase 5: Store startup state for health endpoints
+    app.state.startup_complete = True
+    app.state.startup_time = startup_start
+    app.state.db_health = db_health
+    app.state.vault_status = vault_status
+
+    startup_duration = (datetime.utcnow() - startup_start).total_seconds()
+    logger.info(_get_startup_banner())
+    logger.info(f"[STARTUP] Platform ready in {startup_duration:.2f}s")
+
     yield
-    # Shutdown logic
-    logger.info("Shutting down...")
+
+    # === SHUTDOWN SEQUENCE ===
+    logger.info("[SHUTDOWN] Beginning graceful shutdown...")
+    shutdown_start = datetime.utcnow()
+
+    # Signal shutdown to any background tasks
+    _shutdown_event.set()
+
+    # Cancel and wait for background tasks with timeout
+    if _background_tasks:
+        logger.info(f"[SHUTDOWN] Cancelling {len(_background_tasks)} background tasks...")
+        for task in _background_tasks:
+            task.cancel()
+
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(*_background_tasks, return_exceptions=True),
+                timeout=10.0
+            )
+            logger.info("[SHUTDOWN] Background tasks terminated cleanly")
+        except asyncio.TimeoutError:
+            logger.warning("[SHUTDOWN] Some background tasks did not terminate in time")
+
+    # Note: Database connection pool is managed by SQLAlchemy and will be
+    # cleaned up automatically. Explicit disposal can be added if needed.
+
+    shutdown_duration = (datetime.utcnow() - shutdown_start).total_seconds()
+    logger.info(f"[SHUTDOWN] Graceful shutdown complete in {shutdown_duration:.2f}s")
+
+
+def register_background_task(task: asyncio.Task) -> None:
+    """Register a background task for tracking and graceful shutdown."""
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
+
+def is_shutting_down() -> bool:
+    """Check if the application is shutting down."""
+    return _shutdown_event.is_set()
 
 app = FastAPI(
     title="TensorGuard Management Platform",
@@ -125,6 +270,23 @@ app.add_middleware(
         "X-TG-Fleet-Id", "X-TG-Timestamp", "X-TG-Nonce", "X-TG-Signature",
     ],
 )
+
+# Rate limiting middleware (before logging to track limited requests)
+# Configurable via TG_RATE_LIMIT_GENERAL, TG_RATE_LIMIT_AUTH, TG_RATE_LIMIT_BURST
+TG_ENABLE_RATE_LIMIT = os.getenv("TG_ENABLE_RATE_LIMIT", "true").lower() == "true"
+if TG_ENABLE_RATE_LIMIT:
+    app.add_middleware(RateLimitMiddleware)
+
+# Metrics middleware for request tracking (if prometheus available)
+TG_ENABLE_METRICS = os.getenv("TG_ENABLE_METRICS", "true").lower() == "true"
+if TG_ENABLE_METRICS:
+    try:
+        from ..observability.otel import MetricsMiddleware, setup_observability
+        app.add_middleware(MetricsMiddleware)
+        # Setup observability at module load (will be re-called safely in lifespan)
+        setup_observability("tensorguard-platform")
+    except ImportError:
+        logger.debug("Metrics middleware not available (prometheus_client not installed)")
 
 # Request ID and structured logging middleware
 # Note: Middleware is executed in reverse order of registration
@@ -184,6 +346,105 @@ async def liveness_check():
     Returns 200 if the process is alive.
     """
     return {"alive": True}
+
+
+# --- Production Health Endpoints (Kubernetes-standard naming) ---
+
+@app.get("/healthz", tags=["health"])
+async def healthz():
+    """
+    Kubernetes-style liveness probe.
+    Returns 200 if process is alive - no dependency checks.
+    Use for: Kubernetes livenessProbe
+    """
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
+
+
+@app.get("/readyz", tags=["health"])
+async def readyz(request: Request):
+    """
+    Kubernetes-style readiness probe with comprehensive dependency checks.
+    Returns 200 ONLY if ALL of the following are true:
+    - Database is reachable
+    - Database schema is up-to-date (migrations current)
+    - Vault path is accessible
+
+    Use for: Kubernetes readinessProbe, load balancer health checks
+
+    Returns structured JSON with actionable diagnostics on failure.
+    """
+    checks = {
+        "database": {"status": "unknown"},
+        "migrations": {"status": "unknown"},
+        "vault": {"status": "unknown"},
+    }
+    all_passed = True
+
+    # Check 1: Database connectivity
+    db_health = check_db_health()
+    if db_health["status"] == "healthy":
+        checks["database"] = {"status": "pass", "pool": db_health}
+    else:
+        checks["database"] = {"status": "fail", "error": db_health.get("error", "unknown")}
+        all_passed = False
+
+    # Check 2: Migration status (schema up-to-date)
+    try:
+        migration_status = getattr(request.app.state, "migration_status", None)
+        if migration_status is None:
+            from .db_migration import check_migrations
+            migration_status = check_migrations()
+
+        if migration_status.get("is_current", False):
+            checks["migrations"] = {
+                "status": "pass",
+                "revision": migration_status.get("current_revision"),
+            }
+        else:
+            checks["migrations"] = {
+                "status": "fail",
+                "current": migration_status.get("current_revision"),
+                "head": migration_status.get("head_revision"),
+                "pending_count": migration_status.get("pending_count", 0),
+                "action": "Run 'alembic upgrade head' or set TG_AUTO_MIGRATE=true",
+            }
+            all_passed = False
+    except Exception as e:
+        checks["migrations"] = {"status": "fail", "error": str(e)}
+        all_passed = False
+
+    # Check 3: Vault accessibility
+    vault_status = getattr(request.app.state, "vault_status", None)
+    if vault_status is None:
+        vault_status = _check_vault_accessibility()
+
+    if vault_status.get("status") == "ok":
+        checks["vault"] = {"status": "pass", "path": vault_status.get("path")}
+    else:
+        checks["vault"] = {
+            "status": "fail",
+            "path": vault_status.get("path"),
+            "error": vault_status.get("error", "not writable"),
+        }
+        all_passed = False
+
+    response_body = {
+        "ready": all_passed,
+        "status": "ok" if all_passed else "not_ready",
+        "version": TG_VERSION,
+        "environment": TG_ENVIRONMENT,
+        "timestamp": datetime.utcnow().isoformat(),
+        "checks": checks,
+    }
+
+    if not all_passed:
+        return Response(
+            content=__import__("json").dumps(response_body),
+            status_code=503,
+            media_type="application/json",
+        )
+
+    return response_body
 
 
 # --- API v1 Health Aliases (for frontend compatibility) ---

@@ -155,3 +155,114 @@ docker-compose up
 17. `tests/integration/test_fastumi_fedmoe.py` - Skip markers for h5py/flwr
 18. `tests/test_moai_flow.py` - Skip marker for tenseal
 19. `tests/security/test_platform_security.py` - Environment setting
+
+---
+
+## Phase 7: Production Hardening (2026-01-26)
+
+### 7.1 Startup/Shutdown Hardening
+
+**Issue:** Need deterministic boot sequence and graceful shutdown
+**Fix:**
+- Enhanced lifespan handler with phased startup (config validation, DB check, vault check, migration check)
+- Added background task registry for graceful shutdown
+- Added startup banner with version and environment info
+**Files:** `src/tensorguard/platform/main.py`
+
+### 7.2 Health Endpoints Enhancement
+
+**Issue:** Need Kubernetes-standard `/healthz` and `/readyz` endpoints
+**Fix:**
+- Added `/healthz` (liveness - always 200)
+- Added `/readyz` (readiness - checks DB, migrations, vault accessibility)
+- Returns structured JSON with actionable diagnostics on failure
+**Files:** `src/tensorguard/platform/main.py`
+
+### 7.3 Doctor CLI Enhancement
+
+**Issue:** Needed vault check in doctor CLI
+**Fix:**
+- Added `check_vault()` function for vault diagnostics
+- Added `--vault` flag to CLI
+**Files:** `src/tensorguard/platform/doctor.py`
+
+### 7.4 Rate Limiting Middleware
+
+**Issue:** No rate limiting for abuse protection
+**Fix:**
+- Added `RateLimitMiddleware` with token-bucket algorithm
+- Configurable via `TG_RATE_LIMIT_GENERAL`, `TG_RATE_LIMIT_AUTH`, `TG_RATE_LIMIT_BURST`
+- Stricter limits for `/auth/*` endpoints
+- Returns 429 with Retry-After header
+**Files:** `src/tensorguard/platform/middleware.py`, `src/tensorguard/platform/main.py`
+
+### 7.5 Log Redaction
+
+**Issue:** Secrets could leak into logs
+**Fix:**
+- Added `SecretRedactionFilter` to logging
+- Redacts: Bearer tokens, Authorization headers, API keys, passwords, JWTs, database URLs
+- Applied to all console output
+**Files:** `src/tensorguard/platform/middleware.py`
+
+### 7.6 Vault Export/Import
+
+**Issue:** No disaster recovery primitives for vault
+**Fix:**
+- Added `export_vault()` method with optional key material
+- Added `import_vault()` method for restore
+- Added `get_vault_status()` for health checks
+- Added CLI commands: `python -m tensorguard.core.keys export/import/status`
+**Files:** `src/tensorguard/core/keys.py`
+
+### 7.7 SLO Metrics Enhancement
+
+**Issue:** Missing vault metrics and SLO histograms
+**Fix:**
+- Added `VAULT_OPS`, `VAULT_ERRORS`, `VAULT_KEYS_TOTAL` metrics
+- Added `SLO_REQUEST_LATENCY` histogram for endpoint groups
+- Added `MetricsMiddleware` for automatic request tracking
+- Added helper functions for metrics recording
+**Files:** `src/tensorguard/observability/otel.py`
+
+### 7.8 CI Security Audit
+
+**Issue:** No dependency vulnerability scanning
+**Fix:**
+- Added `security-audit` job with pip-audit
+- Generates markdown report as artifact
+- Non-blocking (reports only)
+**Files:** `.github/workflows/qa.yml`
+
+### 7.9 Version CLI
+
+**Issue:** No single source of truth for version info
+**Fix:**
+- Added `python -m tensorguard.platform.version` CLI
+- Reads from importlib.metadata (pyproject.toml)
+- Supports `--json`, `--check`, `--full` flags
+**Files:** `src/tensorguard/platform/version.py`
+
+### 7.10 Production Documentation
+
+**Issue:** Missing operational runbooks
+**Fix:**
+- Created `docs/PRODUCTION_RUNBOOK.md` - comprehensive ops guide
+- Created `docs/GA_GONOGO_CHECKLIST.md` - release verification checklist
+- Created `docs/DB_RUNBOOK.md` - database operations guide
+**Files:** `docs/PRODUCTION_RUNBOOK.md`, `docs/GA_GONOGO_CHECKLIST.md`, `docs/DB_RUNBOOK.md`
+
+---
+
+## Files Changed (Phase 7)
+
+20. `src/tensorguard/platform/main.py` - Enhanced lifespan, /healthz, /readyz, rate limit middleware
+21. `src/tensorguard/platform/middleware.py` - RateLimitMiddleware, SecretRedactionFilter
+22. `src/tensorguard/platform/doctor.py` - Added check_vault(), --vault flag
+23. `src/tensorguard/core/keys.py` - export_vault(), import_vault(), CLI commands
+24. `src/tensorguard/observability/otel.py` - Vault metrics, SLO metrics, MetricsMiddleware
+25. `src/tensorguard/platform/version.py` - Version CLI (new file)
+26. `.github/workflows/qa.yml` - security-audit job with pip-audit
+27. `docs/PRODUCTION_RUNBOOK.md` - Production operations guide (new file)
+28. `docs/GA_GONOGO_CHECKLIST.md` - Release checklist (new file)
+29. `docs/DB_RUNBOOK.md` - Database operations guide (new file)
