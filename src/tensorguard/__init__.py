@@ -15,8 +15,21 @@ Production-Grade Features:
 - Resilient aggregation
 """
 
-__version__ = "2.1.0"
+from importlib.metadata import version as _get_version, PackageNotFoundError
+
+# Single source of truth: version from pyproject.toml via package metadata
+try:
+    __version__ = _get_version("tensorguard")
+except PackageNotFoundError:
+    # Package not installed (development mode without pip install -e)
+    __version__ = "2.3.0"  # Fallback, should match pyproject.toml
+
 __author__ = "Daniel Foo & The TensorGuard Team"
+
+
+def get_version() -> str:
+    """Get the current TensorGuard version."""
+    return __version__
 
 try:
     # Core interfaces

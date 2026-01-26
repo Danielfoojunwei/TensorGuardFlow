@@ -38,6 +38,7 @@ def validate_startup_config(
     require_database: bool = False,
     require_secret_key: bool = False,
     require_key_master: bool = False,
+    enforce_migrations: bool = False,
     required_dependencies: Optional[Sequence[str] | Sequence[DependencySpec]] = None,
     feature_flags: Optional[Dict[str, Dict[str, object]]] = None,
 ) -> Dict[str, object]:
@@ -49,6 +50,7 @@ def validate_startup_config(
         require_database: Whether DATABASE_URL must be set in production.
         require_secret_key: Whether TG_SECRET_KEY must be set in production.
         require_key_master: Whether TG_KEY_MASTER must be set in production.
+        enforce_migrations: Whether to check/run database migrations.
         required_dependencies: Dependencies to require in production.
         feature_flags: Optional mapping of feature gates to config:
             {
@@ -64,6 +66,7 @@ def validate_startup_config(
 
     Raises:
         ProductionGateError: If any production gate fails.
+        RuntimeError: If migrations are pending and enforcement is enabled.
     """
     results: Dict[str, object] = {
         "component": component,
@@ -100,6 +103,17 @@ def validate_startup_config(
             min_length=64,
         )
         results["gates_checked"].append("key_master_set")
+
+    if enforce_migrations:
+        try:
+            from ..platform.db_migration import enforce_migrations as _enforce_migrations
+            _enforce_migrations()
+            results["gates_checked"].append("migrations_current")
+        except ImportError:
+            logger.warning("Migration enforcement requested but db_migration module not available")
+        except RuntimeError as e:
+            # Migration enforcement failed
+            raise
 
     if required_dependencies:
         for dep_name, remediation in _normalize_dependencies(required_dependencies):

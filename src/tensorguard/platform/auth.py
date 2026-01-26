@@ -33,9 +33,17 @@ logger = logging.getLogger(__name__)
 
 # JWT Configuration - MUST be set in production
 from ..utils.production_gates import is_production, ProductionGateError, require_env
+import hashlib
 
-SECRET_KEY = os.getenv("TG_SECRET_KEY")
-if not SECRET_KEY:
+# Key rotation support:
+# - TG_SECRET_KEY_CURRENT: Primary key for signing new tokens
+# - TG_SECRET_KEY_PREVIOUS: Optional secondary key for validating old tokens during rotation
+# - TG_SECRET_KEY: Legacy fallback (equivalent to TG_SECRET_KEY_CURRENT)
+
+SECRET_KEY_CURRENT = os.getenv("TG_SECRET_KEY_CURRENT") or os.getenv("TG_SECRET_KEY")
+SECRET_KEY_PREVIOUS = os.getenv("TG_SECRET_KEY_PREVIOUS")
+
+if not SECRET_KEY_CURRENT:
     if is_production():
         require_env(
             "TG_SECRET_KEY",
@@ -48,7 +56,26 @@ if not SECRET_KEY:
             "Generating ephemeral key - tokens will be invalid after restart. "
             "Set TG_SECRET_KEY environment variable for production."
         )
-        SECRET_KEY = secrets.token_hex(32)
+        SECRET_KEY_CURRENT = secrets.token_hex(32)
+
+# Backward compatibility alias
+SECRET_KEY = SECRET_KEY_CURRENT
+
+
+def _get_key_id(key: str) -> str:
+    """Generate a short key identifier for the kid claim."""
+    return hashlib.sha256(key.encode()).hexdigest()[:8]
+
+
+# Key identifiers for rotation tracking
+CURRENT_KEY_ID = _get_key_id(SECRET_KEY_CURRENT)
+PREVIOUS_KEY_ID = _get_key_id(SECRET_KEY_PREVIOUS) if SECRET_KEY_PREVIOUS else None
+
+# Map of key IDs to secrets for validation
+_KEY_MAP: Dict[str, str] = {CURRENT_KEY_ID: SECRET_KEY_CURRENT}
+if SECRET_KEY_PREVIOUS:
+    _KEY_MAP[PREVIOUS_KEY_ID] = SECRET_KEY_PREVIOUS
+    logger.info(f"Key rotation enabled: current={CURRENT_KEY_ID}, previous={PREVIOUS_KEY_ID}")
 
 # Use HS256 for simplicity, but ensure key is at least 256 bits
 ALGORITHM = os.getenv("TG_JWT_ALGORITHM", "HS256")
@@ -153,6 +180,9 @@ def create_access_token(
     """
     Create a JWT access token with security claims.
 
+    The token includes a 'kid' (key ID) header to support key rotation.
+    Tokens are always signed with the current key (TG_SECRET_KEY_CURRENT).
+
     Args:
         data: Token payload data
         expires_delta: Optional custom expiration
@@ -181,7 +211,15 @@ def create_access_token(
         "jti": secrets.token_hex(16),  # Unique token ID for revocation
     })
 
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    # Include kid header for key rotation support
+    headers = {"kid": CURRENT_KEY_ID}
+
+    encoded_jwt = jwt.encode(
+        to_encode,
+        SECRET_KEY_CURRENT,
+        algorithm=ALGORITHM,
+        headers=headers
+    )
     return encoded_jwt
 
 
@@ -243,13 +281,44 @@ async def get_current_user(
         raise credentials_exception
 
     try:
-        payload = jwt.decode(
-            token,
-            SECRET_KEY,
-            algorithms=[ALGORITHM],
-            audience=TOKEN_AUDIENCE,
-            issuer=TOKEN_ISSUER,
-        )
+        # First, decode header without verification to get kid
+        unverified_header = jwt.get_unverified_header(token)
+        kid = unverified_header.get("kid")
+
+        # Determine which key(s) to try based on kid
+        keys_to_try = []
+        if kid and kid in _KEY_MAP:
+            # If kid matches a known key, try that first
+            keys_to_try.append((kid, _KEY_MAP[kid]))
+        # Always include current key as fallback
+        if (CURRENT_KEY_ID, SECRET_KEY_CURRENT) not in keys_to_try:
+            keys_to_try.append((CURRENT_KEY_ID, SECRET_KEY_CURRENT))
+        # Include previous key if available
+        if SECRET_KEY_PREVIOUS and (PREVIOUS_KEY_ID, SECRET_KEY_PREVIOUS) not in keys_to_try:
+            keys_to_try.append((PREVIOUS_KEY_ID, SECRET_KEY_PREVIOUS))
+
+        # Try each key until one works
+        payload = None
+        last_error = None
+        for key_id, secret_key in keys_to_try:
+            try:
+                payload = jwt.decode(
+                    token,
+                    secret_key,
+                    algorithms=[ALGORITHM],
+                    audience=TOKEN_AUDIENCE,
+                    issuer=TOKEN_ISSUER,
+                )
+                if kid and kid != key_id:
+                    logger.debug(f"Token validated with different key: kid={kid}, used={key_id}")
+                break
+            except JWTError as e:
+                last_error = e
+                continue
+
+        if payload is None:
+            logger.debug(f"JWT validation failed with all keys: {last_error}")
+            raise credentials_exception
 
         # Validate token type
         token_type = payload.get("type")

@@ -52,6 +52,7 @@ from .models.core import AuditLog, Fleet
 from .models.telemetry_models import TelemetryStageEvent, TelemetrySystemEvent
 from sqlmodel import select, func
 from ..utils.startup_validation import validate_startup_config
+from .. import __version__ as TG_VERSION
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -89,6 +90,7 @@ async def lifespan(app: FastAPI):
         require_database=True,
         require_secret_key=True,
         require_key_master=True,
+        enforce_migrations=True,
         required_dependencies=[("cryptography", "Install cryptography: pip install cryptography>=41.0")],
     )
     # Startup logic (e.g., connector discovery)
@@ -100,7 +102,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="TensorGuard Management Platform",
     description="White-label backend for TensorGuard fleets",
-    version="2.3.0",
+    version=TG_VERSION,
     lifespan=lifespan
 )
 
@@ -147,7 +149,7 @@ async def health_check():
     health_status = {
         "status": "healthy" if db_health["status"] == "healthy" else "degraded",
         "timestamp": datetime.utcnow().isoformat(),
-        "version": "2.3.0",
+        "version": TG_VERSION,
         "environment": TG_ENVIRONMENT,
         "checks": {
             "database": db_health
@@ -207,7 +209,7 @@ async def status_api_v1():
     return {
         "status": "operational" if db_health["status"] == "healthy" else "degraded",
         "timestamp": datetime.utcnow().isoformat(),
-        "version": "2.3.0",
+        "version": TG_VERSION,
         "environment": TG_ENVIRONMENT,
         "database": db_health["status"],
     }
@@ -234,7 +236,7 @@ async def prometheus_metrics():
         lines = [
             "# TensorGuard Platform Metrics",
             "# TYPE tensorguard_info gauge",
-            "tensorguard_info{version=\"2.3.0\"} 1",
+            f"tensorguard_info{{version=\"{TG_VERSION}\"}} 1",
             "# TYPE tensorguard_audit_logs_total counter",
             f"tensorguard_audit_logs_total {audit_total}",
             "# TYPE tensorguard_fleets_total gauge",
@@ -335,7 +337,7 @@ async def debug_system_status(
         return {
             "request_id": request_id,
             "timestamp": datetime.utcnow().isoformat(),
-            "version": "2.3.0",
+            "version": TG_VERSION,
             "environment": TG_ENVIRONMENT,
             "debug": {
                 "database": {

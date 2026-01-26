@@ -105,7 +105,8 @@ print('✓ Enterprise entitlements fail-closed')
 
     - name: Install Linters
       run: |
-        pip install ruff black
+        pip install ruff black mypy
+        pip install -e ".[dev]"
 
     - name: Run Ruff
       run: |
@@ -116,6 +117,11 @@ print('✓ Enterprise entitlements fail-closed')
       run: |
         black --check src/ --line-length 120
         echo "✓ Black formatting check complete"
+
+    - name: Run MyPy Type Checking
+      run: |
+        mypy src/tensorguard --ignore-missing-imports --no-error-summary || true
+        echo "✓ MyPy type checking complete (warnings only)"
 
   # ==========================================================================
   # FULL TEST SUITE
@@ -149,13 +155,13 @@ print('✓ Enterprise entitlements fail-closed')
         pip install -e ".[all]"
         pip install pytest pytest-cov requests httpx coverage
 
-    - name: Run Backend QA Suite
+    - name: Run Backend QA Suite with Coverage
       env:
         PYTHONPATH: src
         TG_ENVIRONMENT: development
         TG_DEMO_MODE: "false"
       run: |
-        pytest tests/ --cov=src/tensorguard --cov-report=xml -v --tb=short
+        pytest tests/ --cov=src/tensorguard --cov-report=xml --cov-report=term --cov-fail-under=70 -v --tb=short
 
     - name: Upload Report Artifacts
       uses: actions/upload-artifact@v4
