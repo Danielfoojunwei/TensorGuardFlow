@@ -122,6 +122,48 @@ if PROMETHEUS_AVAILABLE:
         'Number of pending client contributions'
     )
 
+    # Security metrics
+    AUTH_FAILURES = Counter(
+        'tensorguard_auth_failures_total',
+        'Total authentication failures',
+        ['reason']  # invalid_token, expired, user_not_found, etc.
+    )
+    AUTH_SUCCESS = Counter(
+        'tensorguard_auth_success_total',
+        'Total successful authentications',
+        ['method']  # jwt, api_key, fleet
+    )
+
+    # Policy metrics
+    POLICY_DENIALS = Counter(
+        'tensorguard_policy_denials_total',
+        'Total policy-based access denials',
+        ['policy', 'resource']
+    )
+    POLICY_EVALUATIONS = Counter(
+        'tensorguard_policy_evaluations_total',
+        'Total policy evaluations',
+        ['policy', 'result']  # allow, deny
+    )
+
+    # Job metrics
+    JOB_FAILURES = Counter(
+        'tensorguard_job_failures_total',
+        'Total job failures',
+        ['job_type', 'reason']
+    )
+    JOB_COMPLETIONS = Counter(
+        'tensorguard_job_completions_total',
+        'Total job completions',
+        ['job_type', 'status']  # success, failed, cancelled
+    )
+    JOB_DURATION = Histogram(
+        'tensorguard_job_duration_seconds',
+        'Job execution duration',
+        ['job_type'],
+        buckets=[1, 5, 10, 30, 60, 120, 300, 600, 1800, 3600]
+    )
+
 
 def setup_observability(
     service_name: str = "tensorguard",
