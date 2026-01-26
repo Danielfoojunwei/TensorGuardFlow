@@ -306,11 +306,26 @@ Deploy the fleet management platform, authentication, and secure package distrib
 git clone https://github.com/Danielfoojunwei/TensorGuardFlow
 cd TensorGuardFlow
 
+# Configure environment (REQUIRED)
+cp .env.example .env
+echo "TG_SECRET_KEY=$(openssl rand -hex 32)" >> .env
+
 # Install core platform dependencies only
 pip install -e ".[platform]"
 
-# Run database migrations
-python -m api.main
+# Run the platform
+python -m tensorguard.platform.main
+```
+
+**Using Docker:**
+
+```bash
+# Configure environment first
+cp .env.example .env
+echo "SECRET_KEY=$(openssl rand -hex 32)" >> .env
+
+# Run with Docker Compose
+docker compose up api
 ```
 
 ### Option B: Research Prototype with Federated Learning (🔬 Experimental)
@@ -318,6 +333,10 @@ python -m api.main
 **⚠️ Important**: This path includes experimental cryptography.
 
 ```bash
+# Configure environment (REQUIRED)
+cp .env.example .env
+echo "TG_SECRET_KEY=$(openssl rand -hex 32)" >> .env
+
 # Install all dependencies including FL and crypto
 pip install -e ".[all]"
 
@@ -325,6 +344,8 @@ pip install -e ".[all]"
 export TG_ENABLE_EXPERIMENTAL_CRYPTO=true
 export TG_ENVIRONMENT=development
 ```
+
+> **Note**: See `.env.example` for all available configuration options.
 
 ---
 
