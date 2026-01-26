@@ -85,3 +85,17 @@ frontend/dist/
 frontend/test-results/
 frontend/coverage/
 *.zip
+
+# ============================================
+# Benchmark Data and Reports (Generated)
+# ============================================
+# Downloaded datasets (automatically fetched)
+data/cifar100/
+data/tinyimagenet/
+data/core50/
+data/wilds/
+data/synthetic/
+
+# Generated benchmark reports (run make bench to regenerate)
+reports/
+!reports/.gitkeep

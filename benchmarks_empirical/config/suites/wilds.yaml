@@ -1,0 +1,49 @@
+# WILDS Distribution Shift Benchmark Suite
+# Tests ID vs OOD generalization
+
+suite: wilds
+
+datasets:
+  - name: iwildcam
+    num_tasks: 1
+    classes_per_task: 182
+    train_transforms: standard
+    eval_transforms: standard
+    download: true
+    data_dir: ./data/wilds
+
+  - name: camelyon17
+    num_tasks: 1
+    classes_per_task: 2
+    train_transforms: standard
+    eval_transforms: standard
+    download: true
+    data_dir: ./data/wilds
+
+model:
+  backbone: resnet50
+  pretrained: true
+  num_classes: 182
+  hidden_dim: 2048
+
+training:
+  epochs_per_task: 10
+  batch_size: 32
+  learning_rate: 0.0001
+  weight_decay: 0.0001
+  optimizer: adamw
+  scheduler: linear_warmup
+
+methods:
+  - frozen
+  - naive_finetune
+  - tensorguard
+
+seeds:
+  - 42
+  - 123
+  - 456
+
+device: cuda
+output_dir: reports
+fail_on_mock: true
