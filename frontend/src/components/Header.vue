@@ -1,10 +1,14 @@
 <script setup>
 import { Shield, Printer } from 'lucide-vue-next'
 import { ref, onMounted } from 'vue'
+import { useSessionStore } from '../stores/session'
+import { settingsApi } from '../services/api'
+
+const sessionStore = useSessionStore()
 
 const security = ref({
-  pqc: true,
-  dp: false
+    pqc: true,
+    dp: false
 })
 
 const currentTime = ref(new Date().toISOString().split('T')[0] + ' ' + new Date().toLocaleTimeString())
@@ -12,29 +16,28 @@ const currentTime = ref(new Date().toISOString().split('T')[0] + ' ' + new Date(
 // Load settings from backend on mount
 onMounted(async () => {
     try {
-        const res = await fetch('/api/v1/settings')
-        const data = await res.json()
-        if (data.pqc_enabled !== undefined) security.value.pqc = data.pqc_enabled === 'true'
-        if (data.dp_enabled !== undefined) security.value.dp = data.dp_enabled === 'true'
-    } catch (e) { console.warn("Failed to load settings", e) }
+        const data = await settingsApi.getSettings()
+        if (data.pqc_enabled !== undefined) security.value.pqc = data.pqc_enabled === true || data.pqc_enabled === 'true'
+        if (data.dp_enabled !== undefined) security.value.dp = data.dp_enabled === true || data.dp_enabled === 'true'
+    } catch (e) {
+        console.warn("Failed to load settings", e)
+    }
 })
 
 // Persist toggle state to backend
 const persistSetting = async (key, value) => {
     try {
-        await fetch('/api/v1/settings', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ key, value: String(value) })
-        })
-    } catch (e) { console.warn("Failed to persist setting", e) }
+        await settingsApi.updateSetting(key, value)
+    } catch (e) {
+        console.warn("Failed to persist setting", e)
+    }
 }
 
-const togglePQC = () => { 
+const togglePQC = () => {
     security.value.pqc = !security.value.pqc
     persistSetting('pqc_enabled', security.value.pqc)
 }
-const toggleDP = () => { 
+const toggleDP = () => {
     security.value.dp = !security.value.dp
     persistSetting('dp_enabled', security.value.dp)
 }
@@ -60,9 +63,9 @@ const generateReport = () => { window.print() }
             <span class="text-xs font-bold text-primary">SHIELD</span>
         </div>
         <div class="h-4 w-[1px] bg-[#333]"></div>
-        
+
         <!-- PQC Toggle -->
-        <div class="flex items-center gap-2 cursor-pointer" @click="togglePQC" title="Quantum-Resistant Encryption">
+        <div class="flex items-center gap-2 cursor-pointer" @click="togglePQC" title="Quantum-Resistant Encryption" role="switch" :aria-checked="security.pqc" tabindex="0" @keydown.enter="togglePQC" @keydown.space.prevent="togglePQC">
             <div class="w-8 h-4 rounded-full relative transition-colors" :class="security.pqc ? 'bg-primary' : 'bg-[#333]'">
                 <div class="w-3 h-3 bg-white rounded-full absolute top-0.5 transition-all" :style="security.pqc ? 'left: 18px' : 'left: 2px'"></div>
             </div>
@@ -70,7 +73,7 @@ const generateReport = () => { window.print() }
         </div>
 
         <!-- DP Toggle -->
-        <div class="flex items-center gap-2 cursor-pointer" @click="toggleDP" title="Differential Privacy">
+        <div class="flex items-center gap-2 cursor-pointer" @click="toggleDP" title="Differential Privacy" role="switch" :aria-checked="security.dp" tabindex="0" @keydown.enter="toggleDP" @keydown.space.prevent="toggleDP">
             <div class="w-8 h-4 rounded-full relative transition-colors" :class="security.dp ? 'bg-primary' : 'bg-[#333]'">
                 <div class="w-3 h-3 bg-white rounded-full absolute top-0.5 transition-all" :style="security.dp ? 'left: 18px' : 'left: 2px'"></div>
             </div>
@@ -78,13 +81,15 @@ const generateReport = () => { window.print() }
         </div>
       </div>
 
-      <button @click="generateReport" class="flex items-center gap-2 px-3 py-1.5 text-xs font-bold border border-primary text-primary rounded-md hover:bg-primary hover:text-white transition-colors">
+      <button @click="generateReport" class="flex items-center gap-2 px-3 py-1.5 text-xs font-bold border border-primary text-primary rounded-md hover:bg-primary hover:text-white transition-colors" aria-label="Generate Report">
         <Printer class="w-4 h-4" />
         REPORT
       </button>
 
       <div class="flex items-center gap-2">
-          <div class="w-8 h-8 rounded-full bg-orange-600 flex items-center justify-center text-white text-xs font-bold">DF</div>
+          <div class="w-8 h-8 rounded-full bg-orange-600 flex items-center justify-center text-white text-xs font-bold" :title="sessionStore.userDisplayName">
+            {{ sessionStore.userInitials }}
+          </div>
       </div>
     </div>
   </header>

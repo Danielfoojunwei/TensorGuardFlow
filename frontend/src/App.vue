@@ -1,115 +1,94 @@
 <script setup>
-import { ref } from 'vue'
+import { computed, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import Sidebar from './components/Sidebar.vue'
 import Header from './components/Header.vue'
+import ToastHost from './components/ui/ToastHost.vue'
+import { useDemoModeStore } from './stores/demoMode'
 
-// Consolidated Views
-import CommandCenter from './components/CommandCenter.vue'
-import ModelsWorkbench from './components/ModelsWorkbench.vue'
-import OperationsCenter from './components/OperationsCenter.vue'
-import SecurityCenter from './components/SecurityCenter.vue'
-import GlobalSettings from './components/GlobalSettings.vue'
-import AuthCenter from './components/AuthCenter.vue'
+const router = useRouter()
+const route = useRoute()
+const demoMode = useDemoModeStore()
 
-// Auth state
-const isAuthenticated = ref(!!localStorage.getItem('auth_token'))
-const userEmail = ref(localStorage.getItem('auth_user') || '')
+// Compute active section from route
+const activeSection = computed(() => {
+    const path = route.path
+    if (path.startsWith('/models')) return 'models'
+    if (path.startsWith('/operations')) return 'operations'
+    if (path.startsWith('/security')) return 'security'
+    if (path.startsWith('/settings')) return 'settings'
+    if (path.startsWith('/dashboard') || path === '/') return 'dashboard'
+    return 'dashboard'
+})
 
-// Main navigation state
-const activeTab = ref('dashboard')
+// Check if on login page
+const isLoginPage = computed(() => route.name === 'login')
 
-// Sub-tab states for deep linking
-const modelTab = ref('registry')
-const operationsTab = ref('fleets')
-const securityTab = ref('overview')
-
-// Handle navigation events from child components
+// Handle navigation from sidebar
 const handleNavigate = (target) => {
-  if (target === 'signout') {
-    localStorage.removeItem('auth_token')
-    localStorage.removeItem('auth_user')
-    isAuthenticated.value = false
-    return
-  }
-  
-  if (typeof target === 'object') {
-    activeTab.value = target.page
-    if (target.tab) {
-      switch (target.page) {
-        case 'models':
-          modelTab.value = target.tab
-          break
-        case 'operations':
-          operationsTab.value = target.tab
-          break
-        case 'security':
-          securityTab.value = target.tab
-          break
-      }
+    if (target === 'signout') {
+        localStorage.removeItem('auth_token')
+        localStorage.removeItem('auth_user')
+        router.push('/login')
+        return
     }
-  } else {
-    activeTab.value = target
-  }
-}
 
-const handleAuthenticated = (email) => {
-  userEmail.value = email
-  isAuthenticated.value = true
+    // Navigate to the appropriate route
+    const routes = {
+        dashboard: '/dashboard',
+        models: '/models/registry',
+        operations: '/operations/fleets',
+        security: '/security/overview',
+        settings: '/settings'
+    }
+
+    if (typeof target === 'object') {
+        // Handle deep navigation with tab
+        const basePath = routes[target.page] || '/dashboard'
+        if (target.tab) {
+            router.push(`/${target.page}/${target.tab}`)
+        } else {
+            router.push(basePath)
+        }
+    } else {
+        router.push(routes[target] || '/dashboard')
+    }
 }
 </script>
 
 <template>
   <div class="flex h-screen bg-background text-secondary overflow-hidden">
-    <!-- Auth Gate -->
-    <AuthCenter v-if="!isAuthenticated" @authenticated="handleAuthenticated" />
+    <!-- Demo Mode Banner -->
+    <div v-if="demoMode.isEnabled && !isLoginPage" class="fixed top-0 left-0 right-0 z-50 bg-yellow-500 text-black text-center text-xs font-bold py-1 px-4">
+      DEMO MODE - Data shown is simulated for demonstration purposes
+    </div>
 
+    <!-- Login Page (full screen, no sidebar) -->
+    <template v-if="isLoginPage">
+      <RouterView />
+    </template>
+
+    <!-- Authenticated Layout -->
     <template v-else>
       <!-- Sidebar -->
-      <Sidebar :activeTab="activeTab" @update:activeTab="handleNavigate" />
+      <Sidebar :activeTab="activeSection" @update:activeTab="handleNavigate" />
 
       <!-- Main Content -->
-      <div class="flex-1 flex flex-col ml-64 transition-all duration-300">
+      <div :class="['flex-1 flex flex-col ml-64 transition-all duration-300', demoMode.isEnabled ? 'pt-6' : '']">
         <Header />
 
         <main class="flex-1 overflow-hidden relative">
-          <!-- Content Switcher -->
           <transition name="fade" mode="out-in">
-            <!-- Command Center (Dashboard) -->
-            <div v-if="activeTab === 'dashboard'" class="h-full overflow-y-auto">
-              <CommandCenter @navigate="handleNavigate" />
-            </div>
-
-            <!-- Models Workbench -->
-            <div v-else-if="activeTab === 'models'" class="h-full overflow-hidden">
-              <ModelsWorkbench :initialTab="modelTab" @navigate="handleNavigate" />
-            </div>
-
-            <!-- Operations Center -->
-            <div v-else-if="activeTab === 'operations'" class="h-full overflow-hidden">
-              <OperationsCenter :initialTab="operationsTab" @navigate="handleNavigate" />
-            </div>
-
-            <!-- Security Center -->
-            <div v-else-if="activeTab === 'security'" class="h-full overflow-hidden">
-              <SecurityCenter :initialTab="securityTab" @navigate="handleNavigate" />
-            </div>
-
-            <!-- Settings -->
-            <div v-else-if="activeTab === 'settings'" class="h-full overflow-y-auto p-6">
-              <GlobalSettings />
-            </div>
-
-            <!-- Fallback -->
-            <div v-else class="h-full overflow-y-auto p-6 flex items-center justify-center">
-              <div class="text-gray-500 text-center">
-                <div class="text-4xl mb-4">404</div>
-                <div>View not found: {{ activeTab }}</div>
-              </div>
-            </div>
+            <RouterView v-slot="{ Component }">
+              <component :is="Component" @navigate="handleNavigate" />
+            </RouterView>
           </transition>
         </main>
       </div>
     </template>
+
+    <!-- Toast Notifications -->
+    <ToastHost />
   </div>
 </template>
 

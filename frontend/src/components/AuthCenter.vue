@@ -1,11 +1,14 @@
 <script setup>
 import { ref } from 'vue'
-import { 
-  Shield, Mail, Lock, LogIn, Github, 
-  Chrome, MessageSquare, AlertCircle, ChevronRight
+import { useRouter } from 'vue-router'
+import { useSessionStore } from '../stores/session'
+import {
+    Shield, Mail, Lock, LogIn, Github,
+    Chrome, MessageSquare, AlertCircle, ChevronRight
 } from 'lucide-vue-next'
 
-const emit = defineEmits(['authenticated'])
+const router = useRouter()
+const sessionStore = useSessionStore()
 
 const email = ref('')
 const password = ref('')
@@ -14,34 +17,33 @@ const error = ref('')
 
 const handleLogin = async () => {
     if (!email.value || !password.value) {
-        error.value = 'Please provide both email and system-issued password.'
+        error.value = 'Please provide both email and password.'
         return
     }
-    
+
     loading.value = true
     error.value = ''
-    
-    // Simulations for GA Login Flow
+
     try {
-        // In a real scenario, this hits /api/v1/auth/login
-        setTimeout(() => {
-            if (password.value === 'admin' || password.value.length >= 8) {
-                localStorage.setItem('auth_user', email.value)
-                localStorage.setItem('auth_token', 'tg-ga-pqc-v2.3-session-jwt')
-                emit('authenticated', email.value)
-            } else {
-                error.value = 'Invalid credentials. Please use the password provided in your onboarding kit.'
-            }
-            loading.value = false
-        }, 1200)
+        const result = await sessionStore.login(email.value, password.value)
+
+        if (result.success) {
+            // Check for redirect path
+            const redirectPath = sessionStorage.getItem('auth_redirect')
+            sessionStorage.removeItem('auth_redirect')
+            router.push(redirectPath || '/dashboard')
+        } else {
+            error.value = result.error || 'Authentication failed'
+        }
     } catch (e) {
-        error.value = 'Security service unreachable.'
+        error.value = e.message || 'An unexpected error occurred'
+    } finally {
         loading.value = false
     }
 }
 
 const handleOAuth = (provider) => {
-    alert(`Redirecting to ${provider} OAuth Gateway...`)
+    alert(`OAuth with ${provider} is not yet configured. Please use email/password login.`)
 }
 </script>
 
@@ -62,7 +64,7 @@ const handleOAuth = (provider) => {
             </div>
         </div>
         <h1 class="text-2xl font-bold tracking-tight text-orange-500 mb-1">DYNAMICAL</h1>
-        <p class="text-xs text-gray-500 uppercase font-bold tracking-widest">Enterprise Access Hub • v2.3 GA</p>
+        <p class="text-xs text-gray-500 uppercase font-bold tracking-widest">Enterprise Access Hub • v2.4 GA</p>
       </div>
 
       <!-- Login Card (Glassmorphism) -->
@@ -72,15 +74,17 @@ const handleOAuth = (provider) => {
             <p class="text-xs text-red-400 font-medium leading-relaxed">{{ error }}</p>
         </div>
 
-        <form @submit.prevent="handleLogin" class="space-y-5">
+        <form @submit.prevent="handleLogin" class="space-y-5" data-testid="login-form">
           <div class="space-y-1.5">
             <label class="text-[10px] font-bold text-gray-400 uppercase ml-1">Work Email</label>
             <div class="relative group">
               <Mail class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600 group-focus-within:text-primary transition-colors" />
-              <input 
+              <input
                 v-model="email"
-                type="email" 
+                type="email"
                 placeholder="name@company.com"
+                data-testid="login-email"
+                autocomplete="username"
                 class="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder:text-gray-700 focus:border-primary/50 focus:ring-4 focus:ring-primary/5 outline-none transition-all"
               />
             </div>
@@ -88,23 +92,26 @@ const handleOAuth = (provider) => {
 
           <div class="space-y-1.5">
             <div class="flex items-center justify-between ml-1">
-                <label class="text-[10px] font-bold text-gray-400 uppercase">System Password</label>
+                <label class="text-[10px] font-bold text-gray-400 uppercase">Password</label>
                 <button type="button" class="text-[10px] font-bold text-primary hover:text-primary/80 uppercase">Reset</button>
             </div>
             <div class="relative group">
               <Lock class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600 group-focus-within:text-primary transition-colors" />
-              <input 
+              <input
                 v-model="password"
-                type="password" 
+                type="password"
                 placeholder="••••••••"
+                data-testid="login-password"
+                autocomplete="current-password"
                 class="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder:text-gray-700 focus:border-primary/50 focus:ring-4 focus:ring-primary/5 outline-none transition-all"
               />
             </div>
           </div>
 
-          <button 
+          <button
             type="submit"
             :disabled="loading"
+            data-testid="login-submit"
             class="w-full bg-primary hover:bg-primary/90 text-white font-bold h-12 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed group shadow-lg shadow-primary/10"
           >
             <span v-if="!loading">Authorize Access</span>

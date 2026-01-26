@@ -1,6 +1,6 @@
 <script setup>
 /**
- * Sidebar - Simplified Navigation
+ * Sidebar - Navigation with Router Integration
  *
  * Streamlined to 5 main sections based on engineering workflows:
  * - Command Center (Dashboard)
@@ -9,46 +9,85 @@
  * - Security (Identity, Keys, Compliance)
  * - Settings
  */
+import { useRouter, useRoute } from 'vue-router'
 import {
     LayoutDashboard, Bot, Server, Shield, Settings,
-    ChevronRight
+    ChevronRight, LogOut
 } from 'lucide-vue-next'
 
 const props = defineProps(['activeTab'])
 const emit = defineEmits(['update:activeTab'])
+
+const router = useRouter()
+const route = useRoute()
 
 const navItems = [
     {
         id: 'dashboard',
         label: 'Command Center',
         icon: LayoutDashboard,
-        description: 'System overview'
+        description: 'System overview',
+        route: '/dashboard'
     },
     {
         id: 'models',
         label: 'Models',
         icon: Bot,
-        description: 'VLA registry, training, evaluation'
+        description: 'VLA registry, training, evaluation',
+        route: '/models/registry'
     },
     {
         id: 'operations',
         label: 'Operations',
         icon: Server,
-        description: 'Fleet, monitoring, deployments'
+        description: 'Fleet, monitoring, deployments',
+        route: '/operations/fleets'
     },
     {
         id: 'security',
         label: 'Security',
         icon: Shield,
-        description: 'Identity, keys, compliance'
+        description: 'Identity, keys, compliance',
+        route: '/security/overview'
     },
     {
         id: 'settings',
         label: 'Settings',
         icon: Settings,
-        description: 'Configuration'
+        description: 'Configuration',
+        route: '/settings'
     }
 ]
+
+const navigate = (item) => {
+    router.push(item.route)
+}
+
+const handleSignout = () => {
+    localStorage.removeItem('auth_token')
+    localStorage.removeItem('auth_user')
+    router.push('/login')
+}
+
+// Handle keyboard navigation
+const handleKeydown = (event, item, index) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault()
+        navigate(item)
+    } else if (event.key === 'ArrowDown') {
+        event.preventDefault()
+        const next = navItems[index + 1]
+        if (next) {
+            document.querySelector(`[data-nav-item="${next.id}"]`)?.focus()
+        }
+    } else if (event.key === 'ArrowUp') {
+        event.preventDefault()
+        const prev = navItems[index - 1]
+        if (prev) {
+            document.querySelector(`[data-nav-item="${prev.id}"]`)?.focus()
+        }
+    }
+}
 </script>
 
 <template>
@@ -61,22 +100,28 @@ const navItems = [
         </div>
         <span class="font-bold text-orange-500 text-sm tracking-tight">DYNAMICAL</span>
       </div>
-      <div class="text-[10px] text-gray-500">Flow v2.3 GA</div>
+      <div class="text-[10px] text-gray-500">Flow v2.4 GA</div>
     </div>
 
     <!-- Navigation -->
-    <nav class="flex-1 px-3 py-4">
+    <nav class="flex-1 px-3 py-4" role="navigation" aria-label="Main navigation">
       <div class="space-y-1">
         <button
-          v-for="item in navItems"
+          v-for="(item, index) in navItems"
           :key="item.id"
-          @click="emit('update:activeTab', item.id)"
+          :data-nav-item="item.id"
+          :data-testid="`nav-${item.id}`"
+          @click="navigate(item)"
+          @keydown="handleKeydown($event, item, index)"
           :class="[
             'w-full flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-200 group',
             activeTab === item.id
               ? 'bg-[#1f2428] border-l-2 border-primary text-white'
               : 'text-gray-400 hover:text-white hover:bg-[#161b22]'
           ]"
+          :aria-label="item.label"
+          :aria-current="activeTab === item.id ? 'page' : undefined"
+          tabindex="0"
         >
           <component
             :is="item.icon"
@@ -84,6 +129,7 @@ const navItems = [
               'w-5 h-5 flex-shrink-0 transition-colors',
               activeTab === item.id ? 'text-primary' : 'text-gray-500 group-hover:text-gray-400'
             ]"
+            aria-hidden="true"
           />
           <div class="flex-1 text-left">
             <div class="text-sm font-medium">{{ item.label }}</div>
@@ -94,6 +140,7 @@ const navItems = [
           <ChevronRight
             v-if="activeTab === item.id"
             class="w-4 h-4 text-primary"
+            aria-hidden="true"
           />
         </button>
       </div>
@@ -102,7 +149,7 @@ const navItems = [
     <!-- System Status -->
     <div class="px-4 py-3 border-t border-[#30363d] flex-shrink-0">
       <div class="flex items-center gap-2 mb-2">
-        <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+        <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse" aria-hidden="true"></div>
         <span class="text-[10px] text-gray-500 uppercase">System Healthy</span>
       </div>
       <div class="text-[10px] text-gray-600">
@@ -120,6 +167,14 @@ const navItems = [
           <div class="text-sm font-medium text-white">Daniel Foo</div>
           <div class="text-[10px] text-gray-500">Organization Admin</div>
         </div>
+        <button
+          @click="handleSignout"
+          class="p-2 rounded-lg text-gray-500 hover:text-white hover:bg-[#161b22] transition-colors"
+          aria-label="Sign out"
+          data-testid="signout-btn"
+        >
+          <LogOut class="w-4 h-4" />
+        </button>
       </div>
     </div>
   </aside>

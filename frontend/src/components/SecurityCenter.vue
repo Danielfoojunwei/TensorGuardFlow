@@ -5,7 +5,8 @@
  * Consolidates: Identity Manager, Key Vault, Policy Gating, Forensics, Compliance, Audit
  * Single pane of glass for all security operations
  */
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import {
     Shield, FileKey, Lock, Sliders, Search, ShieldCheck, ClipboardList,
     RefreshCw, Plus, AlertTriangle, CheckCircle, Clock, Key,
@@ -16,7 +17,23 @@ const props = defineProps({
     initialTab: { type: String, default: 'overview' }
 })
 
-const activeTab = ref(props.initialTab)
+const router = useRouter()
+const route = useRoute()
+
+const activeTab = ref(route.params.tab || props.initialTab)
+
+// Sync with route params
+watch(() => route.params.tab, (newTab) => {
+    if (newTab && newTab !== activeTab.value) {
+        activeTab.value = newTab
+    }
+})
+
+// Update route when tab changes
+const setActiveTab = (tabId) => {
+    activeTab.value = tabId
+    router.push(`/security/${tabId}`)
+}
 
 const tabs = [
     { id: 'overview', label: 'Overview', icon: Shield },
@@ -200,7 +217,8 @@ onMounted(fetchData)
 
         <div class="flex gap-1">
           <button v-for="tab in tabs" :key="tab.id"
-                  @click="activeTab = tab.id"
+                  :data-testid="`security-tab-${tab.id}`"
+                  @click="setActiveTab(tab.id)"
                   :class="['px-4 py-2.5 rounded-t-lg flex items-center gap-2 transition-colors text-sm font-medium',
                            activeTab === tab.id
                              ? 'bg-[#161b22] text-white border-t border-x border-[#30363d]'
@@ -286,17 +304,17 @@ onMounted(fetchData)
 
         <!-- Quick Access -->
         <div class="grid grid-cols-3 gap-4">
-          <button @click="activeTab = 'identity'" class="p-4 bg-[#0d1117] border border-[#30363d] rounded-lg hover:border-[#484f58] transition-colors text-left">
+          <button @click="setActiveTab('identity')" class="p-4 bg-[#0d1117] border border-[#30363d] rounded-lg hover:border-[#484f58] transition-colors text-left">
             <FileKey class="w-5 h-5 text-blue-500 mb-2" />
             <div class="font-medium text-white">Manage Certificates</div>
             <div class="text-xs text-gray-500">{{ certificates.length }} certificates</div>
           </button>
-          <button @click="activeTab = 'keys'" class="p-4 bg-[#0d1117] border border-[#30363d] rounded-lg hover:border-[#484f58] transition-colors text-left">
+          <button @click="setActiveTab('keys')" class="p-4 bg-[#0d1117] border border-[#30363d] rounded-lg hover:border-[#484f58] transition-colors text-left">
             <Lock class="w-5 h-5 text-purple-500 mb-2" />
             <div class="font-medium text-white">Key Management</div>
             <div class="text-xs text-gray-500">{{ keys.length }} keys configured</div>
           </button>
-          <button @click="activeTab = 'audit'" class="p-4 bg-[#0d1117] border border-[#30363d] rounded-lg hover:border-[#484f58] transition-colors text-left">
+          <button @click="setActiveTab('audit')" class="p-4 bg-[#0d1117] border border-[#30363d] rounded-lg hover:border-[#484f58] transition-colors text-left">
             <ClipboardList class="w-5 h-5 text-green-500 mb-2" />
             <div class="font-medium text-white">Audit Trail</div>
             <div class="text-xs text-gray-500">View security logs</div>
