@@ -1,22 +1,52 @@
 /**
  * DYNAMICAL API Service Layer
-ling and auth management
+ *
+ * Centralized API client with:
+ * - Automatic Authorization header injection
+ * - Global 401 handling with redirect to login
+ * - AbortController support for cancellations
+ * - Retry logic for idempotent GET requests
+ * - Consistent error handling
  */
 
 const API_BASE = '/api/v1'
 
 class ApiError extends Error {
-    constructor(message, status, data = null) {
+    constructor(message, status, data = null, correlationId = null) {
         super(message)
         this.status = status
         this.data = data
+        this.correlationId = correlationId
         this.name = 'ApiError'
     }
 }
 
-// Helper for making API requests
+// Retry configuration
+const RETRY_CONFIG = {
+    maxRetries: 3,
+    retryDelay: 1000,
+    retryStatusCodes: [502, 503, 504], // Gateway errors
+    retryOnNetworkError: true
+}
+
+// Sleep helper for retries
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
+
+// Check if request is idempotent (safe to retry)
+const isIdempotent = (method) => ['GET', 'HEAD', 'OPTIONS'].includes(method?.toUpperCase())
+
+/**
+ * Core request function
+ * @param {string} endpoint - API endpoint (e.g., '/settings')
+ * @param {object} options - Fetch options + custom options
+ * @param {AbortSignal} options.signal - AbortController signal for cancellation
+ * @param {boolean} options.skipAuth - Skip Authorization header
+ * @param {boolean} options.retry - Enable retry for this request (default true for GET)
+ */
 async function request(endpoint, options = {}) {
     const url = `${API_BASE}${endpoint}`
+    const method = options.method?.toUpperCase() || 'GET'
+
     const config = {
         headers: {
             'Content-Type': 'application/json',
@@ -25,34 +55,129 @@ async function request(endpoint, options = {}) {
         ...options
     }
 
-    // Add auth token if available
+    // Remove custom options from config
+    const { skipAuth, retry, signal, ...fetchConfig } = config
+
+    // Add auth token if available and not skipped
+    if (!skipAuth) {
+        const token = localStorage.getItem('auth_token')
+        if (token) {
+            fetchConfig.headers['Authorization'] = `Bearer ${token}`
+        }
+    }
+
+    // Add signal for abort support
+    if (signal) {
+        fetchConfig.signal = signal
+    }
+
+    // Determine if retry is enabled
+    const shouldRetry = retry !== false && isIdempotent(method)
+    let lastError = null
+    const maxAttempts = shouldRetry ? RETRY_CONFIG.maxRetries + 1 : 1
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+            const response = await fetch(url, fetchConfig)
+
+            // Handle 401 Unauthorized globally
+            if (response.status === 401) {
+                localStorage.removeItem('auth_token')
+                localStorage.removeItem('auth_user')
+                // Redirect to login (uses history API to avoid circular imports)
+                window.location.href = '/login'
+                throw new ApiError('Session expired. Please log in again.', 401)
+            }
+
+            // Check for retry-able errors
+            if (shouldRetry && RETRY_CONFIG.retryStatusCodes.includes(response.status)) {
+                if (attempt < maxAttempts) {
+                    await sleep(RETRY_CONFIG.retryDelay * attempt)
+                    continue
+                }
+            }
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}))
+                const correlationId = response.headers.get('x-correlation-id') || errorData.correlation_id
+                throw new ApiError(
+                    errorData.detail || errorData.message || `HTTP ${response.status}`,
+                    response.status,
+                    errorData,
+                    correlationId
+                )
+            }
+
+            // Handle empty responses
+            const contentType = response.headers.get('content-type')
+            if (contentType && contentType.includes('application/json')) {
+                return await response.json()
+            }
+            return null
+        } catch (error) {
+            // Handle abort
+            if (error.name === 'AbortError') {
+                throw error
+            }
+
+            // Handle network errors with retry
+            if (error instanceof TypeError && RETRY_CONFIG.retryOnNetworkError && shouldRetry) {
+                lastError = error
+                if (attempt < maxAttempts) {
+                    await sleep(RETRY_CONFIG.retryDelay * attempt)
+                    continue
+                }
+            }
+
+            // Re-throw ApiError as-is
+            if (error instanceof ApiError) {
+                throw error
+            }
+
+            // Wrap other errors
+            lastError = error
+        }
+    }
+
+    // All retries exhausted
+    throw lastError instanceof ApiError ? lastError : new ApiError(lastError?.message || 'Network error', 0)
+}
+
+/**
+ * Upload file with FormData
+ * @param {string} endpoint - API endpoint
+ * @param {FormData} formData - Form data with file
+ * @param {object} options - Additional options
+ */
+async function uploadFile(endpoint, formData, options = {}) {
+    const url = `${API_BASE}${endpoint}`
+
+    const headers = {}
     const token = localStorage.getItem('auth_token')
     if (token) {
-        config.headers['Authorization'] = `Bearer ${token}`
+        headers['Authorization'] = `Bearer ${token}`
     }
 
-    try {
-        const response = await fetch(url, config)
+    const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: formData,
+        ...options
+    })
 
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}))
-            throw new ApiError(
-                errorData.detail || errorData.message || `HTTP ${response.status}`,
-                response.status,
-                errorData
-            )
-        }
-
-        // Handle empty responses
-        const contentType = response.headers.get('content-type')
-        if (contentType && contentType.includes('application/json')) {
-            return await response.json()
-        }
-        return null
-    } catch (error) {
-        if (error instanceof ApiError) throw error
-        throw new ApiError(error.message, 0)
+    if (response.status === 401) {
+        localStorage.removeItem('auth_token')
+        localStorage.removeItem('auth_user')
+        window.location.href = '/login'
+        throw new ApiError('Session expired. Please log in again.', 401)
     }
+
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new ApiError(errorData.detail || 'Upload failed', response.status, errorData)
+    }
+
+    return response.json()
 }
 
 // VLA Model Registry API
@@ -84,7 +209,7 @@ export const identityApi = {
         const query = new URLSearchParams(params).toString()
         return request(`/identity/inventory${query ? '?' + query : ''}`)
     },
-    createEndpoint: (data) => request('/identity/endpoints', { method: 'POST', body: JSON.stringify(data) }),
+    createEndpoint: (data) => request('/identity/inventory/endpoints', { method: 'POST', body: JSON.stringify(data) }),
     requestScan: (fleetId) => request(`/identity/scan/request?fleet_id=${fleetId}`, { method: 'POST' }),
     listPolicies: () => request('/identity/policies'),
     createPolicy: (data) => request('/identity/policies', { method: 'POST', body: JSON.stringify(data) }),
@@ -130,19 +255,13 @@ export const integrationsApi = {
     getStatus: () => request('/integrations/status')
 }
 
-// TGSP Marketplace API (standard /api/v1/tgsp path)
+// TGSP Marketplace API
 export const tgspApi = {
     listPackages: () => request('/tgsp/packages'),
-    uploadPackage: async (file) => {
+    uploadPackage: (file) => {
         const formData = new FormData()
         formData.append('file', file)
-        const url = `${API_BASE}/tgsp/upload`
-        const response = await fetch(url, { method: 'POST', body: formData })
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}))
-            throw new ApiError(errorData.detail || 'Upload failed', response.status, errorData)
-        }
-        return response.json()
+        return uploadFile('/tgsp/upload', formData)
     },
     createRelease: (packageId, fleetId, channel = 'stable') =>
         request('/tgsp/releases', {
@@ -186,13 +305,19 @@ export const forensicsApi = {
             method: 'POST',
             body: JSON.stringify({ incident_id: incidentId, time_window_hours: timeWindowHours })
         }),
-    verifyCompliance: () => request('/forensics/verify-compliance', { method: 'POST' })
+    verifyCompliance: () => request('/forensics/verify-compliance', { method: 'POST' }),
+    getMetricsExtended: () => request('/forensics/metrics/extended')
 }
 
 // Fleet API
 export const fleetApi = {
     listFleets: () => request('/fleets/extended'),
-    createFleet: (name) => request(`/fleets?name=${encodeURIComponent(name)}`, { method: 'POST' })
+    createFleet: (name) => request(`/fleets?name=${encodeURIComponent(name)}`, { method: 'POST' }),
+    emergencyRollback: (fleetId, reason) =>
+        request('/fleets/emergency-rollback', {
+            method: 'POST',
+            body: JSON.stringify({ fleet_id: fleetId, reason })
+        })
 }
 
 // PEFT API
@@ -205,11 +330,61 @@ export const peftApi = {
         request(`/peft/runs/${runId}/promote`, { method: 'POST', body: JSON.stringify({ channel }) })
 }
 
-// Status & Health API
-// Backend now has /api/v1/health and /api/v1/status for frontend compatibility
-export const statusApi = {
-    getStatus: () => request('/status'),
-    getHealth: () => request('/health')
+// Telemetry API
+export const telemetryApi = {
+    getPipeline: (timeRange = '15m') => request(`/telemetry/pipeline?time_range=${timeRange}`),
+    getDevices: () => request('/telemetry/devices')
 }
 
-export { ApiError, request }
+// Dashboard API
+export const dashboardApi = {
+    getStats: () => request('/dashboard/stats')
+}
+
+// Settings API
+export const settingsApi = {
+    getSettings: () => request('/settings'),
+    updateSetting: (key, value) =>
+        request('/settings', { method: 'PUT', body: JSON.stringify({ key, value: String(value) }) }),
+    bulkUpdate: (settings) =>
+        request('/settings/bulk', { method: 'PUT', body: JSON.stringify(settings) })
+}
+
+// Status & Health API
+export const statusApi = {
+    getStatus: () => request('/status'),
+    getHealth: () => request('/status/health'),
+    getMetrics: () => request('/status/metrics')
+}
+
+// Security API
+export const securityApi = {
+    getScore: () => request('/security/score')
+}
+
+// Skills API
+export const skillsApi = {
+    getLibrary: () => request('/skills/library'),
+    rollback: (skillId, version) =>
+        request('/skills/rollback', { method: 'POST', body: JSON.stringify({ skill_id: skillId, version }) })
+}
+
+// Lineage API
+export const lineageApi = {
+    getVersions: () => request('/lineage/versions'),
+    deploy: (versionId, fleetId) =>
+        request('/lineage/deploy', { method: 'POST', body: JSON.stringify({ version_id: versionId, fleet_id: fleetId }) }),
+    sync: () => request('/lineage/sync', { method: 'POST' })
+}
+
+// Audit API
+export const auditApi = {
+    getLogs: (limit = 50) => request(`/audit/logs?limit=${limit}`)
+}
+
+// Community API
+export const communityApi = {
+    getTgspPackages: () => request('/community/tgsp/packages')
+}
+
+export { ApiError, request, uploadFile }

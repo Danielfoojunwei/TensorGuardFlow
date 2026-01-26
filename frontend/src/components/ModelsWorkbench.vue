@@ -5,7 +5,8 @@
  * Consolidates: VLA Registry, PEFT Studio, Eval Arena, Skills Library, Model Lineage
  * Tabbed interface for complete model workflow from creation to deployment
  */
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import {
     Bot, Database, Scale, BookOpen, GitBranch,
     Plus, Search, Filter, RefreshCw, Play, Shield,
@@ -19,7 +20,23 @@ const props = defineProps({
     initialTab: { type: String, default: 'registry' }
 })
 
-const activeTab = ref(props.initialTab)
+const router = useRouter()
+const route = useRoute()
+
+const activeTab = ref(route.params.tab || props.initialTab)
+
+// Sync with route params
+watch(() => route.params.tab, (newTab) => {
+    if (newTab && newTab !== activeTab.value) {
+        activeTab.value = newTab
+    }
+})
+
+// Update route when tab changes
+const setActiveTab = (tabId) => {
+    activeTab.value = tabId
+    router.push(`/models/${tabId}`)
+}
 
 const tabs = [
     { id: 'registry', label: 'Model Registry', icon: Bot, description: 'VLA models & deployment' },
@@ -118,7 +135,7 @@ const getStatusStyle = (status) => {
 
 // Actions
 const startTraining = () => {
-    activeTab.value = 'training'
+    setActiveTab('training')
     // Open training wizard
 }
 
@@ -167,7 +184,8 @@ onMounted(fetchData)
         <!-- Tabs -->
         <div class="flex gap-1">
           <button v-for="tab in tabs" :key="tab.id"
-                  @click="activeTab = tab.id"
+                  :data-testid="`models-tab-${tab.id}`"
+                  @click="setActiveTab(tab.id)"
                   :class="['px-4 py-2.5 rounded-t-lg flex items-center gap-2 transition-colors text-sm font-medium',
                            activeTab === tab.id
                              ? 'bg-[#161b22] text-white border-t border-x border-[#30363d]'

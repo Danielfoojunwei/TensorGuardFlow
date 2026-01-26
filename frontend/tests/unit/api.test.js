@@ -14,6 +14,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 const mockFetch = vi.fn()
 global.fetch = mockFetch
 
+// Mock window.location for 401 redirect tests
+const mockLocation = { href: '' }
+Object.defineProperty(window, 'location', {
+    value: mockLocation,
+    writable: true
+})
+
 // Import after setting up mocks
 import { ApiError, request } from '@/services/api.js'
 
@@ -39,6 +46,11 @@ describe('ApiError', () => {
     it('should be instanceof Error', () => {
         const error = new ApiError('Test', 400)
         expect(error instanceof Error).toBe(true)
+    })
+
+    it('should include correlation ID', () => {
+        const error = new ApiError('Test', 400, null, 'corr-123')
+        expect(error.correlationId).toBe('corr-123')
     })
 })
 
@@ -159,6 +171,11 @@ describe('API Request Error Handling', () => {
     beforeEach(() => {
         localStorage.clear()
         mockFetch.mockReset()
+        mockLocation.href = ''
+    })
+
+    afterEach(() => {
+        localStorage.clear()
     })
 
     it('should throw ApiError on 401 Unauthorized', async () => {
@@ -168,12 +185,20 @@ describe('API Request Error Handling', () => {
             json: async () => ({ detail: 'Invalid credentials' })
         })
 
-        await expect(request('/auth/me')).rejects.toThrow(ApiError)
+        await expect(request('/auth/me', { retry: false })).rejects.toThrow(ApiError)
+    })
+
+    it('should redirect to login on 401', async () => {
+        mockFetch.mockResolvedValueOnce({
+            ok: false,
+            status: 401,
+            json: async () => ({ detail: 'Invalid credentials' })
+        })
 
         try {
-            await request('/auth/me')
+            await request('/auth/me', { retry: false })
         } catch (error) {
-            // Reset mock for second call
+            expect(mockLocation.href).toBe('/login')
         }
     })
 
@@ -181,11 +206,12 @@ describe('API Request Error Handling', () => {
         mockFetch.mockResolvedValueOnce({
             ok: false,
             status: 403,
+            headers: new Headers(),
             json: async () => ({ detail: 'Forbidden' })
         })
 
         try {
-            await request('/protected')
+            await request('/protected', { retry: false })
         } catch (error) {
             expect(error.status).toBe(403)
         }
@@ -195,41 +221,44 @@ describe('API Request Error Handling', () => {
         mockFetch.mockResolvedValueOnce({
             ok: false,
             status: 404,
+            headers: new Headers(),
             json: async () => ({ detail: 'Not found' })
         })
 
-        await expect(request('/nonexistent')).rejects.toThrow(ApiError)
+        await expect(request('/nonexistent', { retry: false })).rejects.toThrow(ApiError)
     })
 
     it('should handle 500 Server Error', async () => {
         mockFetch.mockResolvedValueOnce({
             ok: false,
             status: 500,
+            headers: new Headers(),
             json: async () => ({ detail: 'Internal server error' })
         })
 
         try {
-            await request('/error')
+            await request('/error', { retry: false })
         } catch (error) {
             expect(error.status).toBe(500)
         }
     })
 
     it('should handle network errors', async () => {
-        mockFetch.mockRejectedValueOnce(new Error('Network failure'))
+        mockFetch.mockRejectedValueOnce(new TypeError('Network failure'))
 
-        await expect(request('/test')).rejects.toThrow(ApiError)
+        await expect(request('/test', { method: 'POST', retry: false })).rejects.toThrow()
     })
 
     it('should handle non-JSON error responses', async () => {
         mockFetch.mockResolvedValueOnce({
             ok: false,
             status: 502,
+            headers: new Headers(),
             json: async () => { throw new Error('Not JSON') }
         })
 
         try {
-            await request('/bad-gateway')
+            await request('/bad-gateway', { retry: false })
         } catch (error) {
             expect(error.status).toBe(502)
         }

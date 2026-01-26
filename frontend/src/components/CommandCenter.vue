@@ -14,8 +14,9 @@ import {
     Activity, Server, Shield, Zap, AlertTriangle, CheckCircle,
     TrendingUp, Clock, Users, Database, Lock, Package,
     Play, ArrowRight, RefreshCw, Radio, Bot, FileKey,
-    BookOpen
+    BookOpen, Plus
 } from 'lucide-vue-next'
+import { dashboardApi, statusApi, securityApi, fleetApi } from '../services/api'
 
 const emit = defineEmits(['navigate'])
 
@@ -59,27 +60,22 @@ const error = ref(null)
 // Polling
 let pollInterval = null
 
-const getAuthHeaders = () => {
-    const token = localStorage.getItem('auth_token')
-    return token ? { 'Authorization': `Bearer ${token}` } : {}
-}
-
 const fetchDashboardData = async () => {
     try {
-        const headers = getAuthHeaders()
-
-        // Fetch from multiple endpoints in parallel
-        const [statsRes, healthRes, metricsRes, securityRes, fleetsRes] = await Promise.allSettled([
-            fetch('/api/v1/dashboard/stats', { headers }),
-            fetch('/api/v1/status/health', { headers }),
-            fetch('/api/v1/status/metrics', { headers }),
-            fetch('/api/v1/security/score', { headers }),
-            fetch('/api/v1/fleets/extended', { headers })
+        // Fetch from multiple endpoints in parallel using API service
+        const results = await Promise.allSettled([
+            dashboardApi.getStats(),
+            statusApi.getHealth(),
+            statusApi.getMetrics(),
+            securityApi.getScore(),
+            fleetApi.listFleets()
         ])
 
+        const [statsRes, healthRes, metricsRes, securityRes, fleetsRes] = results
+
         // Process dashboard stats
-        if (statsRes.status === 'fulfilled' && statsRes.value.ok) {
-            const data = await statsRes.value.json()
+        if (statsRes.status === 'fulfilled') {
+            const data = statsRes.value
             metrics.value = {
                 activeFleets: data.fleet_count || 0,
                 connectedDevices: data.devices_online || 0,
@@ -93,8 +89,8 @@ const fetchDashboardData = async () => {
         }
 
         // Process service health
-        if (healthRes.status === 'fulfilled' && healthRes.value.ok) {
-            const data = await healthRes.value.json()
+        if (healthRes.status === 'fulfilled') {
+            const data = healthRes.value
             systemHealth.value = {
                 overall: data.overall || 'healthy',
                 services: data.services || {}
@@ -102,8 +98,8 @@ const fetchDashboardData = async () => {
         }
 
         // Process extended metrics
-        if (metricsRes.status === 'fulfilled' && metricsRes.value.ok) {
-            const data = await metricsRes.value.json()
+        if (metricsRes.status === 'fulfilled') {
+            const data = metricsRes.value
             secondaryMetrics.value = {
                 uptime_pct: data.uptime_pct || 99.9,
                 avg_latency_ms: data.avg_latency_ms || 0,
@@ -115,14 +111,14 @@ const fetchDashboardData = async () => {
         }
 
         // Process security alerts
-        if (securityRes.status === 'fulfilled' && securityRes.value.ok) {
-            const data = await securityRes.value.json()
+        if (securityRes.status === 'fulfilled') {
+            const data = securityRes.value
             alerts.value = data.alerts || []
         }
 
         // Fallback to fleets endpoint for device counts if needed
-        if (fleetsRes.status === 'fulfilled' && fleetsRes.value.ok) {
-            const fleets = await fleetsRes.value.json()
+        if (fleetsRes.status === 'fulfilled') {
+            const fleets = fleetsRes.value
             if (Array.isArray(fleets)) {
                 metrics.value.activeFleets = fleets.length
                 metrics.value.connectedDevices = fleets.reduce((sum, f) => sum + (f.devices_online || 0), 0)
@@ -190,22 +186,23 @@ onUnmounted(() => {
       <div class="flex items-center justify-between">
         <div>
           <h1 class="text-2xl font-bold text-white tracking-tight">Command Center</h1>
-          <p class="text-sm text-gray-500">DYNAMICAL v2.3 GA System Overview</p>
+          <p class="text-sm text-gray-500">DYNAMICAL v2.4 GA System Overview</p>
         </div>
         <div class="flex items-center gap-4">
           <div class="flex items-center gap-2 text-sm">
             <div :class="['w-2 h-2 rounded-full animate-pulse', getHealthBg(systemHealth.overall)]"></div>
             <span class="text-gray-400">System {{ systemHealth.overall }}</span>
           </div>
-          <button @click="fetchDashboardData" class="p-2 rounded hover:bg-[#1f2428] transition-colors">
+          <button @click="fetchDashboardData" class="p-2 rounded hover:bg-[#1f2428] transition-colors" aria-label="Refresh dashboard" data-testid="dashboard-refresh">
             <RefreshCw class="w-4 h-4 text-gray-400" :class="loading ? 'animate-spin' : ''" />
           </button>
         </div>
       </div>
 
       <!-- Quick Actions -->
-      <div class="grid grid-cols-4 gap-4">
+      <div class="grid grid-cols-4 gap-4" data-testid="quick-actions">
         <button v-for="action in quickActions" :key="action.id"
+                :data-testid="`action-${action.id}`"
                 @click="handleQuickAction(action)"
                 :class="['p-4 rounded-lg flex items-center gap-3 transition-all hover:scale-[1.02]', action.color]">
           <component :is="action.icon" class="w-5 h-5 text-white" />
@@ -215,8 +212,9 @@ onUnmounted(() => {
       </div>
 
       <!-- Primary Metrics -->
-      <div class="grid grid-cols-4 gap-4">
+      <div class="grid grid-cols-4 gap-4" data-testid="metrics-grid">
         <div class="bg-[#0d1117] border border-[#30363d] rounded-lg p-5 hover:border-[#484f58] transition-colors cursor-pointer"
+             data-testid="metric-fleets"
              @click="emit('navigate', { page: 'operations', tab: 'fleets' })">
           <div class="flex items-center justify-between mb-3">
             <Server class="w-5 h-5 text-blue-500" />
@@ -227,6 +225,7 @@ onUnmounted(() => {
         </div>
 
         <div class="bg-[#0d1117] border border-[#30363d] rounded-lg p-5 hover:border-[#484f58] transition-colors cursor-pointer"
+             data-testid="metric-training"
              @click="emit('navigate', { page: 'operations', tab: 'monitor' })">
           <div class="flex items-center justify-between mb-3">
             <Radio class="w-5 h-5 text-green-500" />
@@ -237,6 +236,7 @@ onUnmounted(() => {
         </div>
 
         <div class="bg-[#0d1117] border border-[#30363d] rounded-lg p-5 hover:border-[#484f58] transition-colors cursor-pointer"
+             data-testid="metric-models"
              @click="emit('navigate', { page: 'models', tab: 'registry' })">
           <div class="flex items-center justify-between mb-3">
             <Bot class="w-5 h-5 text-purple-500" />
@@ -247,6 +247,7 @@ onUnmounted(() => {
         </div>
 
         <div class="bg-[#0d1117] border border-[#30363d] rounded-lg p-5 hover:border-[#484f58] transition-colors cursor-pointer"
+             data-testid="metric-security"
              @click="emit('navigate', { page: 'security', tab: 'identity' })">
           <div class="flex items-center justify-between mb-3">
             <Shield class="w-5 h-5 text-orange-500" />
@@ -340,11 +341,9 @@ onUnmounted(() => {
         <div class="px-6 py-4 border-b border-[#30363d] flex items-center justify-between bg-[#161b22] shrink-0">
           <div class="flex items-center gap-2">
             <BookOpen class="w-5 h-5 text-primary" />
-            <h3 class="font-bold text-white">DYNAMICAL v2.3 GA Tutorial</h3>
- Linda
- Linda
+            <h3 class="font-bold text-white">DYNAMICAL v2.4 GA Tutorial</h3>
           </div>
-          <button @click="showTutorial = false" class="text-gray-500 hover:text-white transition-colors">
+          <button @click="showTutorial = false" class="text-gray-500 hover:text-white transition-colors" aria-label="Close tutorial">
             <Plus class="w-5 h-5 rotate-45" />
           </button>
         </div>
