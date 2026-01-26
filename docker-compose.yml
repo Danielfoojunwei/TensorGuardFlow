@@ -26,7 +26,8 @@ services:
     environment:
       - TG_ENVIRONMENT=development
       - DATABASE_URL=sqlite:///./tg_platform.db
-      - SECRET_KEY=${SECRET_KEY:?SECRET_KEY is required - set this environment variable}
+      # Use TG_SECRET_KEY for consistency with code. For dev, a default is provided.
+      - TG_SECRET_KEY=${TG_SECRET_KEY:-dev-only-insecure-key-do-not-use-in-production}
     volumes:
       - ./data:/app/data
       - db-data:/app
@@ -91,7 +92,7 @@ services:
     environment:
       - TG_ENVIRONMENT=production
       - DATABASE_URL=postgresql://tensorguard:${POSTGRES_PASSWORD:-tensorguard}@db:5432/tensorguard
-      - SECRET_KEY=${SECRET_KEY:?SECRET_KEY is required for production}
+      - TG_SECRET_KEY=${TG_SECRET_KEY:?TG_SECRET_KEY is required for production}
     depends_on:
       db:
         condition: service_healthy

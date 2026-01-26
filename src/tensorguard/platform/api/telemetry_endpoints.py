@@ -66,7 +66,7 @@ class TelemetryBatch(BaseModel):
     """Batch of telemetry messages from edge agent."""
     batch_id: str = Field(..., description="Unique batch identifier for idempotency")
     device_info: Optional[DeviceInfo] = Field(None, description="Device information for upsert")
-    messages: List[TelemetryMessage] = Field(..., description="Telemetry messages", max_items=1000)
+    messages: List[TelemetryMessage] = Field(..., description="Telemetry messages", max_length=1000)
 
 
 # Configuration for ingest limits
@@ -391,7 +391,7 @@ def _parse_forensics_event(tenant_id: str, fleet_id: str, device_id: str, ts: da
 @router.get("/telemetry/pipeline")
 async def get_pipeline_telemetry(
     fleet_id: Optional[str] = None,
-    time_range: str = Query(default="15m", regex="^(15m|1h|24h)$"),
+    time_range: str = Query(default="15m", pattern="^(15m|1h|24h)$"),
     stage: Optional[str] = None,
     session: Session = Depends(get_session),
     auth: OrgAuthContext = Depends(require_org_role(OrganizationRole.READONLY)),

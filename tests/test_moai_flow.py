@@ -1,7 +1,13 @@
 """
 Test MOAI End-to-End Flow
+
+Requires: pip install tensorguard[fl] (includes tenseal)
 """
 import pytest
+
+# Skip entire module if tenseal is not available
+tenseal = pytest.importorskip("tenseal", reason="TenSEAL required for MOAI tests")
+
 import numpy as np
 from tensorguard.moai.moai_config import MoaiConfig
 from tensorguard.moai.keys import MoaiKeyManager

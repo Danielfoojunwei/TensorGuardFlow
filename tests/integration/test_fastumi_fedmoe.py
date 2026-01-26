@@ -1,5 +1,14 @@
+"""
+End-to-End Simulation of TensorGuardFlow with FastUMI-100K Dataset.
 
+Requires: pip install tensorguard[fl] h5py
+"""
 import pytest
+
+# Skip entire module if required deps are not available
+h5py = pytest.importorskip("h5py", reason="h5py required for FastUMI tests")
+flwr = pytest.importorskip("flwr", reason="Flower (flwr) required for FedMoE tests")
+
 import numpy as np
 from datetime import datetime
 import time

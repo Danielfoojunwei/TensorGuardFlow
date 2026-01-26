@@ -6,6 +6,10 @@ Handles SQLModel's global metadata issue by using file-based SQLite with proper 
 
 import os
 import tempfile
+
+# Ensure development environment BEFORE any imports that might load config
+os.environ.setdefault("TG_ENVIRONMENT", "development")
+
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 from sqlalchemy.pool import StaticPool
