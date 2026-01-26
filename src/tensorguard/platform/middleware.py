@@ -4,6 +4,8 @@ TensorGuard Platform Middleware
 Provides:
 - RequestIDMiddleware: Adds unique request ID to all requests
 - StructuredLoggingMiddleware: Logs all requests with route, status, latency
+- RateLimitMiddleware: Token-bucket rate limiting per IP
+- SecretRedactionFilter: Log filter to redact secrets/tokens
 - ErrorHandlerMiddleware: Consistent error response format
 
 All middleware respects the request_id for traceability.
@@ -11,10 +13,15 @@ All middleware respects the request_id for traceability.
 
 import json
 import logging
+import os
+import re
 import time
 import uuid
+from collections import defaultdict
 from contextvars import ContextVar
-from typing import Callable, Optional
+from datetime import datetime
+from threading import Lock
+from typing import Callable, Dict, Optional, Tuple
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -133,6 +140,182 @@ class StructuredLoggingMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    """
+    Token-bucket rate limiting middleware.
+
+    Features:
+    - Per-IP rate limiting
+    - Configurable limits per path pattern
+    - Stricter limits for auth endpoints
+    - Returns 429 with Retry-After header when exceeded
+
+    Configuration via environment:
+    - TG_RATE_LIMIT_GENERAL: requests/second for general endpoints (default: 100)
+    - TG_RATE_LIMIT_AUTH: requests/second for auth endpoints (default: 10)
+    - TG_RATE_LIMIT_BURST: burst capacity multiplier (default: 3)
+    """
+
+    # Path patterns for stricter rate limiting
+    AUTH_PATHS = {"/auth/token", "/api/v1/auth/token", "/auth/login", "/api/v1/auth/login"}
+
+    def __init__(self, app, **kwargs):
+        super().__init__(app, **kwargs)
+        # Configuration
+        self.general_rate = float(os.getenv("TG_RATE_LIMIT_GENERAL", "100"))  # req/sec
+        self.auth_rate = float(os.getenv("TG_RATE_LIMIT_AUTH", "10"))  # req/sec
+        self.burst_multiplier = float(os.getenv("TG_RATE_LIMIT_BURST", "3"))
+
+        # Token buckets: {ip: (tokens, last_update)}
+        self._buckets: Dict[str, Tuple[float, float]] = defaultdict(lambda: (self._get_burst(False), time.time()))
+        self._auth_buckets: Dict[str, Tuple[float, float]] = defaultdict(lambda: (self._get_burst(True), time.time()))
+        self._lock = Lock()
+
+        # Exempt paths from rate limiting
+        self.exempt_paths = {"/health", "/healthz", "/ready", "/readyz", "/live", "/metrics"}
+
+    def _get_burst(self, is_auth: bool) -> float:
+        """Get burst capacity for bucket type."""
+        rate = self.auth_rate if is_auth else self.general_rate
+        return rate * self.burst_multiplier
+
+    def _get_bucket(self, ip: str, is_auth: bool) -> Tuple[float, float]:
+        """Get or create token bucket for IP."""
+        buckets = self._auth_buckets if is_auth else self._buckets
+        return buckets[ip]
+
+    def _update_bucket(self, ip: str, is_auth: bool, tokens: float, timestamp: float):
+        """Update token bucket."""
+        buckets = self._auth_buckets if is_auth else self._buckets
+        buckets[ip] = (tokens, timestamp)
+
+    def _consume_token(self, ip: str, is_auth: bool) -> Tuple[bool, float]:
+        """
+        Attempt to consume a token from the bucket.
+
+        Returns:
+            (allowed, retry_after_seconds)
+        """
+        with self._lock:
+            tokens, last_update = self._get_bucket(ip, is_auth)
+            now = time.time()
+
+            # Refill tokens based on time elapsed
+            rate = self.auth_rate if is_auth else self.general_rate
+            burst = self._get_burst(is_auth)
+            elapsed = now - last_update
+            tokens = min(burst, tokens + elapsed * rate)
+
+            if tokens >= 1.0:
+                # Consume token
+                self._update_bucket(ip, is_auth, tokens - 1.0, now)
+                return True, 0.0
+            else:
+                # Calculate retry time
+                retry_after = (1.0 - tokens) / rate
+                self._update_bucket(ip, is_auth, tokens, now)
+                return False, retry_after
+
+    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        # Skip rate limiting for health checks
+        if request.url.path in self.exempt_paths:
+            return await call_next(request)
+
+        # Get client IP (consider X-Forwarded-For in production)
+        client_ip = request.client.host if request.client else "unknown"
+        forwarded = request.headers.get("X-Forwarded-For")
+        if forwarded:
+            client_ip = forwarded.split(",")[0].strip()
+
+        # Determine if this is an auth endpoint (stricter limits)
+        is_auth = request.url.path in self.AUTH_PATHS
+
+        # Check rate limit
+        allowed, retry_after = self._consume_token(client_ip, is_auth)
+
+        if not allowed:
+            request_id = getattr(request.state, "request_id", None) or get_request_id() or "-"
+            logger.warning(
+                f"[{request_id}] Rate limit exceeded for {client_ip} on {request.url.path}",
+                extra={
+                    "request_id": request_id,
+                    "client_ip": client_ip,
+                    "path": request.url.path,
+                    "retry_after": retry_after,
+                }
+            )
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "error": {
+                        "code": "RATE_LIMITED",
+                        "message": "Too many requests. Please slow down.",
+                    },
+                    "request_id": request_id,
+                },
+                headers={"Retry-After": str(int(retry_after + 1))},
+            )
+
+        return await call_next(request)
+
+
+class SecretRedactionFilter(logging.Filter):
+    """
+    Log filter that redacts sensitive information from log messages.
+
+    Redacts:
+    - Bearer tokens
+    - Authorization headers
+    - API keys
+    - Secret keys
+    - Passwords
+    - JWT tokens
+    """
+
+    # Patterns to redact (pattern, replacement)
+    REDACTION_PATTERNS = [
+        # Bearer tokens
+        (re.compile(r'Bearer\s+[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+', re.IGNORECASE), 'Bearer [REDACTED]'),
+        (re.compile(r'Bearer\s+[A-Za-z0-9\-_\.]+', re.IGNORECASE), 'Bearer [REDACTED]'),
+        # Authorization header values
+        (re.compile(r'Authorization["\']?\s*[:=]\s*["\']?[A-Za-z0-9\-_\.]+["\']?', re.IGNORECASE), 'Authorization: [REDACTED]'),
+        # API keys (various formats)
+        (re.compile(r'api[_-]?key["\']?\s*[:=]\s*["\']?[A-Za-z0-9\-_]+["\']?', re.IGNORECASE), 'api_key=[REDACTED]'),
+        (re.compile(r'x-api-key["\']?\s*[:=]\s*["\']?[A-Za-z0-9\-_]+["\']?', re.IGNORECASE), 'x-api-key: [REDACTED]'),
+        # Secret keys
+        (re.compile(r'secret[_-]?key["\']?\s*[:=]\s*["\']?[^\s,\}\"\']+["\']?', re.IGNORECASE), 'secret_key=[REDACTED]'),
+        (re.compile(r'TG_SECRET_KEY\s*=\s*[^\s]+', re.IGNORECASE), 'TG_SECRET_KEY=[REDACTED]'),
+        (re.compile(r'TG_VAULT_MASTER_KEY\s*=\s*[^\s]+', re.IGNORECASE), 'TG_VAULT_MASTER_KEY=[REDACTED]'),
+        # Passwords
+        (re.compile(r'password["\']?\s*[:=]\s*["\']?[^\s,\}\"\']+["\']?', re.IGNORECASE), 'password=[REDACTED]'),
+        # Database URLs with passwords
+        (re.compile(r'://[^:]+:([^@]+)@', re.IGNORECASE), '://[user]:[REDACTED]@'),
+        # JWT tokens (3 parts separated by dots)
+        (re.compile(r'eyJ[A-Za-z0-9\-_]+\.eyJ[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+'), '[JWT_REDACTED]'),
+    ]
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        """Filter and redact sensitive information from log record."""
+        # Redact message
+        if record.msg:
+            record.msg = self._redact(str(record.msg))
+
+        # Redact args if present
+        if record.args:
+            if isinstance(record.args, dict):
+                record.args = {k: self._redact(str(v)) if isinstance(v, str) else v for k, v in record.args.items()}
+            elif isinstance(record.args, tuple):
+                record.args = tuple(self._redact(str(a)) if isinstance(a, str) else a for a in record.args)
+
+        return True
+
+    def _redact(self, text: str) -> str:
+        """Apply all redaction patterns to text."""
+        for pattern, replacement in self.REDACTION_PATTERNS:
+            text = pattern.sub(replacement, text)
+        return text
+
+
 class StandardErrorResponse:
     """
     Standard error response format for consistency.
@@ -212,10 +395,9 @@ def setup_logging(log_level: str = "INFO"):
     Sets up:
     - JSON-formatted logs for production
     - Human-readable logs for development
+    - Secret redaction filter to prevent credential leakage
     - Proper log levels
     """
-    import os
-
     env = os.getenv("TG_ENVIRONMENT", "development")
 
     # Create formatter based on environment
@@ -239,9 +421,10 @@ def setup_logging(log_level: str = "INFO"):
     # Clear existing handlers
     root_logger.handlers.clear()
 
-    # Add console handler
+    # Add console handler with secret redaction filter
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(formatter)
+    console_handler.addFilter(SecretRedactionFilter())  # Redact secrets from all logs
     root_logger.addHandler(console_handler)
 
     # Set levels for noisy libraries
