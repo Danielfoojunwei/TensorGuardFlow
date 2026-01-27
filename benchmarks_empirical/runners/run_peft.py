@@ -151,11 +151,13 @@ class PEFTRunner:
         if method == "frozen":
             params = model.classifier.parameters()
         elif method == "lora" and adapter:
-            # Only train LoRA parameters and classifier
+            # Only train LoRA parameters (classifier's original weights are frozen)
             lora_params = []
             for layer in adapter.lora_layers.values():
+                # LoRALinear has .lora which contains lora_A and lora_B
                 lora_params.extend([layer.lora.lora_A, layer.lora.lora_B])
-            params = list(model.classifier.parameters()) + lora_params
+            params = lora_params
+            print(f"    LoRA trainable params: {sum(p.numel() for p in lora_params)}")
         else:
             params = model.parameters()
 
@@ -264,12 +266,26 @@ class PEFTRunner:
         elif method == "full_finetune":
             model = get_backbone("resnet18", num_classes=100, pretrained=True, frozen=False)
         elif method == "lora":
+            # For CNNs, we apply LoRA to the classifier layer
+            # This adds low-rank trainable matrices on top of frozen backbone
             model = get_backbone("resnet18", num_classes=100, pretrained=True, frozen=True)
-            # Note: For vision models, LoRA is typically applied to attention layers
-            # ResNet doesn't have attention, so we create a simpler adapter approach
-            adapter = LoRAAdapter(rank=8, alpha=16, dropout=0.1, target_modules=['layer3', 'layer4'])
-            # The adapter tracks the modules but actual LoRA injection would need
-            # attention-based models. For ResNet, we use the frozen+classifier approach
+
+            # Replace classifier with LoRA-wrapped version
+            # Use rank=32 for better accuracy while remaining parameter-efficient
+            from ..models.peft_wrappers import LoRALinear
+            original_classifier = model.classifier
+            lora_classifier = LoRALinear(
+                original_layer=original_classifier,
+                rank=32,  # Higher rank for better accuracy
+                alpha=64,
+                dropout=0.1,
+            )
+            model.classifier = lora_classifier
+
+            # Create adapter tracker for metrics
+            adapter = LoRAAdapter(rank=32, alpha=64, dropout=0.1, target_modules=['classifier'])
+            adapter.lora_layers['classifier'] = lora_classifier
+
         elif method == "adapter":
             model = get_backbone("resnet18", num_classes=100, pretrained=True, frozen=True)
             adapter = AdapterWrapper(bottleneck_dim=64, target_modules=['layer3', 'layer4'])

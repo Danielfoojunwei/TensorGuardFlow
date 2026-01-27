@@ -226,17 +226,17 @@ class CLVisionRunner:
                 frozen=False,
             )
         elif method == "tensorguard":
-            # Use LoRA adapters
+            # TensorGuard uses per-task classifier heads with EWC-like regularization
+            # This prevents catastrophic forgetting by constraining important weights
             model = get_backbone(
                 name="resnet18",
                 num_classes=num_classes,
                 pretrained=True,
-                frozen=True,
+                frozen=True,  # Freeze backbone
             )
-            # Apply LoRA to later layers
-            lora = LoRAAdapter(rank=8, alpha=16, target_modules=['layer3', 'layer4'])
-            # For ResNet, we need to wrap the classifier
-            # The backbone is frozen, classifier is trainable
+            # Store task-specific information for regularization
+            model.task_classifiers = {}
+            model.fisher_information = {}
         else:
             raise ValueError(f"Unknown method: {method}")
 
@@ -267,14 +267,20 @@ class CLVisionRunner:
         task_classes = dataset.get_task_classes(task_id)
 
         # Setup optimizer
-        if method == "frozen" or method == "tensorguard":
+        if method == "frozen":
             # Only train classifier
+            params = [p for p in model.classifier.parameters()]
+        elif method == "tensorguard":
+            # TensorGuard: train classifier with EWC-like regularization
             params = [p for p in model.classifier.parameters()]
         else:
             params = model.parameters()
 
         optimizer = torch.optim.Adam(params, lr=learning_rate)
         criterion = nn.CrossEntropyLoss()
+
+        # EWC regularization strength for tensorguard
+        ewc_lambda = 5000.0 if method == "tensorguard" else 0.0
 
         # Training loop
         for epoch in range(epochs):
@@ -286,8 +292,48 @@ class CLVisionRunner:
                 optimizer.zero_grad()
                 outputs = model(x)
                 loss = criterion(outputs, y)
+
+                # EWC regularization for tensorguard (prevents forgetting)
+                if method == "tensorguard" and hasattr(model, 'fisher_information') and task_id > 0:
+                    ewc_loss = 0.0
+                    for name, param in model.classifier.named_parameters():
+                        if name in model.fisher_information:
+                            fisher = model.fisher_information[name]
+                            old_param = model.task_classifiers.get(task_id - 1, {}).get(name)
+                            if old_param is not None:
+                                ewc_loss += (fisher * (param - old_param) ** 2).sum()
+                    loss = loss + ewc_lambda * ewc_loss
+
                 loss.backward()
                 optimizer.step()
+
+        # After training, store classifier state and compute Fisher for tensorguard
+        if method == "tensorguard" and hasattr(model, 'task_classifiers'):
+            # Store classifier weights for this task
+            model.task_classifiers[task_id] = {
+                name: param.clone().detach()
+                for name, param in model.classifier.named_parameters()
+            }
+
+            # Compute Fisher information (simplified diagonal approximation)
+            model.eval()
+            fisher = {name: torch.zeros_like(param) for name, param in model.classifier.named_parameters()}
+            for batch in train_loader:
+                x, y = batch[0].to(self.device), batch[1].to(self.device)
+                outputs = model(x)
+                loss = criterion(outputs, y)
+                loss.backward()
+                for name, param in model.classifier.named_parameters():
+                    if param.grad is not None:
+                        fisher[name] += param.grad.data ** 2
+            # Average and store
+            for name in fisher:
+                fisher[name] /= len(train_loader)
+                if name in model.fisher_information:
+                    model.fisher_information[name] += fisher[name]
+                else:
+                    model.fisher_information[name] = fisher[name]
+            model.train()
 
     def _evaluate_task(
         self,

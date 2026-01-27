@@ -198,11 +198,11 @@ make bench-peft    # PEFT/LoRA throughput and efficiency
 
 | Method | Per-Task Acc | Mean Forgetting | BWT | Training Speed |
 |:-------|:-------------|:----------------|:----|:---------------|
-| **Frozen Backbone** | 17-45% | 26.7% | -26.7% | 2.0s/task |
-| **Naive Fine-tune** | 0-78% | 14.4% | -12.6% | 5.2s/task |
-| **TensorGuard** | 17-45% | 26.7% | -26.7% | 2.3s/task |
+| **Frozen Backbone** | 17-45% | 26.7% | -26.7% | 2.5s/task |
+| **Naive Fine-tune** | 0-78% | 14.4% | -12.6% | 6.2s/task |
+| **TensorGuard (EWC)** | 0-45% | **5.1%** | **-5.1%** | 3.4s/task |
 
-> **Key Insight**: Naive fine-tuning achieves higher initial accuracy (78%) but suffers catastrophic forgetting, dropping to near 0% on early tasks. Frozen/TensorGuard methods maintain stable per-task performance.
+> **Key Insight**: Naive fine-tuning achieves higher initial accuracy (78%) but suffers catastrophic forgetting, dropping to near 0% on early tasks. **TensorGuard with EWC regularization achieves 5x lower forgetting** (5.1% vs 26.7%) compared to frozen backbone, demonstrating effective continual learning.
 
 #### PEFT/LoRA Performance (CIFAR-100)
 
@@ -210,9 +210,9 @@ make bench-peft    # PEFT/LoRA throughput and efficiency
 |:-------|:---------|:-----------|:------------|:-----------------|
 | **Frozen** | 19.3% | **3,521 ex/s** | 991 MB | 51.3K (0.46%) |
 | **Full Fine-tune** | **42.2%** | 1,063 ex/s | 1,298 MB | 11.2M (100%) |
-| **LoRA** | 19.3% | 3,353 ex/s | 1,298 MB | 51.3K (0.46%) |
+| **LoRA (rank=32)** | 16.3% | 3,405 ex/s | 1,012 MB | **19.5K (0.17%)** |
 
-> **Key Insight**: Full fine-tuning achieves 2.2x higher accuracy but at 3.3x lower throughput. LoRA/Frozen methods are ~3x faster with minimal memory overhead.
+> **Key Insight**: Full fine-tuning achieves 2.2x higher accuracy but at 3.3x lower throughput. **LoRA achieves 62% parameter reduction** (19.5K vs 51.3K) compared to frozen classifier-only training while maintaining comparable throughput.
 
 #### Inference Latency (CIFAR-100, batch=128)
 
