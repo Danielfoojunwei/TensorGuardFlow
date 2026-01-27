@@ -1,7 +1,7 @@
 # Makefile for TensorGuardFlow
 # Automation for build, test, development, and deployment
 
-.PHONY: install test agent bench clean lint setup ci typecheck dev dev-backend dev-frontend db-init worker docker docker-prod db-migrate help test-backend test-frontend test-e2e test-integration test-security qa qa-quick
+.PHONY: install test agent bench clean lint setup ci typecheck dev dev-backend dev-frontend db-init worker docker docker-prod db-migrate help test-backend test-frontend test-e2e test-integration test-security qa qa-quick full-stack-verify test-full-stack
 
 # Default target
 all: help
@@ -51,6 +51,10 @@ help:
 	@echo "  make bench-smoke   - Quick benchmark smoke test"
 	@echo "  make bench-stress  - High-load stress testing"
 	@echo "  make bench-regression - Compare against baseline"
+	@echo ""
+	@echo "Integration Verification:"
+	@echo "  make full-stack-verify   - Run all integration tests and generate proof pack"
+	@echo "  make test-full-stack     - Run full-stack integration tests only"
 	@echo ""
 
 # ============================================================================
@@ -315,3 +319,33 @@ clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +
 	rm -f artifacts/report.html
 	rm -f tg_platform.db
+
+# ============================================================================
+# INTEGRATION VERIFICATION
+# ============================================================================
+
+# Run full-stack integration verification and generate proof pack
+full-stack-verify:
+	@echo "--- Running Full-Stack Integration Verification ---"
+	@mkdir -p reports/integrations
+	./scripts/integrations/full_stack_verify.sh
+
+# Run full-stack integration tests only (without proof pack generation)
+test-full-stack:
+	@echo "--- Running Full-Stack Integration Tests ---"
+	PYTHONPATH=src python -m pytest tests/integration/full_stack/ -v
+
+# Run only contract schema tests (TIER 1)
+test-full-stack-contracts:
+	@echo "--- Running Contract Schema Tests (TIER 1) ---"
+	PYTHONPATH=src python -m pytest tests/integration/full_stack/test_contract_schemas.py -v
+
+# Run only local E2E tests (TIER 2)
+test-full-stack-e2e:
+	@echo "--- Running Local E2E Tests (TIER 2) ---"
+	PYTHONPATH=src python -m pytest tests/integration/full_stack/test_local_e2e.py -v
+
+# Run provider smoke tests (TIER 3, requires credentials)
+test-full-stack-providers:
+	@echo "--- Running Provider Smoke Tests (TIER 3) ---"
+	PYTHONPATH=src python -m pytest tests/integration/full_stack/test_provider_smoke.py -v
