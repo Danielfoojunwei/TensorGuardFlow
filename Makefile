@@ -1,7 +1,7 @@
 # Makefile for TensorGuardFlow
 # Automation for build, test, development, and deployment
 
-.PHONY: install test agent bench clean lint setup ci typecheck dev dev-backend dev-frontend db-init worker docker docker-prod db-migrate help test-backend test-frontend test-e2e test-integration test-security qa qa-quick full-stack-verify test-full-stack
+.PHONY: install test agent bench clean lint setup ci typecheck dev dev-backend dev-frontend db-init worker docker docker-prod db-migrate help test-backend test-frontend test-e2e test-integration test-security qa qa-quick full-stack-verify test-full-stack robotics-verify test-robotics-contracts test-robotics-integration test-robotics-smoke test-robotics-ui
 
 # Default target
 all: help
@@ -55,6 +55,13 @@ help:
 	@echo "Integration Verification:"
 	@echo "  make full-stack-verify   - Run all integration tests and generate proof pack"
 	@echo "  make test-full-stack     - Run full-stack integration tests only"
+	@echo ""
+	@echo "Robotics Ops Integrations:"
+	@echo "  make robotics-verify          - Run robotics verification and generate proof pack"
+	@echo "  make test-robotics-contracts  - Run robotics contract tests (TIER 1)"
+	@echo "  make test-robotics-integration - Run robotics integration tests (TIER 2)"
+	@echo "  make test-robotics-smoke      - Run robotics smoke tests (TIER 3, requires creds)"
+	@echo "  make test-robotics-ui         - Run robotics UI tests (requires Playwright)"
 	@echo ""
 
 # ============================================================================
@@ -349,3 +356,33 @@ test-full-stack-e2e:
 test-full-stack-providers:
 	@echo "--- Running Provider Smoke Tests (TIER 3) ---"
 	PYTHONPATH=src python -m pytest tests/integration/full_stack/test_provider_smoke.py -v
+
+# ============================================================================
+# ROBOTICS OPS INTEGRATIONS
+# ============================================================================
+
+# Run robotics ops integrations verification and generate proof pack
+robotics-verify:
+	@echo "--- Running Robotics Ops Integrations Verification ---"
+	@mkdir -p reports/robotics_integrations
+	./scripts/integrations/robotics_verify.sh
+
+# Run robotics contract tests only (TIER 1)
+test-robotics-contracts:
+	@echo "--- Running Robotics Contract Tests (TIER 1) ---"
+	PYTHONPATH=src python -m pytest tests/contract/robotics_integrations/ -v
+
+# Run robotics integration tests only (TIER 2)
+test-robotics-integration:
+	@echo "--- Running Robotics Integration Tests (TIER 2) ---"
+	PYTHONPATH=src python -m pytest tests/integration/robotics_ops_loop/ -v
+
+# Run robotics smoke tests (TIER 3, requires credentials)
+test-robotics-smoke:
+	@echo "--- Running Robotics Smoke Tests (TIER 3) ---"
+	./scripts/integrations/robotics_verify.sh --smoke
+
+# Run robotics UI tests (requires Playwright)
+test-robotics-ui:
+	@echo "--- Running Robotics UI Tests ---"
+	cd frontend && npx playwright test tests/ui/robotics_integrations_console.spec.ts
