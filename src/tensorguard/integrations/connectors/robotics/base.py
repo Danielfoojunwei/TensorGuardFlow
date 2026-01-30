@@ -103,14 +103,14 @@ class BoundedDedupeCache:
         # Evict old entries if at capacity
         if len(self._cache) >= self.max_size:
             self._evict_expired()
-            if len(self._cache) >= self.max_size:
-                # Evict oldest entries
-                sorted_keys = sorted(
+            # If still at capacity, evict oldest entries one at a time
+            while len(self._cache) >= self.max_size:
+                # Find and remove the oldest entry
+                oldest_key = min(
                     self._cache.keys(),
                     key=lambda k: self._cache[k]
                 )
-                for k in sorted_keys[:len(sorted_keys) // 2]:
-                    del self._cache[k]
+                del self._cache[oldest_key]
 
         self._cache[key] = time.time()
         return True
@@ -663,6 +663,12 @@ class RoboticsOpsConnector(IntegrationConnector):
                 "route_key": "[N2HE_REDACTED]",
             }
 
+        # Truncate dedupe_key only if longer than limit
+        dedupe_key = signal.dedupe_key
+        truncate_limit = 8
+        if len(dedupe_key) > truncate_limit:
+            dedupe_key = dedupe_key[:truncate_limit] + "..."
+
         return {
             "signal_id": signal.signal_id,
             "type": signal.type.value,
@@ -670,5 +676,5 @@ class RoboticsOpsConnector(IntegrationConnector):
             "source": signal.source.value,
             "route_key": signal.route_key,
             "auth_verified": signal.auth.verified,
-            "dedupe_key": signal.dedupe_key[:20] + "...",  # Truncate
+            "dedupe_key": dedupe_key,
         }
